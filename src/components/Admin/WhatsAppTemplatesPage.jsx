@@ -87,6 +87,32 @@ const TEMPLATE_TYPES = [
   { id: "makeup_session_student_offline", label: "حصة تعويضية - الطالب (Offline)", icon: Gift, color: "amber", emoji: "🎁", category: "makeup", type: "student_only", api: "message", isNew: true },
   { id: "makeup_session_guardian_offline", label: "حصة تعويضية - ولي الأمر (Offline)", icon: Gift, color: "amber", emoji: "🎁", category: "makeup", type: "guardian_only", api: "message", isNew: true },
   { id: "makeup_session_instructor_offline", label: "حصة تعويضية - المدرب (Offline)", icon: Gift, color: "amber", emoji: "🎁", category: "makeup", type: "instructor_only", api: "instructor", isNew: true },
+
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ ADULTS — Reminders (Online)
+  // ═══════════════════════════════════════════════════════════════
+  { id: "reminder_24h_adult", label: "تذكير الطالب البالغ 24 ساعة", icon: Clock, color: "sky", emoji: "⏰", category: "reminder", type: "student_with_session", api: "message", isNew: true },
+  { id: "reminder_15min_adult", label: "تذكير الطالب البالغ قبل 15 دقيقة", icon: Clock, color: "accent", emoji: "⏳", category: "reminder", type: "student_with_session", api: "message", isNew: true },
+
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ ADULTS — Offline Reminders
+  // ═══════════════════════════════════════════════════════════════
+  { id: "reminder_24h_offline_adult", label: "تذكير الطالب البالغ 24 ساعة (Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "offline", type: "student_with_session", api: "message", isNew: true },
+  { id: "reminder_30min_offline_adult", label: "تنبيه الطالب البالغ قبل 30 دقيقة (Drop-off)", icon: Car, color: "amber", emoji: "🚗", category: "offline", type: "student_with_session", api: "message", isNew: true },
+
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ ADULTS — Attendance (بيبعت للطالب مباشرة بدون ولي أمر)
+  // ═══════════════════════════════════════════════════════════════
+  { id: "absence_notification_adult", label: "إشعار غياب - البالغ", icon: AlertCircle, color: "rose", emoji: "📋", category: "attendance", type: "student_with_session", api: "message", isNew: true },
+  { id: "late_notification_adult", label: "إشعار تأخير - البالغ", icon: Clock, color: "accent", emoji: "⏰", category: "attendance", type: "student_with_session", api: "message", isNew: true },
+  { id: "excused_notification_adult", label: "إشعار غياب بعذر - البالغ", icon: FileText, color: "secondary", emoji: "📝", category: "attendance", type: "student_with_session", api: "message", isNew: true },
+
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ ADULTS — Evaluation (قسم مخصص للبالغين)
+  // ═══════════════════════════════════════════════════════════════
+  { id: "evaluation_pass_adult", label: "تقييم البالغ: ممتاز", icon: Star, color: "primary", emoji: "✅", category: "evaluation_adult", type: "student_with_session", api: "message", isNew: true },
+  { id: "evaluation_review_adult", label: "تقييم البالغ: يحتاج مراجعة", icon: FileText, color: "accent", emoji: "⚠️", category: "evaluation_adult", type: "student_with_session", api: "message", isNew: true },
+  { id: "evaluation_repeat_adult", label: "تقييم البالغ: يحتاج دعم إضافي", icon: RotateCcw, color: "rose", emoji: "🔄", category: "evaluation_adult", type: "student_with_session", api: "message", isNew: true },
 ];
 
 const CATEGORIES = {
@@ -99,6 +125,7 @@ const CATEGORIES = {
   attendance: { label: "الحضور", emoji: "📋" },
   completion: { label: "الإكمال", emoji: "🎉" },
   evaluation: { label: "التقييم", emoji: "⭐" },
+  evaluation_adult: { label: "التقييم - البالغين", emoji: "🎯" }, // ✅ NEW
   billing: { label: "الرصيد والباقات", emoji: "💳" },
   makeup: { label: "الحصص التعويضية", emoji: "🎁" },
   portfolio: { label: "البورتفوليو", emoji: "💼" },
@@ -351,6 +378,76 @@ const FRONTEND_FALLBACKS = {
     ar: `{salutation} 👋\n\nحبيت أبلغك إنه تم إسناد جروب *{groupName}* الخاص بكورس *{courseName}* لحضرتك ✨\nدي كل تفاصيل البداية عشان تكون جاهز:\n\n📘 الـ Course: {courseName}\n👥 الـ Group: {groupName}\n📅 تاريخ البداية: {startDate}\n⏰ المعاد: من {timeFrom} إلى {timeTo}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن: {mapsLink}\n\nمتحمسين جداً لبداية قوية معاك، وبالتوفيق يا هندسة 🌟\n\nنور ✨\nفريق الأوبيريشن - Code School`,
     en: `{salutation} 👋\n\nWe're pleased to assign you group *{groupName}* for *{courseName}* ✨\nHere are all the starting details to get you ready:\n\n📘 Course: {courseName}\n👥 Group: {groupName}\n📅 Start Date: {startDate}\n⏰ Time: From {timeFrom} to {timeTo}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Maps: {mapsLink}\n\nExcited for a strong start with you, best of luck! 🌟\n\nNour ✨\nOperations Team - Code School`,
   },
+
+    // ═══════════════════════════════════════════════════════════════
+  // ✅ ADULTS — Reminders
+  // ═══════════════════════════════════════════════════════════════
+  reminder_24h_adult: ["studentSalutation", "studentName", "sessionName", "sessionDescription", "date", "time", "meetingLink", "enrollmentNumber"],
+  reminder_15min_adult: ["studentSalutation", "studentName", "sessionName", "sessionDescription", "time", "meetingLink", "enrollmentNumber"],
+  reminder_24h_offline_adult: ["studentSalutation", "studentName", "sessionName", "date", "time", "placeName", "address", "mapsLink"],
+  reminder_30min_offline_adult: ["studentSalutation", "studentName", "sessionName", "time", "placeName", "mapsLink"],
+
+  // ✅ ADULTS — Attendance
+  absence_notification_adult: ["studentSalutation", "studentName", "status", "sessionName", "date", "time", "enrollmentNumber"],
+  late_notification_adult: ["studentSalutation", "studentName", "status", "sessionName", "date", "time", "enrollmentNumber"],
+  excused_notification_adult: ["studentSalutation", "studentName", "status", "sessionName", "date", "time", "enrollmentNumber"],
+
+  // ✅ ADULTS — Evaluation
+  evaluation_pass_adult: ["studentSalutation", "studentName", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink"],
+  evaluation_review_adult: ["studentSalutation", "studentName", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink"],
+  evaluation_repeat_adult: ["studentSalutation", "studentName", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink"],
+
+    // ═══════════════════════════════════════════════════════════════
+  // ✅ ADULTS — Reminders
+  // ═══════════════════════════════════════════════════════════════
+  reminder_24h_adult: {
+    ar: `{studentSalutation} 👋\n\nتذكير: حصتك *{sessionName}* بكرة إن شاء الله ✨\n\n📘 الحصة: {sessionName}\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 لينك الحصة:\n{meetingLink}\n\n💡 ياريت تتأكد إن اللاب مشحون، النت مستقر، والكاميرا جاهزة 👍\n\nمتحمسين نشوفك بكرة 💻🚀\nفريق Code School`,
+    en: `{studentSalutation} 👋\n\nJust a reminder that your session *{sessionName}* is tomorrow ✨\n\n📘 Session: {sessionName}\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n💡 Please make sure your laptop is charged, internet is stable, and camera is ready 👍\n\nExcited to see you tomorrow 💻🚀\nCode School Team`,
+  },
+  reminder_15min_adult: {
+    ar: `{studentSalutation} 👋\n\n⏳ تذكير: حصتك *{sessionName}* هتبدأ خلال *15 دقيقة* الساعة {time} ⏰\n\n🔗 رابط الحصة:\n{meetingLink}\n\nCode School 💻`,
+    en: `{studentSalutation} 👋\n\n⏳ Reminder: Your session *{sessionName}* starts in *15 minutes* at {time} ⏰\n\n🔗 Meeting link:\n{meetingLink}\n\nCode School 💻`,
+  },
+  reminder_24h_offline_adult: {
+    ar: `{studentSalutation} 👋\n\nتذكير: حصتك *{sessionName}* بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن على الخريطة:\n{mapsLink}\n\nمنتظرينك في الميعاد 💻\nCode School`,
+    en: `{studentSalutation} 👋\n\nReminder: Your session *{sessionName}* is tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location on Maps:\n{mapsLink}\n\nSee you there 💻\nCode School`,
+  },
+  reminder_30min_offline_adult: {
+    ar: `{studentSalutation} 👋\n\n⏰ فاضل 30 دقيقة على بداية الحصة *{sessionName}*\n\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\nيلا استعد للنزول 👍\nCode School 💻`,
+    en: `{studentSalutation} 👋\n\n⏰ 30 minutes left until *{sessionName}*\n\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\nGet ready to head out 👍\nCode School 💻`,
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ ADULTS — Attendance (بيبعت للطالب مباشرة)
+  // ═══════════════════════════════════════════════════════════════
+  absence_notification_adult: {
+    ar: `{studentSalutation}،\n\nنود إعلامك بأنه تم تسجيل غيابك عن الحصة:\n\n📘 الحصة: {sessionName}\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\nيرجى التواصل معنا في حال وجود أي استفسار.\nفريق Code School 💻`,
+    en: `{studentSalutation},\n\nWe would like to inform you that your absence has been recorded for the session:\n\n📘 Session: {sessionName}\n📅 Date: {date}\n⏰ Time: {time}\n\nPlease contact us if you have any questions.\nCode School Team 💻`,
+  },
+  late_notification_adult: {
+    ar: `{studentSalutation}،\n\nنود إعلامك بأنه تم تسجيل وصولك متأخراً للحصة:\n\n📘 الحصة: {sessionName}\n📅 التاريخ: {date}\n\nيرجى الحرص على المواعيد في المرات القادمة.\nفريق Code School 💻`,
+    en: `{studentSalutation},\n\nWe would like to inform you that your late arrival has been recorded for the session:\n\n📘 Session: {sessionName}\n📅 Date: {date}\n\nPlease ensure punctuality in future sessions.\nCode School Team 💻`,
+  },
+  excused_notification_adult: {
+    ar: `{studentSalutation}،\n\nتم تسجيل غيابك بعذر عن الحصة:\n\n📘 الحصة: {sessionName}\n📅 التاريخ: {date}\n\nفريق Code School 💻`,
+    en: `{studentSalutation},\n\nYour absence has been recorded as excused for the session:\n\n📘 Session: {sessionName}\n📅 Date: {date}\n\nCode School Team 💻`,
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ ADULTS — Evaluation
+  // ═══════════════════════════════════════════════════════════════
+  evaluation_pass_adult: {
+    ar: `{studentSalutation}،\n\nتقرير الحصة 📃✨\n📆 التاريخ : {sessionDate}\n📑 رقم الحصة : {sessionNumber}\n⏱️ مدة الحصة : ساعتين\n👥 الحضور : {attendanceStatus}\n📊 تقييم الأداء :\n⭐ الالتزام والتركيز : {starsCommitment}\n⭐ مستوى الاستيعاب : {starsUnderstanding}\n⭐ تنفيذ المهام : {starsTaskExecution}\n⭐ المشاركة داخل الحصة : {starsParticipation}\n📝 تعليق المدرب :\n{instructorComment}\n🔢 عدد الحصص المنتهية : {completedSessions}\n{recordingLink}\n🏆 النتيجة : {evaluationDecision}\n🙏 نشكرك على ثقتك في Code School\n📞 للتواصل : +2 011 40 474 129`,
+    en: `{studentSalutation},\n\nSession Report 📃✨\n📆 Date : {sessionDate}\n📑 Session No. : {sessionNumber}\n⏱️ Duration : 2 hours\n👥 Attendance : {attendanceStatus}\n📊 Performance Evaluation :\n⭐ Commitment & Focus : {starsCommitment}\n⭐ Understanding Level : {starsUnderstanding}\n⭐ Task Execution : {starsTaskExecution}\n⭐ Class Participation : {starsParticipation}\n📝 Instructor's Comment :\n{instructorComment}\n🔢 Sessions Completed : {completedSessions}\n{recordingLink}\n🏆 Result : {evaluationDecision}\n🙏 Thank you for trusting Code School\n📞 Contact : +2 011 40 474 129`,
+  },
+  evaluation_review_adult: {
+    ar: `{studentSalutation}،\n\nتقرير الحصة 📃✨\n📆 التاريخ : {sessionDate}\n📑 رقم الحصة : {sessionNumber}\n⏱️ مدة الحصة : ساعتين\n👥 الحضور : {attendanceStatus}\n📊 تقييم الأداء :\n⭐ الالتزام والتركيز : {starsCommitment}\n⭐ مستوى الاستيعاب : {starsUnderstanding}\n⭐ تنفيذ المهام : {starsTaskExecution}\n⭐ المشاركة داخل الحصة : {starsParticipation}\n📝 تعليق المدرب :\n{instructorComment}\n🔢 عدد الحصص المنتهية : {completedSessions}\n{recordingLink}\n🏆 النتيجة : {evaluationDecision}\n🙏 نشكرك على ثقتك في Code School\n📞 للتواصل : +2 011 40 474 129`,
+    en: `{studentSalutation},\n\nSession Report 📃✨\n📆 Date : {sessionDate}\n📑 Session No. : {sessionNumber}\n⏱️ Duration : 2 hours\n👥 Attendance : {attendanceStatus}\n📊 Performance Evaluation :\n⭐ Commitment & Focus : {starsCommitment}\n⭐ Understanding Level : {starsUnderstanding}\n⭐ Task Execution : {starsTaskExecution}\n⭐ Class Participation : {starsParticipation}\n📝 Instructor's Comment :\n{instructorComment}\n🔢 Sessions Completed : {completedSessions}\n{recordingLink}\n🏆 Result : {evaluationDecision}\n🙏 Thank you for trusting Code School\n📞 Contact : +2 011 40 474 129`,
+  },
+  evaluation_repeat_adult: {
+    ar: `{studentSalutation}،\n\nتقرير الحصة 📃✨\n📆 التاريخ : {sessionDate}\n📑 رقم الحصة : {sessionNumber}\n⏱️ مدة الحصة : ساعتين\n👥 الحضور : {attendanceStatus}\n📊 تقييم الأداء :\n⭐ الالتزام والتركيز : {starsCommitment}\n⭐ مستوى الاستيعاب : {starsUnderstanding}\n⭐ تنفيذ المهام : {starsTaskExecution}\n⭐ المشاركة داخل الحصة : {starsParticipation}\n📝 تعليق المدرب :\n{instructorComment}\n🔢 عدد الحصص المنتهية : {completedSessions}\n{recordingLink}\n🏆 النتيجة : {evaluationDecision}\n🙏 نشكرك على ثقتك في Code School\n📞 للتواصل : +2 011 40 474 129`,
+    en: `{studentSalutation},\n\nSession Report 📃✨\n📆 Date : {sessionDate}\n📑 Session No. : {sessionNumber}\n⏱️ Duration : 2 hours\n👥 Attendance : {attendanceStatus}\n📊 Performance Evaluation :\n⭐ Commitment & Focus : {starsCommitment}\n⭐ Understanding Level : {starsUnderstanding}\n⭐ Task Execution : {starsTaskExecution}\n⭐ Class Participation : {starsParticipation}\n📝 Instructor's Comment :\n{instructorComment}\n🔢 Sessions Completed : {completedSessions}\n{recordingLink}\n🏆 Result : {evaluationDecision}\n🙏 Thank you for trusting Code School\n📞 Contact : +2 011 40 474 129`,
+  },
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -412,6 +509,8 @@ function buildVals(variable) {
 function getRecipientType(tabId) {
   if (tabId.startsWith("portfolio_")) return "portfolio_owner";
   if (tabId.startsWith("makeup_session_instructor")) return "instructor";
+  // ✅ ADULTS: أي قالب فيه "_adult" → للطالب مباشرة
+  if (tabId.includes("_adult") || tabId.endsWith("_adult")) return "student";
   if (tabId.includes("student")) return "student";
   return "guardian";
 }
@@ -1472,223 +1571,223 @@ export default function WhatsAppTemplatesPage() {
   // ═══════════════════════════════════════════════════════════════════════
   // SAVE TEMPLATE
   // ═══════════════════════════════════════════════════════════════════════
- // ═══════════════════════════════════════════════════════════════════════
-// SAVE TEMPLATE
-// ═══════════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════════
-// SAVE TEMPLATE
-// ═══════════════════════════════════════════════════════════════════════
-const saveTemplate = async () => {
-  const cur = templates[activeTab];
-  if (!cur) return;
-  setSaving(true);
-  try {
-    let endpoint, payload;
+  // ═══════════════════════════════════════════════════════════════════════
+  // SAVE TEMPLATE
+  // ═══════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════
+  // SAVE TEMPLATE
+  // ═══════════════════════════════════════════════════════════════════════
+  const saveTemplate = async () => {
+    const cur = templates[activeTab];
+    if (!cur) return;
+    setSaving(true);
+    try {
+      let endpoint, payload;
 
-    // ═══════════════════════════════════════════════════════════════
-    // 1. Instructor Templates
-    // ═══════════════════════════════════════════════════════════════
-    if (isInstructorTemplate(activeTab)) {
-      endpoint = "/api/whatsapp/instructor-templates";
-      const dbType = INSTRUCTOR_TYPE_MAP[activeTab];
+      // ═══════════════════════════════════════════════════════════════
+      // 1. Instructor Templates
+      // ═══════════════════════════════════════════════════════════════
+      if (isInstructorTemplate(activeTab)) {
+        endpoint = "/api/whatsapp/instructor-templates";
+        const dbType = INSTRUCTOR_TYPE_MAP[activeTab];
 
-      if (cur.isFrontendFallback || !cur._id) {
-        const data = await safeFetchJson(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            templateType: dbType,
-            name: activeType?.label || activeTab,
-            contentAr: cur.contentAr || cur.content,
-            contentEn: cur.contentEn || "",
-            isDefault: true,
-            isActive: true,
-          }),
-        });
-        if (data.success) {
-          await fetchTemplates();
-          setDirty(false);
-          toast.success("✅ تم حفظ القالب");
-        } else {
-          toast.error(data.message || data.error || "فشل الحفظ");
+        if (cur.isFrontendFallback || !cur._id) {
+          const data = await safeFetchJson(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              templateType: dbType,
+              name: activeType?.label || activeTab,
+              contentAr: cur.contentAr || cur.content,
+              contentEn: cur.contentEn || "",
+              isDefault: true,
+              isActive: true,
+            }),
+          });
+          if (data.success) {
+            await fetchTemplates();
+            setDirty(false);
+            toast.success("✅ تم حفظ القالب");
+          } else {
+            toast.error(data.message || data.error || "فشل الحفظ");
+          }
+          return;
         }
-        return;
+
+        payload = {
+          id: cur._id,
+          templateType: dbType,
+          contentAr: cur.contentAr || cur.content,
+          contentEn: cur.contentEn || "",
+          setAsDefault: true,
+        };
+      }
+      // ═══════════════════════════════════════════════════════════════
+      // 2. Group Welcome Templates
+      // ═══════════════════════════════════════════════════════════════
+      else if (activeTab.startsWith("group_student_welcome")) {
+        endpoint = "/api/whatsapp/group-templates";
+        const isOfflineTab = activeTab.endsWith("_offline");
+        const baseKey = isOfflineTab
+          ? "group_student_welcome_student_offline"
+          : "group_student_welcome_student";
+        const base = templates[baseKey] || cur;
+
+        // ✅ FIX: تحديد دقيق لنوع التبويب الحالي
+        // ⚠️ مش بنستخدم "_student" لأن كل الـ IDs فيها "_student"
+        //    (حتى تبويب ولي الأمر! لأن الـ ID "group_student_welcome_guardian")
+        //    الحل: نفحص "_guardian" — ده اللي بيفرّق فعلاً.
+        const isGuardianTab = activeTab.includes("_guardian");
+
+        const contentAr = cur.contentAr || cur.content || "";
+        const contentEn = cur.contentEn || "";
+
+        // ═══════════════════════════════════════════════════════════════
+        // ✅ FIX: نبعت بس الحقول الخاصة بالتبويب الحالي
+        //    الـ PUT route بيتجاهل أي حقل undefined، فبكده حقول الطرف
+        //    التاني هتفضل زي ما هي في الداتابيز بدون overwrite فاضي.
+        // ═══════════════════════════════════════════════════════════════
+        payload = {
+          id: base?._id || cur._id,
+          setAsDefault: true,
+        };
+
+        if (isGuardianTab) {
+          // ✅ حفظ حقول ولي الأمر فقط (الأب + الأم)
+          payload.guardianFatherContentAr = contentAr;
+          payload.guardianFatherContentEn = contentEn;
+          payload.guardianMotherContentAr = contentAr;
+          payload.guardianMotherContentEn = contentEn;
+          console.log("🔒 [Group Template] Saving GUARDIAN slots:", {
+            templateId: base?._id || cur._id,
+            contentArPreview: contentAr.slice(0, 60),
+          });
+        } else {
+          // ✅ حفظ حقول الطالب فقط (الذكر + الأنثى)
+          payload.studentMaleContentAr = contentAr;
+          payload.studentMaleContentEn = contentEn;
+          payload.studentFemaleContentAr = contentAr;
+          payload.studentFemaleContentEn = contentEn;
+          console.log("🔒 [Group Template] Saving STUDENT slots:", {
+            templateId: base?._id || cur._id,
+            contentArPreview: contentAr.slice(0, 60),
+          });
+        }
+      }
+      // ═══════════════════════════════════════════════════════════════
+      // 3. Language Confirmation
+      // ═══════════════════════════════════════════════════════════════
+      else if (isLangConfirmation) {
+        endpoint = "/api/whatsapp/templates";
+        const dbType = activeTab === "language_confirmation"
+          ? "student_language_confirmation"
+          : "guardian_language_confirmation";
+
+        if (cur.isFrontendFallback || !cur._id) {
+          const data = await safeFetchJson(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              templateType: dbType,
+              name: activeTab === "language_confirmation"
+                ? "تأكيد اللغة للطالب"
+                : "تأكيد اللغة لولي الأمر",
+              content: cur.contentAr || cur.content,
+              contentAr: cur.contentAr || cur.content,
+              contentEn: cur.contentEn || "",
+              description: "",
+              isDefault: true,
+              isActive: true,
+              setAsDefault: true,
+            }),
+          });
+          if (data.success) {
+            await fetchTemplates();
+            setDirty(false);
+            toast.success("✅ تم حفظ القالب");
+          } else {
+            toast.error(data.message || data.error || "فشل الحفظ");
+          }
+          return;
+        }
+
+        payload = {
+          id: cur._id,
+          content: cur.contentAr || cur.content,
+          contentAr: cur.contentAr || cur.content,
+          contentEn: cur.contentEn || "",
+          setAsDefault: true,
+        };
+      }
+      // ═══════════════════════════════════════════════════════════════
+      // 4. Message Templates
+      // ═══════════════════════════════════════════════════════════════
+      else if (cur.isMessageTemplate) {
+        endpoint = "/api/whatsapp/message-templates";
+
+        if (cur.isFrontendFallback || !cur._messageTemplateId) {
+          const data = await safeFetchJson(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              templateType: activeTab,
+              contentAr: cur.contentAr || cur.content,
+              contentEn: cur.contentEn || "",
+              recipientType: getRecipientType(activeTab),
+              name: activeTab,
+              isDefault: true,
+              isActive: true,
+            }),
+          });
+          if (data.success) {
+            await fetchTemplates();
+            setDirty(false);
+            toast.success("✅ تم حفظ القالب");
+          } else {
+            toast.error(data.message || data.error || "فشل الحفظ");
+          }
+          return;
+        }
+
+        payload = {
+          _id: cur._messageTemplateId || cur._id,
+          templateType: activeTab,
+          contentAr: cur.contentAr || cur.content,
+          contentEn: cur.contentEn,
+          recipientType: getRecipientType(activeTab),
+        };
+      }
+      // ═══════════════════════════════════════════════════════════════
+      // 5. Fallback
+      // ═══════════════════════════════════════════════════════════════
+      else {
+        endpoint = "/api/whatsapp/templates";
+        payload = { id: cur._id, content: cur.content, setAsDefault: true };
       }
 
-      payload = {
-        id: cur._id,
-        templateType: dbType,
-        contentAr: cur.contentAr || cur.content,
-        contentEn: cur.contentEn || "",
-        setAsDefault: true,
-      };
-    }
-    // ═══════════════════════════════════════════════════════════════
-    // 2. Group Welcome Templates
-    // ═══════════════════════════════════════════════════════════════
-    else if (activeTab.startsWith("group_student_welcome")) {
-      endpoint = "/api/whatsapp/group-templates";
-      const isOfflineTab = activeTab.endsWith("_offline");
-      const baseKey = isOfflineTab
-        ? "group_student_welcome_student_offline"
-        : "group_student_welcome_student";
-      const base = templates[baseKey] || cur;
-
-      // ✅ FIX: تحديد دقيق لنوع التبويب الحالي
-      // ⚠️ مش بنستخدم "_student" لأن كل الـ IDs فيها "_student"
-      //    (حتى تبويب ولي الأمر! لأن الـ ID "group_student_welcome_guardian")
-      //    الحل: نفحص "_guardian" — ده اللي بيفرّق فعلاً.
-      const isGuardianTab = activeTab.includes("_guardian");
-
-      const contentAr = cur.contentAr || cur.content || "";
-      const contentEn = cur.contentEn || "";
-
       // ═══════════════════════════════════════════════════════════════
-      // ✅ FIX: نبعت بس الحقول الخاصة بالتبويب الحالي
-      //    الـ PUT route بيتجاهل أي حقل undefined، فبكده حقول الطرف
-      //    التاني هتفضل زي ما هي في الداتابيز بدون overwrite فاضي.
+      // إرسال الطلب
       // ═══════════════════════════════════════════════════════════════
-      payload = {
-        id: base?._id || cur._id,
-        setAsDefault: true,
-      };
+      const data = await safeFetchJson(endpoint, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-      if (isGuardianTab) {
-        // ✅ حفظ حقول ولي الأمر فقط (الأب + الأم)
-        payload.guardianFatherContentAr = contentAr;
-        payload.guardianFatherContentEn = contentEn;
-        payload.guardianMotherContentAr = contentAr;
-        payload.guardianMotherContentEn = contentEn;
-        console.log("🔒 [Group Template] Saving GUARDIAN slots:", {
-          templateId: base?._id || cur._id,
-          contentArPreview: contentAr.slice(0, 60),
-        });
+      if (data.success) {
+        await fetchTemplates();
+        setDirty(false);
+        toast.success("✅ تم حفظ القالب");
       } else {
-        // ✅ حفظ حقول الطالب فقط (الذكر + الأنثى)
-        payload.studentMaleContentAr = contentAr;
-        payload.studentMaleContentEn = contentEn;
-        payload.studentFemaleContentAr = contentAr;
-        payload.studentFemaleContentEn = contentEn;
-        console.log("🔒 [Group Template] Saving STUDENT slots:", {
-          templateId: base?._id || cur._id,
-          contentArPreview: contentAr.slice(0, 60),
-        });
+        toast.error(data.message || data.error || "فشل الحفظ");
       }
+    } catch (err) {
+      console.error("❌ saveTemplate error:", err);
+      toast.error("خطأ في الحفظ");
+    } finally {
+      setSaving(false);
     }
-    // ═══════════════════════════════════════════════════════════════
-    // 3. Language Confirmation
-    // ═══════════════════════════════════════════════════════════════
-    else if (isLangConfirmation) {
-      endpoint = "/api/whatsapp/templates";
-      const dbType = activeTab === "language_confirmation"
-        ? "student_language_confirmation"
-        : "guardian_language_confirmation";
-
-      if (cur.isFrontendFallback || !cur._id) {
-        const data = await safeFetchJson(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            templateType: dbType,
-            name: activeTab === "language_confirmation"
-              ? "تأكيد اللغة للطالب"
-              : "تأكيد اللغة لولي الأمر",
-            content: cur.contentAr || cur.content,
-            contentAr: cur.contentAr || cur.content,
-            contentEn: cur.contentEn || "",
-            description: "",
-            isDefault: true,
-            isActive: true,
-            setAsDefault: true,
-          }),
-        });
-        if (data.success) {
-          await fetchTemplates();
-          setDirty(false);
-          toast.success("✅ تم حفظ القالب");
-        } else {
-          toast.error(data.message || data.error || "فشل الحفظ");
-        }
-        return;
-      }
-
-      payload = {
-        id: cur._id,
-        content: cur.contentAr || cur.content,
-        contentAr: cur.contentAr || cur.content,
-        contentEn: cur.contentEn || "",
-        setAsDefault: true,
-      };
-    }
-    // ═══════════════════════════════════════════════════════════════
-    // 4. Message Templates
-    // ═══════════════════════════════════════════════════════════════
-    else if (cur.isMessageTemplate) {
-      endpoint = "/api/whatsapp/message-templates";
-
-      if (cur.isFrontendFallback || !cur._messageTemplateId) {
-        const data = await safeFetchJson(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            templateType: activeTab,
-            contentAr: cur.contentAr || cur.content,
-            contentEn: cur.contentEn || "",
-            recipientType: getRecipientType(activeTab),
-            name: activeTab,
-            isDefault: true,
-            isActive: true,
-          }),
-        });
-        if (data.success) {
-          await fetchTemplates();
-          setDirty(false);
-          toast.success("✅ تم حفظ القالب");
-        } else {
-          toast.error(data.message || data.error || "فشل الحفظ");
-        }
-        return;
-      }
-
-      payload = {
-        _id: cur._messageTemplateId || cur._id,
-        templateType: activeTab,
-        contentAr: cur.contentAr || cur.content,
-        contentEn: cur.contentEn,
-        recipientType: getRecipientType(activeTab),
-      };
-    }
-    // ═══════════════════════════════════════════════════════════════
-    // 5. Fallback
-    // ═══════════════════════════════════════════════════════════════
-    else {
-      endpoint = "/api/whatsapp/templates";
-      payload = { id: cur._id, content: cur.content, setAsDefault: true };
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // إرسال الطلب
-    // ═══════════════════════════════════════════════════════════════
-    const data = await safeFetchJson(endpoint, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (data.success) {
-      await fetchTemplates();
-      setDirty(false);
-      toast.success("✅ تم حفظ القالب");
-    } else {
-      toast.error(data.message || data.error || "فشل الحفظ");
-    }
-  } catch (err) {
-    console.error("❌ saveTemplate error:", err);
-    toast.error("خطأ في الحفظ");
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   const allVars = getVariablesForTemplate(activeTab, testLanguage);
 

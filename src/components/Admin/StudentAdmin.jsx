@@ -326,8 +326,11 @@ export default function StudentAdmin() {
   const [jumpValue, setJumpValue]     = useState("");
   const debouncedSearch = useDebounce(searchInput, 350);
 
+  // ✅ NEW: ضفنا studentType للفلاتر
   const [filters, setFilters] = useState({
-    status: "", level: "", source: "", creditStatus: "", inGroup: "", tags: "", // ✅
+    status: "", level: "", source: "", creditStatus: "", inGroup: "",
+    studentType: "", // ✅ NEW
+    tags: "",
     page: 1, limit: 10,
   });
 
@@ -364,6 +367,7 @@ export default function StudentAdmin() {
     let cancelled = false;
     setLoading(true);
 
+    // ✅ NEW: ضفنا studentType في الـ params
     const params = new URLSearchParams({
       page:  String(filters.page),
       limit: String(filters.limit),
@@ -373,7 +377,8 @@ export default function StudentAdmin() {
       ...(filters.source         && { source:       filters.source }),
       ...(filters.creditStatus   && { creditStatus: filters.creditStatus }),
       ...(filters.inGroup !== "" && { inGroup:      filters.inGroup }),
-      ...(filters.tags           && { tags:         filters.tags }), // ✅
+      ...(filters.studentType    && { studentType:  filters.studentType }), // ✅ NEW
+      ...(filters.tags           && { tags:         filters.tags }),
     });
 
     fetch(`/api/allStudents?${params}`, { cache: "no-store", headers: { "Cache-Control": "no-cache" } })
@@ -396,7 +401,7 @@ export default function StudentAdmin() {
   }, [
     filters.page, filters.limit,
     filters.status, filters.level, filters.source,
-    filters.creditStatus, filters.inGroup, filters.tags, // ✅
+    filters.creditStatus, filters.inGroup, filters.studentType, filters.tags, // ✅ NEW
     debouncedSearch, refreshKey,
   ]);
 
@@ -444,13 +449,16 @@ export default function StudentAdmin() {
     filters.level          && { key: "level",        label: `Level: ${filters.level}` },
     filters.creditStatus   && { key: "creditStatus", label: `Credits: ${filters.creditStatus}` },
     filters.inGroup !== "" && { key: "inGroup",      label: filters.inGroup === "true" ? "In a Group" : "No Group" },
-    filters.tags            && { key: "tags",         label: `Tags: ${filters.tags.split(",").length}` }, // ✅
+    // ✅ NEW: chip لفلتر النوع
+    filters.studentType    && { key: "studentType",  label: filters.studentType === "adults" ? "Adults" : "Kids" },
+    filters.tags           && { key: "tags",         label: `Tags: ${filters.tags.split(",").length}` },
     debouncedSearch        && { key: "search",       label: `"${debouncedSearch}"` },
   ].filter(Boolean);
 
   const clearAll = () => {
     setSearchInput("");
-    setFilters({ status: "", level: "", source: "", creditStatus: "", inGroup: "", tags: "", page: 1, limit: filters.limit }); // ✅
+    // ✅ NEW: ضفنا studentType
+    setFilters({ status: "", level: "", source: "", creditStatus: "", inGroup: "", studentType: "", tags: "", page: 1, limit: filters.limit });
   };
 
   // ─── Row actions ───────────────────────────────────────────────────────────
@@ -527,6 +535,8 @@ export default function StudentAdmin() {
 
   const activeCount    = students.filter(s => s.enrollmentInfo?.status === "Active").length;
   const graduatedCount = students.filter(s => s.enrollmentInfo?.status === "Graduated").length;
+  // ✅ NEW: عدد الطلاب البالغين في الصفحة الحالية
+  const adultsCount    = students.filter(s => s.studentType === "adults").length;
 
   // ─── Filter options ────────────────────────────────────────────────────────
   const statusOptions = [
@@ -551,6 +561,11 @@ export default function StudentAdmin() {
   const groupOptions = [
     { value: "true",  label: "In a Group" },
     { value: "false", label: "No Group" },
+  ];
+  // ✅ NEW: options فلتر نوع الطالب
+  const studentTypeOptions = [
+    { value: "kids",   label: "🧒 Kids" },
+    { value: "adults", label: "🧑 Adults" },
   ];
 
   // ─── Table column headers ──────────────────────────────────────────────────
@@ -623,7 +638,7 @@ export default function StudentAdmin() {
       if (res.ok) {
         toast.success("Tag permanently deleted");
         await loadTags();
-        loadStudents(); // ✅ عشان يشيل التاج من صفوف الطلاب المعروضة
+        loadStudents();
       } else {
         const json = await res.json();
         toast.error(json.error || "Failed to delete tag");
@@ -649,7 +664,6 @@ export default function StudentAdmin() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* ✅ زر إدارة الوسوم */}
             <button
               onClick={() => setTagsModalOpen(true)}
               className="
@@ -679,7 +693,8 @@ export default function StudentAdmin() {
         </div>
 
         {/* ── Stats ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {/* ✅ NEW: lg:grid-cols-7 بدل 6 عشان نحط كارت Adults */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
           <StatCard
             icon={Users}
             label="Total Students"
@@ -697,6 +712,16 @@ export default function StudentAdmin() {
             label="Graduated"
             value={graduatedCount}
             barColor="bg-teal-500"
+          />
+          {/* ✅ NEW: كارت الطلاب البالغين */}
+          <StatCard
+            icon={UserCheck}
+            label="Adults"
+            value={adultsCount}
+            sub={`${pagination.totalStudents - adultsCount} kids`}
+            barColor="bg-indigo-500"
+            onClick={() => setFilter("studentType", filters.studentType === "adults" ? "" : "adults")}
+            active={filters.studentType === "adults"}
           />
           <StatCard
             icon={Package}
@@ -759,10 +784,12 @@ export default function StudentAdmin() {
 
             {/* Select filters */}
             <div className="flex flex-wrap gap-2 items-center">
-              <SelectFilter id="f-status"  label="Status"  value={filters.status}       options={statusOptions}  onChange={v => setFilter("status", v)} />
-              <SelectFilter id="f-level"   label="Level"   value={filters.level}        options={levelOptions}   onChange={v => setFilter("level", v)} />
-              <SelectFilter id="f-credit"  label="Credits" value={filters.creditStatus} options={creditOptions}  onChange={v => setFilter("creditStatus", v)} />
-              <SelectFilter id="f-group"   label="Group"   value={filters.inGroup}      options={groupOptions}   onChange={v => setFilter("inGroup", v)} />
+              {/* ✅ NEW: فلتر النوع */}
+              <SelectFilter id="f-type"   label="Type"    value={filters.studentType}  options={studentTypeOptions} onChange={v => setFilter("studentType", v)} />
+              <SelectFilter id="f-status" label="Status"  value={filters.status}       options={statusOptions}  onChange={v => setFilter("status", v)} />
+              <SelectFilter id="f-level"  label="Level"   value={filters.level}        options={levelOptions}   onChange={v => setFilter("level", v)} />
+              <SelectFilter id="f-credit" label="Credits" value={filters.creditStatus} options={creditOptions}  onChange={v => setFilter("creditStatus", v)} />
+              <SelectFilter id="f-group"  label="Group"   value={filters.inGroup}      options={groupOptions}   onChange={v => setFilter("inGroup", v)} />
 
               <button
                 onClick={loadStudents}
@@ -868,6 +895,7 @@ export default function StudentAdmin() {
                   const levelCls   = LEVEL_CFG[student.academicInfo?.level]     || "bg-gray-100 dark:bg-gray-800 text-gray-500";
                   const inGroup    = student.inGroup;
                   const hasPackage = !!student.creditSystem?.currentPackage;
+                  const isAdult    = student.studentType === "adults"; // ✅ NEW
 
                   return (
                     <tr
@@ -877,13 +905,29 @@ export default function StudentAdmin() {
                       {/* Student */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-9 h-9 rounded-full bg-primary/10 dark:bg-primary/15 flex items-center justify-center shrink-0 text-primary font-bold text-sm uppercase">
+                          {/* ✅ NEW: Avatar بألوان مختلفة حسب النوع */}
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold text-sm uppercase ${
+                            isAdult
+                              ? "bg-indigo-500/10 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400"
+                              : "bg-primary/10 dark:bg-primary/15 text-primary"
+                          }`}>
                             {student.personalInfo?.fullName?.[0] || "?"}
                           </div>
                           <div className="min-w-0">
-                            <p className="font-semibold text-sm text-gray-900 dark:text-white truncate max-w-[150px]">
-                              {student.personalInfo?.fullName || "—"}
-                            </p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="font-semibold text-sm text-gray-900 dark:text-white truncate max-w-[150px]">
+                                {student.personalInfo?.fullName || "—"}
+                              </p>
+                              {/* ✅ NEW: شارة نوع الطالب */}
+                              {isAdult && (
+                                <span
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 whitespace-nowrap"
+                                  title="طالب بالغ — مش محتاج ولي أمر"
+                                >
+                                  🧑 بالغ
+                                </span>
+                              )}
+                            </div>
                             <p className="text-xs text-gray-400 dark:text-darksubtle truncate max-w-[150px]">
                               {student.personalInfo?.email || t("students.table.noEmail")}
                             </p>
@@ -956,7 +1000,6 @@ export default function StudentAdmin() {
                             )}
                           </div>
 
-                          {/* ✅ زر تعديل الساعات السريع +/- */}
                           <CreditQuickAdjust
                             student={student}
                             hasPackage={hasPackage}
@@ -1068,14 +1111,12 @@ export default function StudentAdmin() {
             {/* Smart page numbers */}
             {pagination.totalPages > 1 && (
               <div className="flex items-center gap-1">
-                {/* First */}
                 <PaginationBtn
                   onClick={() => setFilters(f => ({ ...f, page: 1 }))}
                   disabled={pagination.page === 1}
                   icon={ChevronsLeft}
                   label="First page"
                 />
-                {/* Prev */}
                 <PaginationBtn
                   onClick={() => setFilters(f => ({ ...f, page: f.page - 1 }))}
                   disabled={pagination.page === 1}
@@ -1083,7 +1124,6 @@ export default function StudentAdmin() {
                   label="Previous page"
                 />
 
-                {/* Page buttons with smart ellipsis */}
                 {smartPages(pagination.page, pagination.totalPages).map((p, i) =>
                   p === "..." ? (
                     <span
@@ -1109,14 +1149,12 @@ export default function StudentAdmin() {
                   )
                 )}
 
-                {/* Next */}
                 <PaginationBtn
                   onClick={() => setFilters(f => ({ ...f, page: f.page + 1 }))}
                   disabled={pagination.page === pagination.totalPages}
                   icon={ChevronRight}
                   label="Next page"
                 />
-                {/* Last */}
                 <PaginationBtn
                   onClick={() => setFilters(f => ({ ...f, page: pagination.totalPages }))}
                   disabled={pagination.page === pagination.totalPages}
@@ -1129,7 +1167,6 @@ export default function StudentAdmin() {
             {/* Right side controls */}
             <div className="flex items-center gap-3 flex-wrap">
 
-              {/* Divider */}
               <div className="hidden sm:block w-px h-5 bg-gray-200 dark:bg-dark_border" />
 
               {/* Rows per page */}
@@ -1158,10 +1195,9 @@ export default function StudentAdmin() {
                 </select>
               </div>
 
-              {/* Jump to page — only when totalPages > 5 */}
+              {/* Jump to page */}
               {pagination.totalPages > 5 && (
                 <>
-                  {/* Divider */}
                   <div className="hidden sm:block w-px h-5 bg-gray-200 dark:bg-dark_border" />
 
                   <div className="flex items-center gap-2">
@@ -1245,7 +1281,6 @@ export default function StudentAdmin() {
         size="md"
       >
         <div className="space-y-5 p-1">
-          {/* إضافة وسم جديد */}
           <div className="bg-gray-50 dark:bg-dark_input/60 rounded-xl p-3 ring-1 ring-inset ring-gray-200 dark:ring-gray-700">
             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" /> New tag
@@ -1277,7 +1312,6 @@ export default function StudentAdmin() {
             </div>
           </div>
 
-          {/* قائمة الوسوم */}
           <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
             {tagsList.map((tag) => (
               <div key={tag._id} className="flex items-center justify-between p-2.5 rounded-xl ring-1 ring-inset ring-gray-100 dark:ring-gray-700 hover:ring-gray-200 dark:hover:bg-gray-800/60 transition">

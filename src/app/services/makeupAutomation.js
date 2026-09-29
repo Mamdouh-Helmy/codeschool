@@ -24,26 +24,9 @@ import {
 //     واضح، عشان تقدر تعدّل/تضيف براحتك من غير ما تلمس منطق الإرسال.
 //   - القوالب بتتقرا من الداتا بيس فقط (مفيش fallback في الكود).
 //
-// 📌 المتغيرات المتاحة في القوالب (راجع buildMakeupVariables):
-//
-//   للطالب:
-//     {studentSalutation} {studentName}
-//     {courseName} {groupName} {groupCode}
-//     {originalDate} {originalTime} {originalSessionTitle}
-//     {newDate} {newTime} {newSessionTitle}
-//     {meetingLink} {instructorName}
-//     {sessionLocationBlock} {placeName} {address} {mapsLink}
-//
-//   لولي الأمر: زي الطالب + {guardianSalutation} {guardianName} {childTitle}
-//
-//   للمدرس:
-//     {instructorSalutation} {instructorName} {studentName}
-//     {courseName} {groupName} {groupCode}
-//     {originalDate} {originalTime} {originalSessionTitle}
-//     {newDate} {newTime}
-//     {sessionLocationBlock} {placeName} {address} {mapsLink}
-//
-// لو محتاج متغير جديد، ضيفه في buildMakeupVariables() بس — مش في أي مكان تاني.
+// ✅ NEW (Kids/Adults):
+//   - لو الطالب studentType === "adults" → مش بنبعت رسالة لولي الأمر خالص،
+//     ومتغيرات ولي الأمر بتتطلع فاضية "" في القاموس.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const MAKEUP_TEMPLATE_TYPES = {
@@ -116,14 +99,6 @@ async function findMakeupInstructor(group) {
 }
 
 // ─── 🎯 بناء المتغيرات (مكان واحد — عدّل هنا بس) ─────────────────────────
-//
-// ملاحظة مهمة: salutations بتاعة الطالب/ولي الأمر/المدرس بتتبني من
-// prepareStudentVariables / prepareInstructorVariables لأنها بتسحب قيمها من
-// TemplateVariable في الداتا بيس (مع قواعد الجنس/صلة القرابة). بعد كده
-// بنضيف متغيرات الحصة التعويضية الخاصة فوقهم.
-//
-// لو لقيت متغير في قالبك مش موجود هنا، ضيفه هنا.
-// ─────────────────────────────────────────────────────────────────────────
 
 async function buildMakeupVariables({
   group,
@@ -135,6 +110,9 @@ async function buildMakeupVariables({
   isOffline,
 }) {
   const location = isOffline ? getMakeupLocation(group) : EMPTY_LOCATION;
+
+  // ✅ NEW: هل الطالب بالغ؟
+  const isAdult = student.studentType === "adults";
 
   // ── Salutations + الأسماء (من TemplateVariable DB) ─────────────
   const studentPrep = await prepareStudentVariables(
@@ -157,14 +135,7 @@ async function buildMakeupVariables({
     instructorFirstName = instructorPrep.variables.instructorName || "";
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // ✅ Fix: نقرا {studentSalutation} و {guardianSalutation} مباشرة من
-  //    TemplateVariable DB بدل ما نبنيهم من salutation_ar + الاسم
-  // ═══════════════════════════════════════════════════════════════════════
-    // ═══════════════════════════════════════════════════════════════════════
-  // ✅ Fix: نقرا {studentSalutation} و {guardianSalutation} مباشرة من
-  //    TemplateVariable DB، ونضيف اسم الطالب/ولي الأمر بعد التحية
-  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ نقرا {studentSalutation} و {guardianSalutation} من TemplateVariable DB
   const TemplateVariable = (await import("../models/TemplateVariable")).default;
 
   const studentGender = (student.personalInfo?.gender || "male")
@@ -180,46 +151,46 @@ async function buildMakeupVariables({
     instructorGender: instructor?.gender || "male",
   });
 
-  // القيم الأساسية من DB (زي: "السلام عليكم")
   const studentSalutationBase = (varsMap["{studentSalutation}"] || "").trim();
   const guardianSalutationBase = (varsMap["{guardianSalutation}"] || "").trim();
 
-  // الاسم اللي هنضيفه بعد التحية
   const studentNameForSalutation = sv.studentName || "";
   const guardianNameForSalutation = sv.guardianName || "";
 
-  // ✅ لو القيمة من الداتا بيس أصلاً فيها {guardianName}/{studentName} جواها،
-// بدّلها هنا مباشرة ومتضيفش الاسم تاني عشان الاسم يظهر مرة واحدة بس
-const studentSalutationFromDB = studentSalutationBase
-  ? (studentSalutationBase.includes("{studentName}")
-      ? studentSalutationBase.replace(/\{studentName\}/g, studentNameForSalutation)
-      : `${studentSalutationBase} ${studentNameForSalutation}`.trim())
-  : "";
+  const studentSalutationFromDB = studentSalutationBase
+    ? (studentSalutationBase.includes("{studentName}")
+        ? studentSalutationBase.replace(/\{studentName\}/g, studentNameForSalutation)
+        : `${studentSalutationBase} ${studentNameForSalutation}`.trim())
+    : "";
 
-const guardianSalutationFromDB = guardianSalutationBase
-  ? (guardianSalutationBase.includes("{guardianName}")
-      ? guardianSalutationBase.replace(/\{guardianName\}/g, guardianNameForSalutation)
-      : `${guardianSalutationBase} ${guardianNameForSalutation}`.trim())
-  : "";
+  // ✅ لو الطالب adults → نبني التحية الفاضية، مش نروح نجيب من DB
+  const guardianSalutationFromDB = isAdult
+    ? ""
+    : guardianSalutationBase
+      ? (guardianSalutationBase.includes("{guardianName}")
+          ? guardianSalutationBase.replace(/\{guardianName\}/g, guardianNameForSalutation)
+          : `${guardianSalutationBase} ${guardianNameForSalutation}`.trim())
+      : "";
 
   // ── القاموس النهائي ────────────────────────────────────────────
   return {
-    // Student — ✅ من DB مباشرة، ولو مش موجودة نرجع للقيمة المحسوبة
+    // Student
     studentSalutation:
       studentSalutationFromDB || sv.studentSalutation || sv.salutation_ar || "",
     studentName: sv.studentName || "",
 
-    // Guardian — ✅ نفس المنطق
-    guardianSalutation:
-      guardianSalutationFromDB || sv.guardianSalutation || "",
-    guardianName: sv.guardianName || "",
-    childTitle: sv.childTitle || "",
+    // Guardian — ✅ كلها فاضية لو الطالب بالغ
+    guardianSalutation: isAdult
+      ? ""
+      : (guardianSalutationFromDB || sv.guardianSalutation || ""),
+    guardianName: isAdult ? "" : (sv.guardianName || ""),
+    childTitle:   isAdult ? "" : (sv.childTitle   || ""),
 
     // Instructor
     instructorSalutation,
     instructorName: instructorFirstName || instructor?.name?.split(" ")[0] || "",
 
-    // Group / Course — ✅ مفيش groupCode خالص في القاموس
+    // Group / Course
     groupName: group.name || "",
     courseName: group.courseSnapshot?.title || group.courseId?.title || "",
 
@@ -235,9 +206,9 @@ const guardianSalutationFromDB = guardianSalutationBase
 
     // Location / Meeting link
     meetingLink: isOffline ? "" : newSession.meetingLink || "",
-    placeName: isOffline ? location.placeName : "",
-    address: isOffline ? location.address : "",
-    mapsLink: isOffline ? location.mapsLink : "",
+    placeName:   isOffline ? location.placeName : "",
+    address:     isOffline ? location.address   : "",
+    mapsLink:    isOffline ? location.mapsLink  : "",
     sessionLocationBlock: buildSessionLocationBlock({
       isOffline,
       meetingLink: newSession.meetingLink,
@@ -249,15 +220,7 @@ const guardianSalutationFromDB = guardianSalutationBase
 
 // ─── Template loading & rendering ──────────────────────────────────────────
 
-/**
- * بيجيب القالب من الداتا بيس (مفيش fallback في الكود):
- *   - role = "instructor" → WhatsAppTemplateInstructor (وبعدين MessageTemplate)
- *   - role = "student" / "guardian" → MessageTemplate
- *   - isActive: true، والأولوية للـ default، وبعده الأحدث
- *   - لو محتوى اللغة فاضي بنستخدم اللغة التانية من نفس القالب
- */
 async function loadMakeupTemplate(templateType, role, lang) {
-  // قوالب المدرس
   if (role === "instructor") {
     try {
       const doc = await WhatsAppTemplateInstructor.findOne({
@@ -280,7 +243,6 @@ async function loadMakeupTemplate(templateType, role, lang) {
     }
   }
 
-  // student / guardian (وممكن instructor كـ fallback)
   const tpl = await MessageTemplate.findOne({
     templateType,
     recipientType: role,
@@ -304,16 +266,14 @@ async function renderMakeupTemplate({ templateType, role, lang, variables }) {
   const template = await loadMakeupTemplate(templateType, role, lang);
   if (!template) return null;
 
-  // ✅ نشيل {groupCode} من المحتوى — عشان الاسم بس هو اللي يظهر، مش الكود
   let content = template.content.replace(/\{groupCode\}/g, "");
 
   let text = replaceVariables(content, variables).trim();
 
-  // ✅ نضّف الأقواس الفاضية اللي بتنتج من شيل الـ groupCode
   text = text
-    .replace(/\(\s*\)/g, "")   // ()
-    .replace(/\[\s*\]/g, "")   // []
-    .replace(/[ \t]{2,}/g, " ") // مسافات متكررة
+    .replace(/\(\s*\)/g, "")
+    .replace(/\[\s*\]/g, "")
+    .replace(/[ \t]{2,}/g, " ")
     .trim();
 
   const unresolved = text.match(/\{\w+\}/g);
@@ -382,12 +342,6 @@ async function sendMakeupMessage(ctx, { role, phone, lang, vars }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────
 
-/**
- * 🎁 الدالة الرئيسية للحصة التعويضية:
- *   1. توليد السيشن + حجز اللينك (activateGroupSessionsCore)
- *   2. بناء المتغيرات وقراءة القوالب من DB
- *   3. إرسال 3 رسائل (طالب / ولي أمر / مدرس) — Online أو Offline
- */
 export async function sendMakeupGroupNotifications(group, generatedSessions = []) {
   const { studentId, originalSessionId } = group.makeupInfo || {};
   if (!studentId) {
@@ -413,18 +367,20 @@ export async function sendMakeupGroupNotifications(group, generatedSessions = []
     return { success: false, reason: "student_not_found", results: {} };
   }
 
+  // ✅ NEW: هل الطالب بالغ؟ لو آه → مش بنبعت لولي الأمر خالص
+  const isAdult = student.studentType === "adults";
+
   const isOffline =
     group.deliveryMode === "offline" || newSession.deliveryMode === "offline";
 
   console.log(
-    `\n🎁 [Make-up] ${group.name} (${isOffline ? "OFFLINE" : "ONLINE"}) → ${newSession.title}`,
+    `\n🎁 [Make-up] ${group.name} (${isOffline ? "OFFLINE" : "ONLINE"}) → ${newSession.title}` +
+    `${isAdult ? "  [ADULT — skip guardian]" : ""}`,
   );
 
-  // لغات المستلمين
   const studentLang = student.communicationPreferences?.preferredLanguage || "ar";
   const instructorLang = instructor?.language || "ar";
 
-  // متغيرات الطالب/ولي الأمر — بنبنيها مرة واحدة (نفس اللغة عادةً)
   const learnerVars = await buildMakeupVariables({
     group,
     newSession,
@@ -435,11 +391,10 @@ export async function sendMakeupGroupNotifications(group, generatedSessions = []
     isOffline,
   });
 
-  // متغيرات المدرس — لو لغته مختلفة، بنبنيها بلغته
   let instructorVars = {};
   if (instructor) {
     if (instructorLang === studentLang) {
-      instructorVars = learnerVars; // نفس اللغة → نفس المتغيرات
+      instructorVars = learnerVars;
     } else {
       instructorVars = await buildMakeupVariables({
         group,
@@ -462,6 +417,7 @@ export async function sendMakeupGroupNotifications(group, generatedSessions = []
     isOffline,
   };
 
+  // ✅ نبني قائمة المستلمين — مع استثناء ولي الأمر للبالغين
   const recipients = [
     {
       role: "student",
@@ -469,7 +425,8 @@ export async function sendMakeupGroupNotifications(group, generatedSessions = []
       lang: studentLang,
       vars: learnerVars,
     },
-    {
+    // ✅ guardian — بيتخطى تمامًا لو الطالب adults
+    !isAdult && {
       role: "guardian",
       phone: student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone,
       lang: studentLang,
@@ -481,7 +438,7 @@ export async function sendMakeupGroupNotifications(group, generatedSessions = []
       lang: instructorLang,
       vars: instructorVars,
     },
-  ];
+  ].filter(Boolean); // 👈 نشيل أي false
 
   const results = {};
   for (const recipient of recipients) {
@@ -492,17 +449,21 @@ export async function sendMakeupGroupNotifications(group, generatedSessions = []
     );
   }
 
+  // ✅ نتأكد إن results.guardian موجودة حتى لو متخطية (للاتساق)
+  if (isAdult && !results.guardian) {
+    results.guardian = { sent: false, error: "skipped_adult_student" };
+  }
+
   return {
     success: Object.values(results).some((r) => r.sent),
     isOffline,
+    isAdult,
     results,
   };
 }
 
 /**
  * 🎯 الدالة اللي الـ route بينادي عليها للحصة التعويضية.
- *    - بتولّد السيشن + تحجز اللينك (نفس core الجروبات العادية)
- *    - بعدين تبعت الـ 3 رسائل
  */
 export async function onMakeupGroupActivated(groupId, userId, selectedLinkIds = []) {
   console.log(`\n🎁 [Make-up] Activating makeup group: ${groupId}`);

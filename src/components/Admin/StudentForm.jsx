@@ -7,20 +7,21 @@ import {
   UserCircle, Languages, Sparkles, MessageSquare, RefreshCw,
   Eye, Zap, Loader2, Database, MapPin, Smartphone,
   ChevronLeft, ChevronRight, ArrowRight, ArrowLeft,
-  Tag as TagIcon, // ✅ أيقونة الوسوم
+  Tag as TagIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
 
 // ─── Step config ────────────────────────────────────────────────────────────
-const STEPS = [
-  { id: "account",     label_ar: "الحساب",    icon: User          },
-  { id: "personal",    label_ar: "البيانات",   icon: UserCircle    },
-  { id: "contact",     label_ar: "التواصل",   icon: Phone         },
-  { id: "guardian",    label_ar: "ولي الأمر", icon: Users         },
-  { id: "enrollment",  label_ar: "البرنامج",  icon: BookOpen      },
-  { id: "preferences", label_ar: "المستندات", icon: Globe         },
-  { id: "messages",    label_ar: "التأكيد",   icon: MessageCircle },
+// ✅ kidsOnly: الخطوة دي بتظهر للـ kids بس (مش للـ adults)
+const ALL_STEPS = [
+  { id: "account",     label_ar: "الحساب",    icon: User,          kidsOnly: false },
+  { id: "personal",    label_ar: "البيانات",   icon: UserCircle,    kidsOnly: false },
+  { id: "contact",     label_ar: "التواصل",   icon: Phone,         kidsOnly: false },
+  { id: "guardian",    label_ar: "ولي الأمر", icon: Users,         kidsOnly: true  }, // 👈 adults يتخطوها
+  { id: "enrollment",  label_ar: "البرنامج",  icon: BookOpen,      kidsOnly: false },
+  { id: "preferences", label_ar: "المستندات", icon: Globe,         kidsOnly: false },
+  { id: "messages",    label_ar: "التأكيد",   icon: MessageCircle, kidsOnly: false },
 ];
 
 // ─── Shared input styles ────────────────────────────────────────────────────
@@ -38,10 +39,9 @@ const selectBase =
   "dark:bg-dark_input dark:text-white text-sm focus:outline-none " +
   "focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-800 appearance-none";
 
-// ─── Helper: parse DOB from ISO string into {day, month, year} ──────────────
+// ─── Helper: parse DOB ──────────────────────────────────────────────────────
 function parseDOB(raw) {
   if (!raw) return { day: "", month: "", year: "" };
-  // handle "YYYY-MM-DD" or full ISO
   const date = new Date(raw);
   if (isNaN(date.getTime())) return { day: "", month: "", year: "" };
   return {
@@ -51,7 +51,7 @@ function parseDOB(raw) {
   };
 }
 
-// ─── Helper: normalize gender to "Male" | "Female" | "" ────────────────────
+// ─── Helper: normalize gender ───────────────────────────────────────────────
 function normalizeGenderDisplay(raw) {
   if (!raw) return "";
   const lower = raw.toLowerCase();
@@ -59,6 +59,16 @@ function normalizeGenderDisplay(raw) {
   if (lower === "female") return "Female";
   return "";
 }
+
+// ─── Helper: بيانات ولي الأمر الفاضية (للـ adults) ─────────────────────────
+const EMPTY_GUARDIAN = {
+  name: "",
+  nickname: { ar: "", en: "" },
+  relationship: "father",
+  phone: "",
+  whatsappNumber: "",
+  email: "",
+};
 
 export default function StudentForm({ initial, onClose, onSaved }) {
   const { t, locale } = useI18n();
@@ -69,84 +79,156 @@ export default function StudentForm({ initial, onClose, onSaved }) {
   const [animDir, setAnimDir] = useState(1);
   const [visible, setVisible] = useState(true);
 
-  const goTo = (next) => {
-    if (next === step) return;
-    setAnimDir(next > step ? 1 : -1);
+  // ── DOB ─────────────────────────────────────────────────────────────────
+  const [dob, setDob] = useState(() => parseDOB(initial?.personalInfo?.dateOfBirth));
+
+  // ── form state ──────────────────────────────────────────────────────────
+  const [form, setForm] = useState(() => {
+    const initialType = initial?.studentType === "adults" ? "adults" : "kids";
+    return {
+      // ✅ NEW: نوع الطالب
+      studentType: initialType,
+
+      authUserId: initial?.authUserId?._id || "",
+      personalInfo: {
+        fullName:       initial?.personalInfo?.fullName                   || "",
+        nickname: {
+          ar: initial?.personalInfo?.nickname?.ar || "",
+          en: initial?.personalInfo?.nickname?.en || "",
+        },
+        email:          initial?.personalInfo?.email                      || "",
+        phone:          initial?.personalInfo?.phone                      || "",
+        whatsappNumber: initial?.personalInfo?.whatsappNumber             || "",
+        dateOfBirth:    initial?.personalInfo?.dateOfBirth                || "",
+        gender:         normalizeGenderDisplay(initial?.personalInfo?.gender),
+        nationalId:     initial?.personalInfo?.nationalId                 || "",
+        address: {
+          street:     initial?.personalInfo?.address?.street     || "",
+          city:       initial?.personalInfo?.address?.city       || "",
+          state:      initial?.personalInfo?.address?.state      || "",
+          postalCode: initial?.personalInfo?.address?.postalCode || "",
+          country:    initial?.personalInfo?.address?.country    || "",
+        },
+      },
+      // ✅ لو adults → ولي الأمر فاضي من البداية
+      guardianInfo: initialType === "adults"
+        ? { ...EMPTY_GUARDIAN }
+        : {
+            name:           initial?.guardianInfo?.name                       || "",
+            nickname: {
+              ar: initial?.guardianInfo?.nickname?.ar || "",
+              en: initial?.guardianInfo?.nickname?.en || "",
+            },
+            relationship:   initial?.guardianInfo?.relationship               || "father",
+            phone:          initial?.guardianInfo?.phone                      || "",
+            whatsappNumber: initial?.guardianInfo?.whatsappNumber             || "",
+            email:          initial?.guardianInfo?.email                      || "",
+          },
+      enrollmentInfo: {
+        source:     initial?.enrollmentInfo?.source     || "Website",
+        referredBy: initial?.enrollmentInfo?.referredBy || "",
+        status:     initial?.enrollmentInfo?.status     || "Active",
+      },
+      academicInfo: {
+        level:          initial?.academicInfo?.level          || "Beginner",
+        groupIds:       initial?.academicInfo?.groupIds       || [],
+        currentCourses: initial?.academicInfo?.currentCourses || [],
+      },
+      tags: (initial?.tags || []).map((tg) => (typeof tg === "string" ? tg : tg._id)),
+      communicationPreferences: {
+        preferredLanguage:    initial?.communicationPreferences?.preferredLanguage    || "ar",
+        notificationChannels: initial?.communicationPreferences?.notificationChannels || { email: true, whatsapp: true, sms: false },
+        marketingOptIn:       initial?.communicationPreferences?.marketingOptIn       ?? true,
+      },
+      whatsappCustomMessages: {
+        firstMessage:  initial?.whatsappCustomMessages?.firstMessage  || "",
+        secondMessage: initial?.whatsappCustomMessages?.secondMessage || "",
+      },
+    };
+  });
+
+  // ── ✅ STEPS محسوبة من studentType ─────────────────────────────────────
+  const STEPS = useMemo(
+    () => ALL_STEPS.filter((s) => !s.kidsOnly || form.studentType === "kids"),
+    [form.studentType],
+  );
+
+  // ── navigation ─────────────────────────────────────────────────────────
+  const goTo = (nextIdx) => {
+    if (nextIdx === step) return;
+    setAnimDir(nextIdx > step ? 1 : -1);
     setVisible(false);
-    setTimeout(() => { setStep(next); setVisible(true); }, 180);
+    setTimeout(() => { setStep(nextIdx); setVisible(true); }, 180);
   };
   const next = () => goTo(Math.min(step + 1, STEPS.length - 1));
   const prev = () => goTo(Math.max(step - 1, 0));
 
-  // ── DOB — stored separately so partial edits don't break the ISO string ─
-  const [dob, setDob] = useState(() => parseDOB(initial?.personalInfo?.dateOfBirth));
+  // ✅ لو المستخدم بدّل النوع والأIndex الحالي مش موجود → نرجّعه لأقرب خطوة صالحة
+  useEffect(() => {
+    if (step >= STEPS.length) {
+      setStep(STEPS.length - 1);
+    }
+  }, [STEPS.length, step]);
 
-  // sync DOB → form.personalInfo.dateOfBirth
+  // ── ✅ handleStudentTypeChange ──────────────────────────────────────────
+  const handleStudentTypeChange = useCallback((newType) => {
+    setForm((prev) => {
+      if (prev.studentType === newType) return prev;
+
+      // لو adults → نفرّغ بيانات ولي الأمر تمامًا
+      const newGuardian = newType === "adults"
+        ? { ...EMPTY_GUARDIAN }
+        : prev.guardianInfo;
+
+      return {
+        ...prev,
+        studentType: newType,
+        guardianInfo: newGuardian,
+      };
+    });
+  }, []);
+
   const dobToISO = ({ day, month, year }) => {
     if (!day || !month || !year || year.length < 4) return "";
     const d = new Date(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T12:00:00`);
     return isNaN(d.getTime()) ? "" : d.toISOString();
   };
 
-  // ── form state ───────────────────────────────────────────────────────────
-  const [form, setForm] = useState(() => ({
-    authUserId: initial?.authUserId?._id || "",
-    personalInfo: {
-      fullName:       initial?.personalInfo?.fullName                   || "",
-      nickname:       {
-        ar: initial?.personalInfo?.nickname?.ar || "",
-        en: initial?.personalInfo?.nickname?.en || "",
-      },
-      email:          initial?.personalInfo?.email                      || "",
-      phone:          initial?.personalInfo?.phone                      || "",
-      whatsappNumber: initial?.personalInfo?.whatsappNumber             || "",
-      // stored as ISO; computed from dob state on submit
-      dateOfBirth:    initial?.personalInfo?.dateOfBirth                || "",
-      // ✅ FIX: normalize gender so "Male"/"male"/"Female"/"female" all work
-      gender:         normalizeGenderDisplay(initial?.personalInfo?.gender),
-      nationalId:     initial?.personalInfo?.nationalId                 || "",
-      address: {
-        street:     initial?.personalInfo?.address?.street     || "",
-        city:       initial?.personalInfo?.address?.city       || "",
-        state:      initial?.personalInfo?.address?.state      || "",
-        postalCode: initial?.personalInfo?.address?.postalCode || "",
-        country:    initial?.personalInfo?.address?.country    || "",
-      },
-    },
-    guardianInfo: {
-      name:           initial?.guardianInfo?.name                       || "",
-      nickname:       {
-        ar: initial?.guardianInfo?.nickname?.ar || "",
-        en: initial?.guardianInfo?.nickname?.en || "",
-      },
-      relationship:   initial?.guardianInfo?.relationship               || "father",
-      phone:          initial?.guardianInfo?.phone                      || "",
-      whatsappNumber: initial?.guardianInfo?.whatsappNumber             || "",
-      email:          initial?.guardianInfo?.email                      || "",
-    },
-    enrollmentInfo: {
-      source:     initial?.enrollmentInfo?.source     || "Website",
-      referredBy: initial?.enrollmentInfo?.referredBy || "",
-      status:     initial?.enrollmentInfo?.status     || "Active",
-    },
-    academicInfo: {
-      level:          initial?.academicInfo?.level          || "Beginner",
-      groupIds:       initial?.academicInfo?.groupIds       || [],
-      currentCourses: initial?.academicInfo?.currentCourses || [],
-    },
-    // ✅ الوسوم — top-level زي الـ Student schema بالظبط
-    tags: (initial?.tags || []).map(tg => (typeof tg === "string" ? tg : tg._id)),
-    communicationPreferences: {
-      preferredLanguage:    initial?.communicationPreferences?.preferredLanguage    || "ar",
-      notificationChannels: initial?.communicationPreferences?.notificationChannels || { email: true, whatsapp: true, sms: false },
-      marketingOptIn:       initial?.communicationPreferences?.marketingOptIn       ?? true,
-    },
-    whatsappCustomMessages: {
-      firstMessage:  initial?.whatsappCustomMessages?.firstMessage  || "",
-      secondMessage: initial?.whatsappCustomMessages?.secondMessage || "",
-    },
-  }));
+  // ── onChange helper ────────────────────────────────────────────────────
+  const onChange = (path, value) => {
+    const parts = path.split(".");
+    setForm((prev) => {
+      const nextForm = JSON.parse(JSON.stringify(prev));
+      let cur = nextForm;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!cur[parts[i]]) cur[parts[i]] = {};
+        cur = cur[parts[i]];
+      }
+      cur[parts[parts.length - 1]] = value;
+      return nextForm;
+    });
+  };
 
+  const handleAddressChange = (field, value) =>
+    setForm((prev) => ({
+      ...prev,
+      personalInfo: {
+        ...prev.personalInfo,
+        address: { ...prev.personalInfo.address, [field]: value },
+      },
+    }));
+
+  const toggleTag = (tagId) => {
+    setForm((prev) => {
+      const current  = prev.tags || [];
+      const nextTags = current.includes(tagId)
+        ? current.filter((id) => id !== tagId)
+        : [...current, tagId];
+      return { ...prev, tags: nextTags };
+    });
+  };
+
+  // ── state ──────────────────────────────────────────────────────────────
   const [loading,          setLoading]          = useState(false);
   const [students,         setStudents]         = useState([]);
   const [studentsLoading,  setStudentsLoading]  = useState(false);
@@ -157,28 +239,25 @@ export default function StudentForm({ initial, onClose, onSaved }) {
   const [password,         setPassword]         = useState("");
   const [passwordConfirm,  setPasswordConfirm]  = useState("");
 
-  // ── ✅ NEW: account-edit state for an EXISTING student (linked user) ─────
-  const [editEmail,          setEditEmail]          = useState("");   // الإيميل بعد التعديل لطالب موجود
-  const [newPassword,        setNewPassword]        = useState("");   // باسورد جديد (اختياري) لطالب موجود
+  const [editEmail,          setEditEmail]          = useState("");
+  const [newPassword,        setNewPassword]        = useState("");
   const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
-  const [updatingAccount,    setUpdatingAccount]    = useState(false); // لودينج خاص بتحديث الإيميل/الباسورد بس
+  const [updatingAccount,    setUpdatingAccount]    = useState(false);
 
-  // ── ✅ NEW: real-time email-taken check (debounced) ──────────────────────
   const [emailCheckStatus, setEmailCheckStatus] = useState("idle");
   const emailCheckAbortRef = useRef(null);
 
-  const [templates,        setTemplates]        = useState({ student: null, guardian: null });
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
-  const [savingTemplate,   setSavingTemplate]   = useState({ student: false, guardian: false });
-  const [messagePreview,   setMessagePreview]   = useState({ student: "", guardian: "" });
-  const [showStudentHints, setShowStudentHints] = useState(false);
-  const [showGuardianHints,setShowGuardianHints]= useState(false);
-  const [cursorPosition,   setCursorPosition]   = useState({ student: 0, guardian: 0 });
-  const [selectedHintIndex,setSelectedHintIndex]= useState(0);
-  const [dbVars,           setDbVars]           = useState({});
-  const [loadingVars,      setLoadingVars]      = useState(false);
+  const [templates,         setTemplates]         = useState({ student: null, guardian: null });
+  const [loadingTemplates,  setLoadingTemplates]  = useState(false);
+  const [savingTemplate,    setSavingTemplate]    = useState({ student: false, guardian: false });
+  const [messagePreview,    setMessagePreview]    = useState({ student: "", guardian: "" });
+  const [showStudentHints,  setShowStudentHints]  = useState(false);
+  const [showGuardianHints, setShowGuardianHints] = useState(false);
+  const [cursorPosition,    setCursorPosition]    = useState({ student: 0, guardian: 0 });
+  const [selectedHintIndex, setSelectedHintIndex] = useState(0);
+  const [dbVars,            setDbVars]            = useState({});
+  const [loadingVars,       setLoadingVars]       = useState(false);
 
-  // ── ✅ Tags state ─────────────────────────────────────────────────────────
   const [tagsList,    setTagsList]    = useState([]);
   const [tagsLoading, setTagsLoading] = useState(false);
 
@@ -188,42 +267,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
   const studentHintsRef     = useRef(null);
   const guardianHintsRef    = useRef(null);
 
-  // ── onChange helper ──────────────────────────────────────────────────────
-  const onChange = (path, value) => {
-    const parts = path.split(".");
-    setForm(prev => {
-      const next = JSON.parse(JSON.stringify(prev));
-      let cur    = next;
-      for (let i = 0; i < parts.length - 1; i++) {
-        if (!cur[parts[i]]) cur[parts[i]] = {};
-        cur = cur[parts[i]];
-      }
-      cur[parts[parts.length - 1]] = value;
-      return next;
-    });
-  };
-
-  const handleAddressChange = (field, value) =>
-    setForm(prev => ({
-      ...prev,
-      personalInfo: {
-        ...prev.personalInfo,
-        address: { ...prev.personalInfo.address, [field]: value },
-      },
-    }));
-
-  // ✅ دالة تبديل التاج
-  const toggleTag = (tagId) => {
-    setForm(prev => {
-      const current = prev.tags || [];
-      const nextTags = current.includes(tagId)
-        ? current.filter(id => id !== tagId)
-        : [...current, tagId];
-      return { ...prev, tags: nextTags };
-    });
-  };
-
-  // ── DB variables ─────────────────────────────────────────────────────────
+  // ── DB variables ───────────────────────────────────────────────────────
   const fetchDbVariables = async () => {
     setLoadingVars(true);
     try {
@@ -231,7 +275,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
       const data = await res.json();
       if (data.success && data.data) {
         const map = {};
-        data.data.forEach(v => { map[v.key] = v; });
+        data.data.forEach((v) => { map[v.key] = v; });
         setDbVars(map);
       }
     } catch (e) { console.error(e); } finally { setLoadingVars(false); }
@@ -242,12 +286,12 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     if (!v) return null;
     const { studentGender = "Male", guardianType = "father" } = genderContext;
     const isMale   = studentGender === "Male";
-    const isFather = guardianType  === "father";
+    const isFather = guardianType === "father";
     if (v.hasGender) {
       if (v.genderType === "student")
         return lang === "ar"
-          ? (isMale ? v.valueMaleAr   : v.valueFemaleAr)  || v.valueAr || ""
-          : (isMale ? v.valueMaleEn   : v.valueFemaleEn)  || v.valueEn || "";
+          ? (isMale ? v.valueMaleAr : v.valueFemaleAr) || v.valueAr || ""
+          : (isMale ? v.valueMaleEn : v.valueFemaleEn) || v.valueEn || "";
       if (v.genderType === "guardian")
         return lang === "ar"
           ? (isFather ? v.valueFatherAr : v.valueMotherAr) || v.valueAr || ""
@@ -257,43 +301,58 @@ export default function StudentForm({ initial, onClose, onSaved }) {
   }, [dbVars]);
 
   const buildReplacementsMap = useCallback(() => {
-    const gender       = form.personalInfo.gender       || "Male";
+    const gender       = form.personalInfo.gender || "Male";
     const relationship = form.guardianInfo.relationship || "father";
     const isMale       = gender === "Male";
     const genderCtx    = { studentGender: gender, guardianType: relationship };
+    const isAdult      = form.studentType === "adults";
 
-    const studentFullName  = form.personalInfo.fullName       || t("studentForm.student");
-    const studentNickAr    = form.personalInfo.nickname?.ar   || studentFullName.split(" ")[0] || "الطالب";
-    const studentNickEn    = form.personalInfo.nickname?.en   || studentFullName.split(" ")[0] || "Student";
-    const guardianFullName = form.guardianInfo.name           || t("studentForm.guardian");
-    const guardianNickAr   = form.guardianInfo.nickname?.ar   || guardianFullName.split(" ")[0] || "ولي الأمر";
-    const guardianNickEn   = form.guardianInfo.nickname?.en   || guardianFullName.split(" ")[0] || "Guardian";
+    const studentFullName = form.personalInfo.fullName     || t("studentForm.student") || "الطالب";
+    const studentNickAr   = form.personalInfo.nickname?.ar || studentFullName.split(" ")[0] || "الطالب";
+    const studentNickEn   = form.personalInfo.nickname?.en || studentFullName.split(" ")[0] || "Student";
 
-    const salutationAr         = resolveVar("salutation_ar",         "ar", genderCtx) || (isMale ? "عزيزي الطالب"   : "عزيزتي الطالبة");
-    const salutationEn         = resolveVar("salutation_en",         "en", genderCtx) || "Dear student";
-    const welcomeAr            = resolveVar("welcome_ar",            "ar", genderCtx) || (isMale ? "أهلاً بك"        : "أهلاً بكِ");
-    const youAr                = resolveVar("you_ar",                "ar", genderCtx) || (isMale ? "أنت"             : "أنتِ");
-    const guardianSalutationAr = resolveVar("guardianSalutation_ar", "ar", genderCtx)
-      || (relationship === "father" ? "عزيزي الأستاذ" : relationship === "mother" ? "عزيزتي السيدة" : "عزيزي/عزيزتي");
-    const guardianSalutationEn = resolveVar("guardianSalutation_en", "en", genderCtx)
-      || (relationship === "father" ? "Dear Mr." : relationship === "mother" ? "Dear Mrs." : "Dear");
-    const studentGenderAr      = resolveVar("studentGender_ar", "ar", genderCtx) || (isMale ? "الابن"  : "الابنة");
-    const studentGenderEn      = resolveVar("studentGender_en", "en", genderCtx) || (isMale ? "son"    : "daughter");
-    const relationshipAr       = resolveVar("relationship_ar",  "ar", genderCtx)
-      || (relationship === "father" ? t("studentForm.relationship.father") : relationship === "mother" ? t("studentForm.relationship.mother") : t("studentForm.relationship.guardian"));
+    // ✅ لو adult → متغيرات ولي الأمر تطلع فاضية
+    const guardianFullName = isAdult ? "" : (form.guardianInfo.name || t("studentForm.guardian") || "ولي الأمر");
+    const guardianNickAr   = isAdult ? "" : (form.guardianInfo.nickname?.ar || guardianFullName.split(" ")[0] || "ولي الأمر");
+    const guardianNickEn   = isAdult ? "" : (form.guardianInfo.nickname?.en || guardianFullName.split(" ")[0] || "Guardian");
+
+    const salutationAr = resolveVar("salutation_ar", "ar", genderCtx) || (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
+    const salutationEn = resolveVar("salutation_en", "en", genderCtx) || "Dear student";
+    const welcomeAr    = resolveVar("welcome_ar", "ar", genderCtx) || (isMale ? "أهلاً بك" : "أهلاً بكِ");
+    const youAr        = resolveVar("you_ar", "ar", genderCtx) || (isMale ? "أنت" : "أنتِ");
+
+    const guardianSalutationAr = isAdult
+      ? ""
+      : (resolveVar("guardianSalutation_ar", "ar", genderCtx)
+          || (relationship === "father" ? "عزيزي الأستاذ"
+              : relationship === "mother" ? "عزيزتي السيدة"
+              : "عزيزي/عزيزتي"));
+    const guardianSalutationEn = isAdult
+      ? ""
+      : (resolveVar("guardianSalutation_en", "en", genderCtx)
+          || (relationship === "father" ? "Dear Mr."
+              : relationship === "mother" ? "Dear Mrs."
+              : "Dear"));
+
+    const studentGenderAr = resolveVar("studentGender_ar", "ar", genderCtx) || (isMale ? "الابن" : "الابنة");
+    const studentGenderEn = resolveVar("studentGender_en", "en", genderCtx) || (isMale ? "son" : "daughter");
+    const relationshipAr  = resolveVar("relationship_ar", "ar", genderCtx)
+      || (relationship === "father" ? (t("studentForm.relationship.father") || "الأب")
+          : relationship === "mother" ? (t("studentForm.relationship.mother") || "الأم")
+          : (t("studentForm.relationship.guardian") || "ولي الأمر"));
 
     return {
       "{name_ar}":               studentNickAr,
       "{name_en}":               studentNickEn,
       "{fullName}":              studentFullName,
-      "{salutation_ar}":         `${salutationAr} ${studentNickAr}`,
-      "{salutation_en}":         `${salutationEn} ${studentNickEn}`,
+      "{salutation_ar}":         `${salutationAr} ${studentNickAr}`.trim(),
+      "{salutation_en}":         `${salutationEn} ${studentNickEn}`.trim(),
       "{you_ar}":                youAr,
       "{welcome_ar}":            welcomeAr,
       "{guardianName_ar}":       guardianNickAr,
       "{guardianName_en}":       guardianNickEn,
-      "{guardianSalutation_ar}": `${guardianSalutationAr} ${guardianNickAr}`,
-      "{guardianSalutation_en}": `${guardianSalutationEn} ${guardianNickEn}`,
+      "{guardianSalutation_ar}": guardianSalutationAr ? `${guardianSalutationAr} ${guardianNickAr}`.trim() : "",
+      "{guardianSalutation_en}": guardianSalutationEn ? `${guardianSalutationEn} ${guardianNickEn}`.trim() : "",
       "{studentName_ar}":        studentNickAr,
       "{studentName_en}":        studentNickEn,
       "{fullStudentName}":       studentFullName,
@@ -301,32 +360,32 @@ export default function StudentForm({ initial, onClose, onSaved }) {
       "{studentGender_ar}":      studentGenderAr,
       "{studentGender_en}":      studentGenderEn,
     };
-  }, [form.personalInfo, form.guardianInfo, resolveVar, t]);
+  }, [form.personalInfo, form.guardianInfo, form.studentType, resolveVar, t]);
 
   const studentVariables = useMemo(() => {
     const map = buildReplacementsMap();
     return [
-      { key: "{name_ar}",       label: t("studentForm.studentNicknameArabic"),  icon: "👤", example: map["{name_ar}"]       },
-      { key: "{name_en}",       label: t("studentForm.studentNicknameEnglish"), icon: "👤", example: map["{name_en}"]       },
-      { key: "{fullName}",      label: t("studentForm.fullName"),               icon: "📝", example: map["{fullName}"]      },
-      { key: "{salutation_ar}", label: "التحية (عربي)",                         icon: "👋", example: map["{salutation_ar}"] },
-      { key: "{salutation_en}", label: "التحية (إنجليزي)",                      icon: "👋", example: map["{salutation_en}"] },
-      { key: "{you_ar}",        label: "أنت/أنتِ",                              icon: "💬", example: map["{you_ar}"]        },
-      { key: "{welcome_ar}",    label: "الترحيب",                               icon: "🎉", example: map["{welcome_ar}"]    },
+      { key: "{name_ar}",       label: t("studentForm.studentNicknameArabic")  || "الاسم المختصر (عربي)",  icon: "👤", example: map["{name_ar}"]       },
+      { key: "{name_en}",       label: t("studentForm.studentNicknameEnglish") || "الاسم المختصر (إنجليزي)", icon: "👤", example: map["{name_en}"]       },
+      { key: "{fullName}",      label: t("studentForm.fullName")               || "الاسم الكامل",           icon: "📝", example: map["{fullName}"]      },
+      { key: "{salutation_ar}", label: "التحية (عربي)",                                                     icon: "👋", example: map["{salutation_ar}"] },
+      { key: "{salutation_en}", label: "التحية (إنجليزي)",                                                  icon: "👋", example: map["{salutation_en}"] },
+      { key: "{you_ar}",        label: "أنت/أنتِ",                                                          icon: "💬", example: map["{you_ar}"]        },
+      { key: "{welcome_ar}",    label: "الترحيب",                                                           icon: "🎉", example: map["{welcome_ar}"]    },
     ];
   }, [buildReplacementsMap, t]);
 
   const guardianVariables = useMemo(() => {
     const map = buildReplacementsMap();
     return [
-      { key: "{guardianName_ar}",       label: t("studentForm.guardianNicknameArabic"),  icon: "👤", example: map["{guardianName_ar}"]       },
-      { key: "{guardianName_en}",       label: t("studentForm.guardianNicknameEnglish"), icon: "👤", example: map["{guardianName_en}"]       },
-      { key: "{guardianSalutation_ar}", label: "التحية الكاملة (عربي)",                  icon: "👋", example: map["{guardianSalutation_ar}"] },
-      { key: "{guardianSalutation_en}", label: "التحية الكاملة (إنجليزي)",               icon: "👋", example: map["{guardianSalutation_en}"] },
-      { key: "{studentName_ar}",        label: t("studentForm.studentNicknameArabic"),   icon: "👶", example: map["{studentName_ar}"]        },
-      { key: "{studentName_en}",        label: t("studentForm.studentNicknameEnglish"),  icon: "👶", example: map["{studentName_en}"]        },
-      { key: "{relationship_ar}",       label: "العلاقة",                                icon: "👨‍👩‍👦", example: map["{relationship_ar}"]       },
-      { key: "{studentGender_ar}",      label: "الابن/الابنة",                           icon: "⚧",  example: map["{studentGender_ar}"]      },
+      { key: "{guardianName_ar}",       label: t("studentForm.guardianNicknameArabic")  || "اسم ولي الأمر (عربي)",   icon: "👤", example: map["{guardianName_ar}"]       },
+      { key: "{guardianName_en}",       label: t("studentForm.guardianNicknameEnglish") || "اسم ولي الأمر (إنجليزي)", icon: "👤", example: map["{guardianName_en}"]       },
+      { key: "{guardianSalutation_ar}", label: "التحية الكاملة (عربي)",                                              icon: "👋", example: map["{guardianSalutation_ar}"] },
+      { key: "{guardianSalutation_en}", label: "التحية الكاملة (إنجليزي)",                                           icon: "👋", example: map["{guardianSalutation_en}"] },
+      { key: "{studentName_ar}",        label: t("studentForm.studentNicknameArabic")  || "اسم الطالب (عربي)",      icon: "👶", example: map["{studentName_ar}"]        },
+      { key: "{studentName_en}",        label: t("studentForm.studentNicknameEnglish") || "اسم الطالب (إنجليزي)",   icon: "👶", example: map["{studentName_en}"]        },
+      { key: "{relationship_ar}",       label: "العلاقة",                                                            icon: "👨‍👩‍👦", example: map["{relationship_ar}"]       },
+      { key: "{studentGender_ar}",      label: "الابن/الابنة",                                                       icon: "⚧",  example: map["{studentGender_ar}"]      },
     ];
   }, [buildReplacementsMap, t]);
 
@@ -339,15 +398,15 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     return result;
   }, [buildReplacementsMap]);
 
-  // ── templates ────────────────────────────────────────────────────────────
+  // ── templates ──────────────────────────────────────────────────────────
   const fetchTemplates = async () => {
     setLoadingTemplates(true);
     try {
       const res  = await fetch("/api/whatsapp/templates?default=true");
       const data = await res.json();
       if (data.success && data.data.length > 0) {
-        const st = data.data.find(t => t.templateType === "student_welcome");
-        const gt = data.data.find(t => t.templateType === "guardian_notification");
+        const st = data.data.find((t) => t.templateType === "student_welcome");
+        const gt = data.data.find((t) => t.templateType === "guardian_notification");
         setTemplates({ student: st, guardian: gt });
         if (!form.whatsappCustomMessages?.secondMessage && st) onChange("whatsappCustomMessages.secondMessage", st.content);
         if (!form.whatsappCustomMessages?.firstMessage  && gt) onChange("whatsappCustomMessages.firstMessage",  gt.content);
@@ -357,7 +416,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
 
   const saveTemplateUpdate = async (templateType, content) => {
     const key = templateType === "student_welcome" ? "student" : "guardian";
-    setSavingTemplate(prev => ({ ...prev, [key]: true }));
+    setSavingTemplate((prev) => ({ ...prev, [key]: true }));
     try {
       const tmpl = templates[key];
       if (!tmpl) return;
@@ -367,12 +426,17 @@ export default function StudentForm({ initial, onClose, onSaved }) {
         body: JSON.stringify({ id: tmpl._id, content, setAsDefault: true }),
       });
       const data = await res.json();
-      if (data.success) { setTemplates(prev => ({ ...prev, [key]: data.data })); toast.success(t("common.saved"), { duration: 1500 }); }
-    } catch { toast.error(t("common.error")); } finally { setSavingTemplate(prev => ({ ...prev, [key]: false })); }
+      if (data.success) {
+        setTemplates((prev) => ({ ...prev, [key]: data.data }));
+        toast.success(t("common.saved"), { duration: 1500 });
+      }
+    } catch { toast.error(t("common.error")); } finally {
+      setSavingTemplate((prev) => ({ ...prev, [key]: false }));
+    }
   };
 
   useEffect(() => { fetchDbVariables(); }, []);
-  useEffect(() => { fetchTemplates(); },   []);
+  useEffect(() => { fetchTemplates();   }, []);
 
   // ✅ تحميل قائمة الوسوم
   useEffect(() => {
@@ -386,6 +450,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     })();
   }, []);
 
+  // حفظ قالب الطالب تلقائيًا
   useEffect(() => {
     const timer = setTimeout(() => {
       if (form.whatsappCustomMessages?.secondMessage && templates.student && form.whatsappCustomMessages.secondMessage !== templates.student.content)
@@ -394,13 +459,15 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     return () => clearTimeout(timer);
   }, [form.whatsappCustomMessages?.secondMessage]);
 
+  // حفظ قالب ولي الأمر تلقائيًا — بس للـ kids
   useEffect(() => {
+    if (form.studentType === "adults") return;
     const timer = setTimeout(() => {
       if (form.whatsappCustomMessages?.firstMessage && templates.guardian && form.whatsappCustomMessages.firstMessage !== templates.guardian.content)
         saveTemplateUpdate("guardian_notification", form.whatsappCustomMessages.firstMessage);
     }, 2000);
     return () => clearTimeout(timer);
-  }, [form.whatsappCustomMessages?.firstMessage]);
+  }, [form.whatsappCustomMessages?.firstMessage, form.studentType]);
 
   useEffect(() => {
     setMessagePreview({
@@ -409,19 +476,19 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     });
   }, [replaceVariables, form.whatsappCustomMessages, templates]);
 
-  // ── hints & textarea ─────────────────────────────────────────────────────
+  // ── hints & textarea ───────────────────────────────────────────────────
   const handleTextareaInput = (e, type) => {
     const value     = e.target.value;
     const cursorPos = e.target.selectionStart;
     if (type === "student") {
       onChange("whatsappCustomMessages.secondMessage", value);
-      setCursorPosition(p => ({ ...p, student: cursorPos }));
+      setCursorPosition((p) => ({ ...p, student: cursorPos }));
       const lastAt = value.substring(0, cursorPos).lastIndexOf("@");
       if (lastAt !== -1 && lastAt === cursorPos - 1) { setShowStudentHints(true); setSelectedHintIndex(0); }
       else if (showStudentHints && lastAt === -1) setShowStudentHints(false);
     } else {
       onChange("whatsappCustomMessages.firstMessage", value);
-      setCursorPosition(p => ({ ...p, guardian: cursorPos }));
+      setCursorPosition((p) => ({ ...p, guardian: cursorPos }));
       const lastAt = value.substring(0, cursorPos).lastIndexOf("@");
       if (lastAt !== -1 && lastAt === cursorPos - 1) { setShowGuardianHints(true); setSelectedHintIndex(0); }
       else if (showGuardianHints && lastAt === -1) setShowGuardianHints(false);
@@ -435,10 +502,22 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     const textBefore = currentVal.substring(0, cursorPos);
     const lastAt     = textBefore.lastIndexOf("@");
     let newValue, newCursorPos;
-    if (lastAt !== -1) { newValue = currentVal.substring(0, lastAt) + variable.key + currentVal.substring(cursorPos); newCursorPos = lastAt + variable.key.length; }
-    else               { newValue = currentVal.substring(0, cursorPos) + variable.key + currentVal.substring(cursorPos); newCursorPos = cursorPos + variable.key.length; }
-    if (type === "student") { onChange("whatsappCustomMessages.secondMessage", newValue); setShowStudentHints(false); setCursorPosition(p => ({ ...p, student: newCursorPos })); }
-    else                   { onChange("whatsappCustomMessages.firstMessage",  newValue); setShowGuardianHints(false); setCursorPosition(p => ({ ...p, guardian: newCursorPos })); }
+    if (lastAt !== -1) {
+      newValue     = currentVal.substring(0, lastAt) + variable.key + currentVal.substring(cursorPos);
+      newCursorPos = lastAt + variable.key.length;
+    } else {
+      newValue     = currentVal.substring(0, cursorPos) + variable.key + currentVal.substring(cursorPos);
+      newCursorPos = cursorPos + variable.key.length;
+    }
+    if (type === "student") {
+      onChange("whatsappCustomMessages.secondMessage", newValue);
+      setShowStudentHints(false);
+      setCursorPosition((p) => ({ ...p, student: newCursorPos }));
+    } else {
+      onChange("whatsappCustomMessages.firstMessage", newValue);
+      setShowGuardianHints(false);
+      setCursorPosition((p) => ({ ...p, guardian: newCursorPos }));
+    }
     setTimeout(() => { textarea?.focus(); textarea?.setSelectionRange(newCursorPos, newCursorPos); }, 0);
   };
 
@@ -446,13 +525,13 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     const vars      = type === "student" ? studentVariables : guardianVariables;
     const showHints = type === "student" ? showStudentHints : showGuardianHints;
     if (!showHints) return;
-    if (e.key === "ArrowDown")             { e.preventDefault(); setSelectedHintIndex(p => (p + 1) % vars.length); }
-    else if (e.key === "ArrowUp")          { e.preventDefault(); setSelectedHintIndex(p => (p - 1 + vars.length) % vars.length); }
+    if (e.key === "ArrowDown")             { e.preventDefault(); setSelectedHintIndex((p) => (p + 1) % vars.length); }
+    else if (e.key === "ArrowUp")          { e.preventDefault(); setSelectedHintIndex((p) => (p - 1 + vars.length) % vars.length); }
     else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); insertVariable(vars[selectedHintIndex], type); }
     else if (e.key === "Escape")           { e.preventDefault(); type === "student" ? setShowStudentHints(false) : setShowGuardianHints(false); }
   };
 
-  // ── students fetch ───────────────────────────────────────────────────────
+  // ── students fetch ─────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       setStudentsLoading(true);
@@ -475,21 +554,20 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ✅ FIX: also seed editEmail with the current account email when an
-  // existing student is loaded into the form (edit mode entry point).
+  // ✅ Seed editEmail لما نكون في وضع التعديل لطالب موجود
   useEffect(() => {
     if (initial?.authUserId) {
       const name  = initial.personalInfo?.fullName || initial.authUserId?.name  || "";
       const email = initial.personalInfo?.email    || initial.authUserId?.email || "";
       setStudentSearch(name);
       setSelectedStudent({ _id: initial.authUserId._id, name, email });
-      setEditEmail(email); // ✅ تعبئة حقل الإيميل القابل للتعديل
+      setEditEmail(email);
     } else if (initial && !initial.authUserId) {
       setStudentSearch(initial.personalInfo?.fullName || "");
     }
   }, [initial]);
 
-  // ── ✅ NEW: real-time "email already taken" check ────────────────────────
+  // ── real-time email-taken check ────────────────────────────────────────
   useEffect(() => {
     const isExistingStudent = selectedStudent && !selectedStudent.isManual;
 
@@ -528,29 +606,26 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     return () => { clearTimeout(timer); controller.abort(); };
   }, [editEmail, selectedStudent]);
 
-  // ── student search helpers ───────────────────────────────────────────────
+  // ── student search helpers ─────────────────────────────────────────────
   const addManualStudent = (name) => {
-    if (name.trim() && !manualStudents.some(s => s.name === name.trim())) {
+    if (name.trim() && !manualStudents.some((s) => s.name === name.trim())) {
       const s = { _id: `manual_${Date.now()}`, name: name.trim(), email: "", role: "student", isManual: true };
-      setManualStudents(prev => [...prev, s]);
+      setManualStudents((prev) => [...prev, s]);
       return s;
     }
     return null;
   };
 
-  // ✅ FIX: keep editEmail / newPassword in sync when a different existing
-  // student is picked from the dropdown, and clear any leftover password
-  // input from a previously selected student.
   const handleStudentSelect = (student) => {
     if (!student.isManual) {
       setSelectedStudent(student);
       onChange("personalInfo.fullName", student.name);
       onChange("personalInfo.email",   student.email);
       onChange("authUserId",           student._id);
-      setEditEmail(student.email || ""); // ✅
+      setEditEmail(student.email || "");
       setNewPassword("");
       setNewPasswordConfirm("");
-      setEmailCheckStatus("idle"); // ✅ تصفير حالة الفحص عند تبديل الطالب
+      setEmailCheckStatus("idle");
     } else {
       setSelectedStudent(null);
       onChange("personalInfo.fullName", student.name);
@@ -567,11 +642,11 @@ export default function StudentForm({ initial, onClose, onSaved }) {
     if (selectedStudent && value !== selectedStudent.name) { setSelectedStudent(null); onChange("authUserId", ""); }
   };
 
-  const filteredStudents       = students.filter(s => s.name?.toLowerCase().includes(studentSearch.toLowerCase()) || s.email?.toLowerCase().includes(studentSearch.toLowerCase()));
-  const filteredManualStudents = manualStudents.filter(s => s.name?.toLowerCase().includes(studentSearch.toLowerCase()));
+  const filteredStudents       = students.filter((s) => s.name?.toLowerCase().includes(studentSearch.toLowerCase()) || s.email?.toLowerCase().includes(studentSearch.toLowerCase()));
+  const filteredManualStudents = manualStudents.filter((s) => s.name?.toLowerCase().includes(studentSearch.toLowerCase()));
   const isNameInLists          = studentSearch.trim() && (
-    filteredStudents.some(s => s.name?.toLowerCase() === studentSearch.toLowerCase()) ||
-    filteredManualStudents.some(s => s.name?.toLowerCase() === studentSearch.toLowerCase())
+    filteredStudents.some((s) => s.name?.toLowerCase() === studentSearch.toLowerCase()) ||
+    filteredManualStudents.some((s) => s.name?.toLowerCase() === studentSearch.toLowerCase())
   );
 
   const resetToDefaultTemplate = (type) => {
@@ -581,13 +656,14 @@ export default function StudentForm({ initial, onClose, onSaved }) {
 
   const getGuardianIcon = () => ({ father: "👨", mother: "👩" }[form.guardianInfo.relationship] || "👤");
 
-  // ── submit ───────────────────────────────────────────────────────────────
+  // ── submit ─────────────────────────────────────────────────────────────
   const submit = async (e) => {
     e.preventDefault();
 
     const isExistingStudent = selectedStudent && !selectedStudent.isManual;
+    const isAdult           = form.studentType === "adults";
 
-    // ── ✅ NEW: منع الحفظ لو الفحص الفوري أكد إن الإيميل مستخدم ──
+    // ── منع الحفظ لو الفحص الفوري أكد إن الإيميل مستخدم ──
     if (isExistingStudent && emailCheckStatus === "taken") {
       toast.error(t("studentForm.emailAlreadyTaken") || "هذا البريد الإلكتروني مستخدم من قبل حساب آخر");
       return;
@@ -599,7 +675,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
       if (password.length < 6)          { toast.error(t("studentForm.passwordLength"));   return; }
     }
 
-    // ── تحقق كلمة المرور الجديدة لطالب موجود (لو حد كتب فيها) ──
+    // ── تحقق كلمة المرور الجديدة لطالب موجود ──
     if (isExistingStudent && (newPassword || newPasswordConfirm)) {
       if (newPassword !== newPasswordConfirm) { toast.error(t("studentForm.passwordMismatch")); return; }
       if (newPassword.length < 6)             { toast.error(t("studentForm.passwordLength"));   return; }
@@ -611,13 +687,15 @@ export default function StudentForm({ initial, onClose, onSaved }) {
       let userId = form.authUserId;
 
       if (!selectedStudent || selectedStudent.isManual) {
-        // ── طالب جديد: إنشاء يوزر جديد ──
-        const userRes  = await fetch("/api/allStudents/createUser", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.personalInfo.fullName, email: form.personalInfo.email, password, role: "student" }) });
+        const userRes  = await fetch("/api/allStudents/createUser", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: form.personalInfo.fullName, email: form.personalInfo.email, password, role: "student" }),
+        });
         const userData = await userRes.json();
         if (!userRes.ok) throw new Error(userData.message);
         userId = userData.user?.id;
       } else if (isExistingStudent) {
-        // ── طالب موجود: تحديث الإيميل و/أو الباسورد لو فيه تغيير ──
         const emailChanged        = editEmail && editEmail.trim().toLowerCase() !== (selectedStudent.email || "").toLowerCase();
         const wantsPasswordChange = !!newPassword;
 
@@ -636,18 +714,16 @@ export default function StudentForm({ initial, onClose, onSaved }) {
         }
       }
 
-      // build final ISO from dob state
       const dateOfBirthISO = dobToISO(dob) || null;
+      const finalEmail     = isExistingStudent ? editEmail.trim().toLowerCase() : form.personalInfo.email;
 
-      // ✅ FIX: keep Student.personalInfo.email in sync with the (possibly
-      // just-updated) account email when editing an existing student.
-      const finalEmail = isExistingStudent ? editEmail.trim().toLowerCase() : form.personalInfo.email;
-
-      // ✅ الوسوم بتتبعت top-level زي ما هي مخزنة في الـ Student schema
+      // ✅ payload — لو adults: بيانات ولي الأمر فاضية
       const payload = {
         ...form,
+        studentType: form.studentType,
         authUserId: userId,
         personalInfo: { ...form.personalInfo, email: finalEmail, dateOfBirth: dateOfBirthISO },
+        guardianInfo: isAdult ? { ...EMPTY_GUARDIAN } : form.guardianInfo,
         tags: form.tags || [],
       };
 
@@ -672,6 +748,11 @@ export default function StudentForm({ initial, onClose, onSaved }) {
 
   const progress   = ((step + 1) / STEPS.length) * 100;
   const isLastStep = step === STEPS.length - 1;
+
+  // ✅ shorthand للخطوة الحالية بالـ id (أأمن من الـ index)
+  const currentStepId = STEPS[step]?.id;
+
+  const isAdult = form.studentType === "adults";
 
   // ─── RENDER ──────────────────────────────────────────────────────────────
   return (
@@ -737,17 +818,17 @@ export default function StudentForm({ initial, onClose, onSaved }) {
           </div>
           <div className="text-right mb-6">
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
-              {t(`studentForm.step.${STEPS[step].id}.title`) || ""}
+              {t(`studentForm.step.${currentStepId}.title`) || ""}
             </h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t(`studentForm.step.${STEPS[step].id}.desc`) || ""}
+              {t(`studentForm.step.${currentStepId}.desc`) || ""}
             </p>
           </div>
 
           {/* ════════════════════════════════════════════
-              STEP 0 — Account
+              STEP — Account
           ════════════════════════════════════════════ */}
-          {step === 0 && (
+          {currentStepId === "account" && (
             <div className="space-y-5">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -780,7 +861,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                           </div>
                         </button>
                       )}
-                      {filteredStudents.map(s => (
+                      {filteredStudents.map((s) => (
                         <button key={s._id} type="button" onClick={() => handleStudentSelect(s)} className="w-full px-4 py-3 text-right hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                             <User className="w-4 h-4 text-primary" />
@@ -837,7 +918,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                     <input
                       type="email"
                       value={selectedStudent && !selectedStudent.isManual ? editEmail : form.personalInfo.email}
-                      onChange={e => {
+                      onChange={(e) => {
                         if (selectedStudent && !selectedStudent.isManual) {
                           setEditEmail(e.target.value);
                         } else {
@@ -893,11 +974,11 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <label className={labelBase}>{t("common.password") || "كلمة المرور"}</label>
-                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} className={`${inputBase} text-right`} minLength={6} />
+                        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className={`${inputBase} text-right`} minLength={6} />
                       </div>
                       <div className="space-y-1.5">
                         <label className={labelBase}>{t("common.confirmPassword") || "تأكيد"}</label>
-                        <input type="password" value={passwordConfirm} onChange={e => setPasswordConfirm(e.target.value)} className={`${inputBase} text-right`} minLength={6} />
+                        <input type="password" value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} className={`${inputBase} text-right`} minLength={6} />
                       </div>
                     </div>
                     {password && passwordConfirm && password !== passwordConfirm && (
@@ -909,7 +990,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                   </div>
                 )}
 
-                {/* ── ✅ NEW: تغيير كلمة المرور لطالب موجود ── */}
+                {/* ── تغيير كلمة المرور لطالب موجود ── */}
                 {selectedStudent && !selectedStudent.isManual && (
                   <div className="space-y-4 pt-2 border-t border-orange-100 dark:border-orange-900/40">
                     <div className="flex items-center justify-end gap-2 pt-1">
@@ -929,7 +1010,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                         <input
                           type="password"
                           value={newPassword}
-                          onChange={e => setNewPassword(e.target.value)}
+                          onChange={(e) => setNewPassword(e.target.value)}
                           placeholder="••••••••"
                           className={`${inputBase} text-right`}
                           minLength={6}
@@ -940,7 +1021,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                         <input
                           type="password"
                           value={newPasswordConfirm}
-                          onChange={e => setNewPasswordConfirm(e.target.value)}
+                          onChange={(e) => setNewPasswordConfirm(e.target.value)}
                           placeholder="••••••••"
                           className={`${inputBase} text-right`}
                           minLength={6}
@@ -965,10 +1046,63 @@ export default function StudentForm({ initial, onClose, onSaved }) {
           )}
 
           {/* ════════════════════════════════════════════
-              STEP 1 — Personal Info
+              STEP — Personal Info (+ Kids/Adults toggle)
           ════════════════════════════════════════════ */}
-          {step === 1 && (
+          {currentStepId === "personal" && (
             <div className="space-y-6">
+
+              {/* ✅ اختيار نوع الطالب */}
+              <div className="space-y-2">
+                <label className={labelBase}>
+                  نوع الطالب <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleStudentTypeChange("kids")}
+                    className={`
+                      relative flex items-center justify-center gap-2.5 py-4 rounded-xl border-2
+                      text-sm font-semibold transition-all duration-200
+                      ${form.studentType === "kids"
+                        ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 ring-4 ring-emerald-500/15"
+                        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-dark_input text-gray-500 hover:border-emerald-300"}
+                    `}
+                  >
+                    {form.studentType === "kids" && (
+                      <span className="absolute top-2.5 left-2.5 w-2 h-2 rounded-full bg-emerald-500" />
+                    )}
+                    <span className="text-xl leading-none">🧒</span>
+                    <span>أطفال (Kids)</span>
+                    {form.studentType === "kids" && <CheckCircle className="w-4 h-4 absolute top-2.5 right-2.5 opacity-70" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleStudentTypeChange("adults")}
+                    className={`
+                      relative flex items-center justify-center gap-2.5 py-4 rounded-xl border-2
+                      text-sm font-semibold transition-all duration-200
+                      ${form.studentType === "adults"
+                        ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 ring-4 ring-indigo-500/15"
+                        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-dark_input text-gray-500 hover:border-indigo-300"}
+                    `}
+                  >
+                    {form.studentType === "adults" && (
+                      <span className="absolute top-2.5 left-2.5 w-2 h-2 rounded-full bg-indigo-500" />
+                    )}
+                    <span className="text-xl leading-none">🧑</span>
+                    <span>بالغين (Adults)</span>
+                    {form.studentType === "adults" && <CheckCircle className="w-4 h-4 absolute top-2.5 right-2.5 opacity-70" />}
+                  </button>
+                </div>
+
+                {isAdult && (
+                  <div className="flex items-center justify-end gap-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-xl border border-amber-100 dark:border-amber-900/50">
+                    <span>تم تخطي خطوة ولي الأمر ولن يتم إرسال أي رسائل لولي الأمر لهذا الطالب.</span>
+                    <Info className="w-3.5 h-3.5 flex-shrink-0" />
+                  </div>
+                )}
+              </div>
 
               {/* Date of Birth */}
               <div className="space-y-2">
@@ -983,7 +1117,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                       min={1} max={31}
                       placeholder="DD"
                       value={dob.day}
-                      onChange={e => setDob(prev => ({ ...prev, day: e.target.value }))}
+                      onChange={(e) => setDob((prev) => ({ ...prev, day: e.target.value }))}
                       className={`${inputBase} text-center`}
                     />
                   </div>
@@ -992,7 +1126,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                     <div className="relative">
                       <select
                         value={dob.month}
-                        onChange={e => setDob(prev => ({ ...prev, month: e.target.value }))}
+                        onChange={(e) => setDob((prev) => ({ ...prev, month: e.target.value }))}
                         className={`${selectBase} text-center`}
                       >
                         <option value="">الشهر</option>
@@ -1010,7 +1144,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                       min={1920} max={new Date().getFullYear()}
                       placeholder="YYYY"
                       value={dob.year}
-                      onChange={e => setDob(prev => ({ ...prev, year: e.target.value }))}
+                      onChange={(e) => setDob((prev) => ({ ...prev, year: e.target.value }))}
                       className={`${inputBase} text-center`}
                     />
                   </div>
@@ -1038,8 +1172,8 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { value: "Male",   labelAr: "ذكر",  emoji: "♂️", color: "blue"  },
-                    { value: "Female", labelAr: "أنثى", emoji: "♀️", color: "pink"  },
+                    { value: "Male",   labelAr: "ذكر",  emoji: "♂️", color: "blue" },
+                    { value: "Female", labelAr: "أنثى", emoji: "♀️", color: "pink" },
                   ].map(({ value, labelAr, emoji, color }) => {
                     const selected = form.personalInfo.gender === value;
                     const colors = {
@@ -1106,7 +1240,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                   <input
                     type="text"
                     value={form.personalInfo.nickname?.ar || ""}
-                    onChange={e => onChange("personalInfo.nickname.ar", e.target.value)}
+                    onChange={(e) => onChange("personalInfo.nickname.ar", e.target.value)}
                     placeholder={t("studentForm.nicknameArabicPlaceholder") || "مثال: أحمد"}
                     dir="rtl"
                     className={`${inputBase} pl-12 text-right`}
@@ -1130,7 +1264,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                   <input
                     type="text"
                     value={form.personalInfo.nickname?.en || ""}
-                    onChange={e => onChange("personalInfo.nickname.en", e.target.value)}
+                    onChange={(e) => onChange("personalInfo.nickname.en", e.target.value)}
                     placeholder="e.g. Ahmed"
                     className={`${inputBase} pl-12 text-right`}
                     maxLength={20}
@@ -1145,7 +1279,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                 <input
                   type="text"
                   value={form.personalInfo.nationalId}
-                  onChange={e => onChange("personalInfo.nationalId", e.target.value)}
+                  onChange={(e) => onChange("personalInfo.nationalId", e.target.value)}
                   placeholder={t("studentForm.nationalIdPlaceholder") || "30012011234567"}
                   className={`${inputBase} text-right`}
                 />
@@ -1154,14 +1288,14 @@ export default function StudentForm({ initial, onClose, onSaved }) {
           )}
 
           {/* ════════════════════════════════════════════
-              STEP 2 — Contact
+              STEP — Contact
           ════════════════════════════════════════════ */}
-          {step === 2 && (
+          {currentStepId === "contact" && (
             <div className="space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className={labelBase}><Phone className="inline w-3.5 h-3.5 ml-1" />{t("common.phone") || "الهاتف"}</label>
-                  <input type="tel" value={form.personalInfo.phone} onChange={e => onChange("personalInfo.phone", e.target.value)} placeholder="+201234567890" className={`${inputBase} text-right`} />
+                  <input type="tel" value={form.personalInfo.phone} onChange={(e) => onChange("personalInfo.phone", e.target.value)} placeholder="+201234567890" className={`${inputBase} text-right`} />
                 </div>
                 <div className="space-y-2">
                   <label className={labelBase}>
@@ -1169,7 +1303,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                     {t("common.whatsapp") || "واتساب"}
                     <span className="text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded-full mr-1">{t("studentForm.forMessages") || "للرسائل"}</span>
                   </label>
-                  <input type="tel" value={form.personalInfo.whatsappNumber} onChange={e => onChange("personalInfo.whatsappNumber", e.target.value)} placeholder="01234567890" className={`${inputBase} text-right`} />
+                  <input type="tel" value={form.personalInfo.whatsappNumber} onChange={(e) => onChange("personalInfo.whatsappNumber", e.target.value)} placeholder="01234567890" className={`${inputBase} text-right`} />
                 </div>
               </div>
               <div className="space-y-3">
@@ -1177,40 +1311,40 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                   <MapPin className="w-3.5 h-3.5" />{t("common.address") || "العنوان"}
                 </label>
                 <div className="grid grid-cols-2 gap-3">
-                  <input type="text" value={form.personalInfo.address.street}     onChange={e => handleAddressChange("street",     e.target.value)} placeholder={t("common.street")     || "الشارع"}       className={`${inputBase} text-right`} />
-                  <input type="text" value={form.personalInfo.address.city}       onChange={e => handleAddressChange("city",       e.target.value)} placeholder={t("common.city")       || "المدينة"}      className={`${inputBase} text-right`} />
+                  <input type="text" value={form.personalInfo.address.street}     onChange={(e) => handleAddressChange("street",     e.target.value)} placeholder={t("common.street")     || "الشارع"}       className={`${inputBase} text-right`} />
+                  <input type="text" value={form.personalInfo.address.city}       onChange={(e) => handleAddressChange("city",       e.target.value)} placeholder={t("common.city")       || "المدينة"}      className={`${inputBase} text-right`} />
                 </div>
                 <div className="grid grid-cols-3 gap-3">
-                  <input type="text" value={form.personalInfo.address.state}      onChange={e => handleAddressChange("state",      e.target.value)} placeholder={t("common.state")      || "المحافظة"}     className={`${inputBase} text-right`} />
-                  <input type="text" value={form.personalInfo.address.postalCode} onChange={e => handleAddressChange("postalCode", e.target.value)} placeholder={t("common.postalCode") || "الكود البريدي"} className={`${inputBase} text-right`} />
-                  <input type="text" value={form.personalInfo.address.country}    onChange={e => handleAddressChange("country",    e.target.value)} placeholder={t("common.country")    || "الدولة"}       className={`${inputBase} text-right`} />
+                  <input type="text" value={form.personalInfo.address.state}      onChange={(e) => handleAddressChange("state",      e.target.value)} placeholder={t("common.state")      || "المحافظة"}     className={`${inputBase} text-right`} />
+                  <input type="text" value={form.personalInfo.address.postalCode} onChange={(e) => handleAddressChange("postalCode", e.target.value)} placeholder={t("common.postalCode") || "الكود البريدي"} className={`${inputBase} text-right`} />
+                  <input type="text" value={form.personalInfo.address.country}    onChange={(e) => handleAddressChange("country",    e.target.value)} placeholder={t("common.country")    || "الدولة"}       className={`${inputBase} text-right`} />
                 </div>
               </div>
             </div>
           )}
 
           {/* ════════════════════════════════════════════
-              STEP 3 — Guardian
+              STEP — Guardian (يظهر للـ kids بس — عشان مش موجود في STEPS للـ adults)
           ════════════════════════════════════════════ */}
-          {step === 3 && (
+          {currentStepId === "guardian" && (
             <div className="space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className={labelBase}>{t("studentForm.guardianName") || "اسم ولي الأمر"} <span className="text-red-500">*</span></label>
-                  <input type="text" value={form.guardianInfo.name} onChange={e => onChange("guardianInfo.name", e.target.value)} placeholder={t("studentForm.guardianNamePlaceholder") || "الاسم الكامل"} className={`${inputBase} text-right`} />
+                  <input type="text" value={form.guardianInfo.name} onChange={(e) => onChange("guardianInfo.name", e.target.value)} placeholder={t("studentForm.guardianNamePlaceholder") || "الاسم الكامل"} className={`${inputBase} text-right`} />
                 </div>
                 <div className="space-y-2">
                   <label className={labelBase}>
                     {t("studentForm.guardianNicknameArabic") || "الاسم المختصر (عربي)"}
                     <span className="text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded-full mr-1">{t("studentForm.forMessages") || "للرسائل"}</span>
                   </label>
-                  <input type="text" value={form.guardianInfo.nickname?.ar || ""} onChange={e => onChange("guardianInfo.nickname.ar", e.target.value)} placeholder="مثال: محمد" dir="rtl" className={`${inputBase} text-right`} />
+                  <input type="text" value={form.guardianInfo.nickname?.ar || ""} onChange={(e) => onChange("guardianInfo.nickname.ar", e.target.value)} placeholder="مثال: محمد" dir="rtl" className={`${inputBase} text-right`} />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label className={labelBase}>{t("studentForm.guardianNicknameEnglish") || "الاسم (إنجليزي)"}</label>
-                  <input type="text" value={form.guardianInfo.nickname?.en || ""} onChange={e => onChange("guardianInfo.nickname.en", e.target.value)} placeholder="e.g. Mohamed" className={`${inputBase} text-right`} />
+                  <input type="text" value={form.guardianInfo.nickname?.en || ""} onChange={(e) => onChange("guardianInfo.nickname.en", e.target.value)} placeholder="e.g. Mohamed" className={`${inputBase} text-right`} />
                 </div>
                 <div className="space-y-2">
                   <label className={labelBase}>
@@ -1218,7 +1352,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                     <span className="text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded-full mr-1">{t("studentForm.determinesAddress") || "يؤثر على الرسائل"}</span>
                   </label>
                   <div className="relative">
-                    <select value={form.guardianInfo.relationship} onChange={e => onChange("guardianInfo.relationship", e.target.value)} className={`${selectBase} text-right`}>
+                    <select value={form.guardianInfo.relationship} onChange={(e) => onChange("guardianInfo.relationship", e.target.value)} className={`${selectBase} text-right`}>
                       <option value="father">{t("studentForm.relationship.father") || "الأب"} 👨</option>
                       <option value="mother">{t("studentForm.relationship.mother") || "الأم"} 👩</option>
                       <option value="guardian">{t("studentForm.relationship.guardian") || "ولي أمر"} 👤</option>
@@ -1229,7 +1363,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                 </div>
                 <div className="space-y-2">
                   <label className={labelBase}>{t("common.phone") || "الهاتف"}</label>
-                  <input type="tel" value={form.guardianInfo.phone} onChange={e => onChange("guardianInfo.phone", e.target.value)} placeholder="+201234567890" className={`${inputBase} text-right`} />
+                  <input type="tel" value={form.guardianInfo.phone} onChange={(e) => onChange("guardianInfo.phone", e.target.value)} placeholder="+201234567890" className={`${inputBase} text-right`} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -1239,20 +1373,20 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                     {t("common.whatsapp") || "واتساب"}
                     <span className="text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded-full mr-1">{t("studentForm.forMessages") || "للرسائل"}</span>
                   </label>
-                  <input type="tel" value={form.guardianInfo.whatsappNumber} onChange={e => onChange("guardianInfo.whatsappNumber", e.target.value)} placeholder="01234567890" className={`${inputBase} text-right`} />
+                  <input type="tel" value={form.guardianInfo.whatsappNumber} onChange={(e) => onChange("guardianInfo.whatsappNumber", e.target.value)} placeholder="01234567890" className={`${inputBase} text-right`} />
                 </div>
                 <div className="space-y-2">
                   <label className={labelBase}>{t("common.email") || "البريد الإلكتروني"}</label>
-                  <input type="email" value={form.guardianInfo.email} onChange={e => onChange("guardianInfo.email", e.target.value)} placeholder="guardian@example.com" className={`${inputBase} text-right`} />
+                  <input type="email" value={form.guardianInfo.email} onChange={(e) => onChange("guardianInfo.email", e.target.value)} placeholder="guardian@example.com" className={`${inputBase} text-right`} />
                 </div>
               </div>
             </div>
           )}
 
           {/* ════════════════════════════════════════════
-              STEP 4 — Enrollment
+              STEP — Enrollment
           ════════════════════════════════════════════ */}
-          {step === 4 && (
+          {currentStepId === "enrollment" && (
             <div className="space-y-5">
               <div className="grid grid-cols-3 gap-4">
                 {[
@@ -1266,8 +1400,8 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                   <div key={path} className="space-y-2">
                     <label className={labelBase}>{label}</label>
                     <div className="relative">
-                      <select value={value} onChange={e => onChange(path, e.target.value)} className={`${selectBase} text-right`}>
-                        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      <select value={value} onChange={(e) => onChange(path, e.target.value)} className={`${selectBase} text-right`}>
+                        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                       <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                     </div>
@@ -1318,16 +1452,16 @@ export default function StudentForm({ initial, onClose, onSaved }) {
           )}
 
           {/* ════════════════════════════════════════════
-              STEP 5 — Preferences
+              STEP — Preferences
           ════════════════════════════════════════════ */}
-          {step === 5 && (
+          {currentStepId === "preferences" && (
             <div className="space-y-5">
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <label className={labelBase}><GlobeIcon className="inline w-3.5 h-3.5 ml-1" />{t("studentForm.preferredLanguage") || "اللغة المفضلة"}</label>
                     <div className="relative">
-                      <select value={form.communicationPreferences.preferredLanguage} onChange={e => onChange("communicationPreferences.preferredLanguage", e.target.value)} className={`${selectBase} text-right`}>
+                      <select value={form.communicationPreferences.preferredLanguage} onChange={(e) => onChange("communicationPreferences.preferredLanguage", e.target.value)} className={`${selectBase} text-right`}>
                         <option value="ar">{t("common.arabic") || "العربية"}</option>
                         <option value="en">{t("common.english") || "الإنجليزية"}</option>
                       </select>
@@ -1335,7 +1469,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                     </div>
                   </div>
                   <label className="flex items-center gap-3 cursor-pointer p-3.5 rounded-xl border border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input hover:border-primary/40 transition-colors">
-                    <input type="checkbox" checked={form.communicationPreferences.marketingOptIn} onChange={e => onChange("communicationPreferences.marketingOptIn", e.target.checked)} className="w-4 h-4 accent-primary rounded" />
+                    <input type="checkbox" checked={form.communicationPreferences.marketingOptIn} onChange={(e) => onChange("communicationPreferences.marketingOptIn", e.target.checked)} className="w-4 h-4 accent-primary rounded" />
                     <span className="text-sm text-gray-700 dark:text-white">{t("studentForm.marketingOptIn") || "الاشتراك في العروض"}</span>
                   </label>
                 </div>
@@ -1362,9 +1496,10 @@ export default function StudentForm({ initial, onClose, onSaved }) {
           )}
 
           {/* ════════════════════════════════════════════
-              STEP 6 — WhatsApp Messages
+              STEP — WhatsApp Messages
+              (لو adults → قالب ولي الأمر يتخفي)
           ════════════════════════════════════════════ */}
-          {step === 6 && (
+          {currentStepId === "messages" && (
             <div className="space-y-5">
               <div className="flex items-center justify-end gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 flex-wrap">
                 {(loadingTemplates || loadingVars) && <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />}
@@ -1376,16 +1511,33 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${form.personalInfo.gender === "Male" ? "bg-blue-50 text-blue-700" : "bg-pink-50 text-pink-700"}`}>
                   {form.personalInfo.gender === "Male" ? "👦 ذكر" : "👧 أنثى"}
                 </span>
-                <span className="text-gray-300 dark:text-gray-600">|</span>
-                <span className="text-xs font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
-                  {getGuardianIcon()} {t(`studentForm.relationship.${form.guardianInfo.relationship}`) || form.guardianInfo.relationship}
-                </span>
+
+                {/* ✅ معلومات ولي الأمر — بس للـ kids */}
+                {!isAdult && (
+                  <>
+                    <span className="text-gray-300 dark:text-gray-600">|</span>
+                    <span className="text-xs font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                      {getGuardianIcon()} {t(`studentForm.relationship.${form.guardianInfo.relationship}`) || form.guardianInfo.relationship}
+                    </span>
+                  </>
+                )}
+
+                {/* ✅ لو adult — badge توضيحي */}
+                {isAdult && (
+                  <>
+                    <span className="text-gray-300 dark:text-gray-600">|</span>
+                    <span className="text-xs font-semibold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full">
+                      🧑 بالغ — بدون ولي أمر
+                    </span>
+                  </>
+                )}
               </div>
 
               {[
-                { type: "student",  color: "purple", num: 1, label: t("studentForm.studentMessage")  || "رسالة الطالب",    emoji: form.personalInfo.gender === "Male" ? "👦" : "👧", vars: studentVariables,  showHints: showStudentHints,  ref: studentTextareaRef,  hintsRef: studentHintsRef,  msgKey: "secondMessage", templateKey: "student"  },
-                { type: "guardian", color: "blue",   num: 2, label: t("studentForm.guardianMessage") || "رسالة ولي الأمر", emoji: getGuardianIcon(),                               vars: guardianVariables, showHints: showGuardianHints, ref: guardianTextareaRef, hintsRef: guardianHintsRef, msgKey: "firstMessage",  templateKey: "guardian" },
-              ].map(({ type, color, num, label, emoji, vars, showHints, ref, hintsRef, msgKey, templateKey }) => {
+                { type: "student", color: "purple", num: 1, label: t("studentForm.studentMessage") || "رسالة الطالب", emoji: form.personalInfo.gender === "Male" ? "👦" : "👧", vars: studentVariables, showHints: showStudentHints, ref: studentTextareaRef, hintsRef: studentHintsRef, msgKey: "secondMessage", templateKey: "student" },
+                // ✅ قالب ولي الأمر يظهر بس للـ kids
+                !isAdult && { type: "guardian", color: "blue", num: 2, label: t("studentForm.guardianMessage") || "رسالة ولي الأمر", emoji: getGuardianIcon(), vars: guardianVariables, showHints: showGuardianHints, ref: guardianTextareaRef, hintsRef: guardianHintsRef, msgKey: "firstMessage", templateKey: "guardian" },
+              ].filter(Boolean).map(({ type, color, num, label, emoji, vars, showHints, ref, hintsRef, msgKey, templateKey }) => {
                 const C = {
                   purple: { bg: "bg-purple-50/50 dark:bg-purple-900/10", border: "border-purple-100 dark:border-purple-900/40", numBg: "bg-purple-600", headerText: "text-purple-700 dark:text-purple-300", textaBorder: "border-purple-200 dark:border-purple-800", ring: "focus:ring-purple-400", previewBorder: "border-r-4 border-r-purple-500", savingText: "text-purple-600", btn: "text-purple-600 hover:bg-purple-50" },
                   blue:   { bg: "bg-blue-50/50 dark:bg-blue-900/10",     border: "border-blue-100 dark:border-blue-900/40",     numBg: "bg-blue-600",   headerText: "text-blue-700 dark:text-blue-300",     textaBorder: "border-blue-200 dark:border-blue-800",   ring: "focus:ring-blue-400",   previewBorder: "border-r-4 border-r-blue-500",   savingText: "text-blue-600",   btn: "text-blue-600 hover:bg-blue-50" },
@@ -1415,7 +1567,7 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                         <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">@ {t("studentForm.forVariables") || "للمتغيرات"}</span>
                         <span className="text-xs text-gray-400">{t("studentForm.messageText") || "نص الرسالة"}</span>
                       </div>
-                      <textarea ref={ref} value={val} onChange={e => handleTextareaInput(e, type)} onKeyDown={e => handleHintsKeyDown(e, type)} className={`w-full px-4 py-3 border-2 ${C.textaBorder} rounded-xl focus:outline-none focus:ring-2 ${C.ring} dark:bg-dark_input dark:text-white resize-none h-32 text-sm text-right`} dir="rtl" placeholder={t("studentForm.messagePlaceholder") || "اكتب الرسالة هنا..."} />
+                      <textarea ref={ref} value={val} onChange={(e) => handleTextareaInput(e, type)} onKeyDown={(e) => handleHintsKeyDown(e, type)} className={`w-full px-4 py-3 border-2 ${C.textaBorder} rounded-xl focus:outline-none focus:ring-2 ${C.ring} dark:bg-dark_input dark:text-white resize-none h-32 text-sm text-right`} dir="rtl" placeholder={t("studentForm.messagePlaceholder") || "اكتب الرسالة هنا..."} />
                       {showHints && (
                         <div ref={hintsRef} className="absolute z-50 w-full mt-1 bg-white dark:bg-darklight border border-gray-200 dark:border-dark_border rounded-2xl shadow-xl max-h-52 overflow-y-auto">
                           <div className="p-2.5 border-b border-gray-100 dark:border-gray-700 flex items-center gap-1.5">
@@ -1454,6 +1606,14 @@ export default function StudentForm({ initial, onClose, onSaved }) {
                   </div>
                 );
               })}
+
+              {/* ✅ للـ adults: تنبيه إن رسائل ولي الأمر متخطية */}
+              {isAdult && (
+                <div className="flex items-start justify-end gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-xl border border-amber-100 dark:border-amber-900/50">
+                  <span>هذا الطالب بالغ — لن يتم إرسال أي رسائل لولي الأمر.</span>
+                  <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                </div>
+              )}
             </div>
           )}
 

@@ -50,6 +50,21 @@ const MessageTemplateSchema = new mongoose.Schema(
         "makeup_session_student_offline",
         "makeup_session_guardian_offline",
         "makeup_session_instructor_offline",
+
+        // ── Adults (Online Reminders) ────────────────────────────
+        "reminder_24h_adult",
+        "reminder_15min_adult",
+        // ── Adults (Offline Reminders) ───────────────────────────
+        "reminder_24h_offline_adult",
+        "reminder_30min_offline_adult",
+        // ── Adults (Attendance) ──────────────────────────────────
+        "absence_notification_adult",
+        "late_notification_adult",
+        "excused_notification_adult",
+        // ── Adults (Evaluation) ──────────────────────────────────
+        "evaluation_pass_adult",
+        "evaluation_review_adult",
+        "evaluation_repeat_adult",
       ],
     },
 
@@ -209,12 +224,15 @@ MessageTemplateSchema.methods.getExample = function (language = "ar") {
       language === "ar" ? "شارع 9، المعادي، القاهرة" : "Street 9, Maadi, Cairo",
     mapsLink: "https://www.google.com/maps?q=29.9603,31.2569",
 
-    studentSalutation:
-      language === "ar" ? "عزيزي الطالب أحمد" : "Dear Ahmed",
-    newDate: language === "ar" ? "الخميس 25 سبتمبر 2026" : "Thursday, September 25, 2026",
+    studentSalutation: language === "ar" ? "عزيزي الطالب أحمد" : "Dear Ahmed",
+    newDate:
+      language === "ar"
+        ? "الخميس 25 سبتمبر 2026"
+        : "Thursday, September 25, 2026",
     newTime: "05:00 PM - 06:30 PM",
     newSessionTitle: "Make-up Session 1: Introduction",
-    originalDate: language === "ar" ? "السبت 15 أغسطس 2026" : "Saturday, August 15, 2026",
+    originalDate:
+      language === "ar" ? "السبت 15 أغسطس 2026" : "Saturday, August 15, 2026",
     originalTime: "05:00 PM - 07:00 PM",
     originalSessionTitle: "Session 1: Introduction",
     instructorName: language === "ar" ? "أحمد" : "Ahmed",
@@ -261,25 +279,57 @@ MessageTemplateSchema.statics.getOrFallback = async function (
 // ─── Fallback hardcoded templates ────────────────────────────────────────────
 function getFallbackTemplates() {
   const evalVariables = [
-    { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+    {
+      key: "guardianSalutation",
+      label: "تحية ولي الأمر",
+      example: "عزيزي الأستاذ محمد",
+    },
     { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
     { key: "studentName", label: "اسم الطالب", example: "أحمد" },
     { key: "sessionDate", label: "تاريخ الجلسة", example: "30/12/2025" },
     { key: "sessionNumber", label: "رقم الجلسة", example: "1" },
     { key: "attendanceStatus", label: "حالة الحضور", example: "حاضر" },
-    { key: "starsCommitment", label: "نجوم الالتزام والتركيز", example: "⭐⭐⭐⭐⭐" },
-    { key: "starsUnderstanding", label: "نجوم مستوى الاستيعاب", example: "⭐⭐⭐⭐" },
-    { key: "starsTaskExecution", label: "نجوم تنفيذ المهام", example: "⭐⭐⭐⭐" },
+    {
+      key: "starsCommitment",
+      label: "نجوم الالتزام والتركيز",
+      example: "⭐⭐⭐⭐⭐",
+    },
+    {
+      key: "starsUnderstanding",
+      label: "نجوم مستوى الاستيعاب",
+      example: "⭐⭐⭐⭐",
+    },
+    {
+      key: "starsTaskExecution",
+      label: "نجوم تنفيذ المهام",
+      example: "⭐⭐⭐⭐",
+    },
     { key: "starsParticipation", label: "نجوم المشاركة", example: "⭐⭐⭐⭐" },
-    { key: "instructorComment", label: "تعليق المدرس", example: "أداء ممتاز، استمر هكذا!" },
+    {
+      key: "instructorComment",
+      label: "تعليق المدرس",
+      example: "أداء ممتاز، استمر هكذا!",
+    },
     { key: "completedSessions", label: "عدد الحصص المنتهية", example: "2" },
-    { key: "recordingLink", label: "رابط التسجيل", example: "🎥 رابط التسجيل: https://..." },
+    {
+      key: "recordingLink",
+      label: "رابط التسجيل",
+      example: "🎥 رابط التسجيل: https://...",
+    },
   ];
 
   const offlineLocationVariables = [
     { key: "placeName", label: "اسم المكان", example: "Code School - المعادي" },
-    { key: "address", label: "العنوان التفصيلي", example: "شارع 9، المعادي، القاهرة" },
-    { key: "mapsLink", label: "رابط الخريطة", example: "https://maps.google.com/..." },
+    {
+      key: "address",
+      label: "العنوان التفصيلي",
+      example: "شارع 9، المعادي، القاهرة",
+    },
+    {
+      key: "mapsLink",
+      label: "رابط الخريطة",
+      example: "https://maps.google.com/...",
+    },
   ];
 
   const smartLocationVar = {
@@ -292,108 +342,304 @@ function getFallbackTemplates() {
   // ✅ متغيرات الحصة التعويضية (Online)
   // ─────────────────────────────────────────────────────────────
   const makeupStudentVariables = [
-    { key: "studentSalutation", label: "تحية الطالب", example: "عزيزي الطالب أحمد" },
+    {
+      key: "studentSalutation",
+      label: "تحية الطالب",
+      example: "عزيزي الطالب أحمد",
+    },
     { key: "studentName", label: "اسم الطالب", example: "أحمد" },
     { key: "courseName", label: "اسم الكورس", example: "Python Programming" },
-    { key: "groupName", label: "اسم المجموعة الجديدة", example: "Make-up - Ahmed" },
+    {
+      key: "groupName",
+      label: "اسم المجموعة الجديدة",
+      example: "Make-up - Ahmed",
+    },
     { key: "groupCode", label: "كود المجموعة", example: "MAKEUP-001" },
-    { key: "originalDate", label: "تاريخ الحصة الأصلية", example: "السبت 15 أغسطس 2026" },
-    { key: "originalTime", label: "وقت الحصة الأصلية", example: "05:00 PM - 07:00 PM" },
-    { key: "originalSessionTitle", label: "عنوان الحصة الأصلية", example: "Session 1: Introduction" },
-    { key: "newDate", label: "تاريخ الحصة التعويضية", example: "الخميس 25 سبتمبر 2026" },
-    { key: "newTime", label: "وقت الحصة التعويضية", example: "05:00 PM - 06:30 PM" },
-    { key: "newSessionTitle", label: "عنوان الحصة التعويضية", example: "Make-up Session 1: Introduction" },
-    { key: "meetingLink", label: "رابط الحصة", example: "https://meet.google.com/xxx" },
+    {
+      key: "originalDate",
+      label: "تاريخ الحصة الأصلية",
+      example: "السبت 15 أغسطس 2026",
+    },
+    {
+      key: "originalTime",
+      label: "وقت الحصة الأصلية",
+      example: "05:00 PM - 07:00 PM",
+    },
+    {
+      key: "originalSessionTitle",
+      label: "عنوان الحصة الأصلية",
+      example: "Session 1: Introduction",
+    },
+    {
+      key: "newDate",
+      label: "تاريخ الحصة التعويضية",
+      example: "الخميس 25 سبتمبر 2026",
+    },
+    {
+      key: "newTime",
+      label: "وقت الحصة التعويضية",
+      example: "05:00 PM - 06:30 PM",
+    },
+    {
+      key: "newSessionTitle",
+      label: "عنوان الحصة التعويضية",
+      example: "Make-up Session 1: Introduction",
+    },
+    {
+      key: "meetingLink",
+      label: "رابط الحصة",
+      example: "https://meet.google.com/xxx",
+    },
     { key: "instructorName", label: "اسم المدرس", example: "أحمد" },
   ];
 
   const makeupGuardianVariables = [
-    { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+    {
+      key: "guardianSalutation",
+      label: "تحية ولي الأمر",
+      example: "عزيزي الأستاذ محمد",
+    },
     { key: "guardianName", label: "اسم ولي الأمر", example: "محمد" },
     { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
     { key: "studentName", label: "اسم الطالب", example: "أحمد" },
     { key: "courseName", label: "اسم الكورس", example: "Python Programming" },
-    { key: "groupName", label: "اسم المجموعة الجديدة", example: "Make-up - Ahmed" },
+    {
+      key: "groupName",
+      label: "اسم المجموعة الجديدة",
+      example: "Make-up - Ahmed",
+    },
     { key: "groupCode", label: "كود المجموعة", example: "MAKEUP-001" },
-    { key: "originalDate", label: "تاريخ الحصة الأصلية", example: "السبت 15 أغسطس 2026" },
-    { key: "originalTime", label: "وقت الحصة الأصلية", example: "05:00 PM - 07:00 PM" },
-    { key: "newDate", label: "تاريخ الحصة التعويضية", example: "الخميس 25 سبتمبر 2026" },
-    { key: "newTime", label: "وقت الحصة التعويضية", example: "05:00 PM - 06:30 PM" },
-    { key: "meetingLink", label: "رابط الحصة", example: "https://meet.google.com/xxx" },
+    {
+      key: "originalDate",
+      label: "تاريخ الحصة الأصلية",
+      example: "السبت 15 أغسطس 2026",
+    },
+    {
+      key: "originalTime",
+      label: "وقت الحصة الأصلية",
+      example: "05:00 PM - 07:00 PM",
+    },
+    {
+      key: "newDate",
+      label: "تاريخ الحصة التعويضية",
+      example: "الخميس 25 سبتمبر 2026",
+    },
+    {
+      key: "newTime",
+      label: "وقت الحصة التعويضية",
+      example: "05:00 PM - 06:30 PM",
+    },
+    {
+      key: "meetingLink",
+      label: "رابط الحصة",
+      example: "https://meet.google.com/xxx",
+    },
     { key: "instructorName", label: "اسم المدرس", example: "أحمد" },
   ];
 
   const makeupInstructorVariables = [
-    { key: "instructorSalutation", label: "تحية المدرس", example: "عزيزي الأستاذ أحمد" },
+    {
+      key: "instructorSalutation",
+      label: "تحية المدرس",
+      example: "عزيزي الأستاذ أحمد",
+    },
     { key: "instructorName", label: "اسم المدرس", example: "أحمد" },
     { key: "studentName", label: "اسم الطالب", example: "أحمد" },
     { key: "courseName", label: "اسم الكورس", example: "Python Programming" },
     { key: "groupName", label: "اسم المجموعة", example: "Make-up - Ahmed" },
     { key: "groupCode", label: "كود المجموعة", example: "MAKEUP-001" },
-    { key: "originalDate", label: "تاريخ الحصة الأصلية", example: "السبت 15 أغسطس 2026" },
-    { key: "originalTime", label: "وقت الحصة الأصلية", example: "05:00 PM - 07:00 PM" },
-    { key: "originalSessionTitle", label: "عنوان الحصة الأصلية", example: "Session 1: Introduction" },
-    { key: "newDate", label: "تاريخ الحصة التعويضية", example: "الخميس 25 سبتمبر 2026" },
-    { key: "newTime", label: "وقت الحصة التعويضية", example: "05:00 PM - 06:30 PM" },
-    { key: "meetingLink", label: "رابط الحصة", example: "https://meet.google.com/xxx" },
+    {
+      key: "originalDate",
+      label: "تاريخ الحصة الأصلية",
+      example: "السبت 15 أغسطس 2026",
+    },
+    {
+      key: "originalTime",
+      label: "وقت الحصة الأصلية",
+      example: "05:00 PM - 07:00 PM",
+    },
+    {
+      key: "originalSessionTitle",
+      label: "عنوان الحصة الأصلية",
+      example: "Session 1: Introduction",
+    },
+    {
+      key: "newDate",
+      label: "تاريخ الحصة التعويضية",
+      example: "الخميس 25 سبتمبر 2026",
+    },
+    {
+      key: "newTime",
+      label: "وقت الحصة التعويضية",
+      example: "05:00 PM - 06:30 PM",
+    },
+    {
+      key: "meetingLink",
+      label: "رابط الحصة",
+      example: "https://meet.google.com/xxx",
+    },
   ];
 
   // ─────────────────────────────────────────────────────────────
   // ✅ متغيرات الحصة التعويضية (Offline)
   // ─────────────────────────────────────────────────────────────
   const makeupStudentOfflineVariables = [
-    { key: "studentSalutation", label: "تحية الطالب", example: "عزيزي الطالب أحمد" },
+    {
+      key: "studentSalutation",
+      label: "تحية الطالب",
+      example: "عزيزي الطالب أحمد",
+    },
     { key: "studentName", label: "اسم الطالب", example: "أحمد" },
     { key: "courseName", label: "اسم الكورس", example: "Python Programming" },
-    { key: "groupName", label: "اسم المجموعة الجديدة", example: "Make-up - Ahmed" },
+    {
+      key: "groupName",
+      label: "اسم المجموعة الجديدة",
+      example: "Make-up - Ahmed",
+    },
     { key: "groupCode", label: "كود المجموعة", example: "MAKEUP-001" },
-    { key: "originalDate", label: "تاريخ الحصة الأصلية", example: "السبت 15 أغسطس 2026" },
-    { key: "originalTime", label: "وقت الحصة الأصلية", example: "05:00 PM - 07:00 PM" },
-    { key: "originalSessionTitle", label: "عنوان الحصة الأصلية", example: "Session 1: Introduction" },
-    { key: "newDate", label: "تاريخ الحصة التعويضية", example: "الخميس 25 سبتمبر 2026" },
-    { key: "newTime", label: "وقت الحصة التعويضية", example: "05:00 PM - 06:30 PM" },
-    { key: "newSessionTitle", label: "عنوان الحصة التعويضية", example: "Make-up Session 1: Introduction" },
+    {
+      key: "originalDate",
+      label: "تاريخ الحصة الأصلية",
+      example: "السبت 15 أغسطس 2026",
+    },
+    {
+      key: "originalTime",
+      label: "وقت الحصة الأصلية",
+      example: "05:00 PM - 07:00 PM",
+    },
+    {
+      key: "originalSessionTitle",
+      label: "عنوان الحصة الأصلية",
+      example: "Session 1: Introduction",
+    },
+    {
+      key: "newDate",
+      label: "تاريخ الحصة التعويضية",
+      example: "الخميس 25 سبتمبر 2026",
+    },
+    {
+      key: "newTime",
+      label: "وقت الحصة التعويضية",
+      example: "05:00 PM - 06:30 PM",
+    },
+    {
+      key: "newSessionTitle",
+      label: "عنوان الحصة التعويضية",
+      example: "Make-up Session 1: Introduction",
+    },
     { key: "placeName", label: "اسم المكان", example: "Code School - المعادي" },
-    { key: "address", label: "العنوان التفصيلي", example: "شارع 9، المعادي، القاهرة" },
-    { key: "mapsLink", label: "رابط الخريطة", example: "https://maps.google.com/..." },
+    {
+      key: "address",
+      label: "العنوان التفصيلي",
+      example: "شارع 9، المعادي، القاهرة",
+    },
+    {
+      key: "mapsLink",
+      label: "رابط الخريطة",
+      example: "https://maps.google.com/...",
+    },
     smartLocationVar,
     { key: "instructorName", label: "اسم المدرس", example: "أحمد" },
   ];
 
   const makeupGuardianOfflineVariables = [
-    { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+    {
+      key: "guardianSalutation",
+      label: "تحية ولي الأمر",
+      example: "عزيزي الأستاذ محمد",
+    },
     { key: "guardianName", label: "اسم ولي الأمر", example: "محمد" },
     { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
     { key: "studentName", label: "اسم الطالب", example: "أحمد" },
     { key: "courseName", label: "اسم الكورس", example: "Python Programming" },
-    { key: "groupName", label: "اسم المجموعة الجديدة", example: "Make-up - Ahmed" },
+    {
+      key: "groupName",
+      label: "اسم المجموعة الجديدة",
+      example: "Make-up - Ahmed",
+    },
     { key: "groupCode", label: "كود المجموعة", example: "MAKEUP-001" },
-    { key: "originalDate", label: "تاريخ الحصة الأصلية", example: "السبت 15 أغسطس 2026" },
-    { key: "originalTime", label: "وقت الحصة الأصلية", example: "05:00 PM - 07:00 PM" },
-    { key: "newDate", label: "تاريخ الحصة التعويضية", example: "الخميس 25 سبتمبر 2026" },
-    { key: "newTime", label: "وقت الحصة التعويضية", example: "05:00 PM - 06:30 PM" },
+    {
+      key: "originalDate",
+      label: "تاريخ الحصة الأصلية",
+      example: "السبت 15 أغسطس 2026",
+    },
+    {
+      key: "originalTime",
+      label: "وقت الحصة الأصلية",
+      example: "05:00 PM - 07:00 PM",
+    },
+    {
+      key: "newDate",
+      label: "تاريخ الحصة التعويضية",
+      example: "الخميس 25 سبتمبر 2026",
+    },
+    {
+      key: "newTime",
+      label: "وقت الحصة التعويضية",
+      example: "05:00 PM - 06:30 PM",
+    },
     { key: "placeName", label: "اسم المكان", example: "Code School - المعادي" },
-    { key: "address", label: "العنوان التفصيلي", example: "شارع 9، المعادي، القاهرة" },
-    { key: "mapsLink", label: "رابط الخريطة", example: "https://maps.google.com/..." },
+    {
+      key: "address",
+      label: "العنوان التفصيلي",
+      example: "شارع 9، المعادي، القاهرة",
+    },
+    {
+      key: "mapsLink",
+      label: "رابط الخريطة",
+      example: "https://maps.google.com/...",
+    },
     smartLocationVar,
     { key: "instructorName", label: "اسم المدرس", example: "أحمد" },
   ];
 
   const makeupInstructorOfflineVariables = [
-    { key: "instructorSalutation", label: "تحية المدرس", example: "عزيزي الأستاذ أحمد" },
+    {
+      key: "instructorSalutation",
+      label: "تحية المدرس",
+      example: "عزيزي الأستاذ أحمد",
+    },
     { key: "instructorName", label: "اسم المدرس", example: "أحمد" },
     { key: "studentName", label: "اسم الطالب", example: "أحمد" },
     { key: "courseName", label: "اسم الكورس", example: "Python Programming" },
     { key: "groupName", label: "اسم المجموعة", example: "Make-up - Ahmed" },
     { key: "groupCode", label: "كود المجموعة", example: "MAKEUP-001" },
-    { key: "originalDate", label: "تاريخ الحصة الأصلية", example: "السبت 15 أغسطس 2026" },
-    { key: "originalTime", label: "وقت الحصة الأصلية", example: "05:00 PM - 07:00 PM" },
-    { key: "originalSessionTitle", label: "عنوان الحصة الأصلية", example: "Session 1: Introduction" },
-    { key: "newDate", label: "تاريخ الحصة التعويضية", example: "الخميس 25 سبتمبر 2026" },
-    { key: "newTime", label: "وقت الحصة التعويضية", example: "05:00 PM - 06:30 PM" },
+    {
+      key: "originalDate",
+      label: "تاريخ الحصة الأصلية",
+      example: "السبت 15 أغسطس 2026",
+    },
+    {
+      key: "originalTime",
+      label: "وقت الحصة الأصلية",
+      example: "05:00 PM - 07:00 PM",
+    },
+    {
+      key: "originalSessionTitle",
+      label: "عنوان الحصة الأصلية",
+      example: "Session 1: Introduction",
+    },
+    {
+      key: "newDate",
+      label: "تاريخ الحصة التعويضية",
+      example: "الخميس 25 سبتمبر 2026",
+    },
+    {
+      key: "newTime",
+      label: "وقت الحصة التعويضية",
+      example: "05:00 PM - 06:30 PM",
+    },
     { key: "placeName", label: "اسم المكان", example: "Code School - المعادي" },
-    { key: "address", label: "العنوان التفصيلي", example: "شارع 9، المعادي، القاهرة" },
-    { key: "mapsLink", label: "رابط الخريطة", example: "https://maps.google.com/..." },
+    {
+      key: "address",
+      label: "العنوان التفصيلي",
+      example: "شارع 9، المعادي، القاهرة",
+    },
+    {
+      key: "mapsLink",
+      label: "رابط الخريطة",
+      example: "https://maps.google.com/...",
+    },
     smartLocationVar,
   ];
 
@@ -422,11 +668,19 @@ function getFallbackTemplates() {
     // ── session_recording ──────────────────────────────────────
     session_recording: {
       variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
         { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
         { key: "studentName", label: "اسم الطالب", example: "أحمد" },
         { key: "sessionName", label: "اسم الجلسة", example: "الجلسة الأولى" },
-        { key: "recordingLink", label: "رابط التسجيل", example: "https://drive.google.com/xxx" },
+        {
+          key: "recordingLink",
+          label: "رابط التسجيل",
+          example: "https://drive.google.com/xxx",
+        },
       ],
       ar: `{guardianSalutation}،\n\n🎥 رابط تسجيل جلسة "{sessionName}" لـ{childTitle} *{studentName}*:\n\n{recordingLink}\n\nيمكن مراجعة التسجيل في أي وقت للمذاكرة والمراجعة.\nفريق Code School 💻`,
       en: `{guardianSalutation},\n\n🎥 Recording for "{sessionName}" — {childTitle} *{studentName}*:\n\n{recordingLink}\n\nThe recording can be reviewed anytime for study and revision.\nCode School Team 💻`,
@@ -435,7 +689,11 @@ function getFallbackTemplates() {
     // ── learning_supervisor_intro ─────────────────────────────
     learning_supervisor_intro: {
       variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ أحمد" },
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ أحمد",
+        },
         { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
         { key: "studentName", label: "اسم الطالب", example: "يوسف" },
         { key: "supervisorName", label: "اسم المشرف", example: "أحمد علي" },
@@ -447,10 +705,18 @@ function getFallbackTemplates() {
     // ── module_overview ───────────────────────────────────────
     module_overview: {
       variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ أحمد" },
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ أحمد",
+        },
         { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
         { key: "studentName", label: "اسم الطالب", example: "يوسف" },
-        { key: "moduleTitle", label: "عنوان الموديول", example: "Real-Life Mobile Solutions" },
+        {
+          key: "moduleTitle",
+          label: "عنوان الموديول",
+          example: "Real-Life Mobile Solutions",
+        },
         { key: "supervisorName", label: "اسم المشرف", example: "أحمد علي" },
       ],
       ar: `{guardianSalutation} 👋\nحابب أشارك مع حضرتك لمحة سريعة عن الـ Module الجديد اللي هيبدأه {childTitle} **{studentName}** ✨\n\n**Module Title:** {moduleTitle}\n\nخلال الـ Module ده، {studentName} هياخد فكرة ممتعة وبسيطة عن إزاي التطبيقات اللي بنستخدمها في حياتنا بتتعمل وبتتجهز بشكل مناسب للمستخدمين 📱\nوهيركز كمان على بناء شاشات بسيطة تشبه تطبيقات الموبايل، مع تدريب عملي يساعده يفهم الفكرة خطوة بخطوة بشكل سهل ومناسب لسنه 🌟\n\nوأنا هكون متابع مع حضرتك خلال الـ Module، وهشاركك أي ملاحظات مهمة أو تطور واضح بإذن الله.\n\n{supervisorName} ✨\nLearning Supervisor`,
@@ -460,11 +726,23 @@ function getFallbackTemplates() {
     // ── reminder_15min_student ────────────────────────────────
     reminder_15min_student: {
       variables: [
-        { key: "salutation_ar", label: "تحية الطالب عربي", example: "عزيزي الطالب ممدوح" },
-        { key: "salutation_en", label: "تحية الطالب إنجليزي", example: "Dear student Mamdouh" },
+        {
+          key: "salutation_ar",
+          label: "تحية الطالب عربي",
+          example: "عزيزي الطالب ممدوح",
+        },
+        {
+          key: "salutation_en",
+          label: "تحية الطالب إنجليزي",
+          example: "Dear student Mamdouh",
+        },
         { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
         { key: "time", label: "وقت الحصة", example: "07:00 - 08:30 مساءً" },
-        { key: "meetingLink", label: "رابط الحصة", example: "https://meet.google.com/xxx" },
+        {
+          key: "meetingLink",
+          label: "رابط الحصة",
+          example: "https://meet.google.com/xxx",
+        },
       ],
       ar: `{salutation_ar}،\n\n⏳ تذكير: حصتك *{sessionName}* هتبدأ خلال *15 دقيقة* الساعة {time} ⏰\n\n🔗 رابط الحصة:\n{meetingLink}\n\nCode School 💻`,
       en: `{salutation_en},\n\n⏳ Reminder: Your session *{sessionName}* starts in *15 minutes* at {time} ⏰\n\n🔗 Meeting link:\n{meetingLink}\n\nCode School 💻`,
@@ -473,12 +751,20 @@ function getFallbackTemplates() {
     // ── reminder_15min_guardian ───────────────────────────────
     reminder_15min_guardian: {
       variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
         { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
         { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
         { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
         { key: "time", label: "وقت الحصة", example: "07:00 - 08:30 مساءً" },
-        { key: "meetingLink", label: "رابط الحصة", example: "https://meet.google.com/xxx" },
+        {
+          key: "meetingLink",
+          label: "رابط الحصة",
+          example: "https://meet.google.com/xxx",
+        },
       ],
       ar: `{guardianSalutation}،\n\n⏳ تذكير: حصة {childTitle} *{studentName}* - *{sessionName}* هتبدأ خلال *15 دقيقة* الساعة {time} ⏰\n\n🔗 رابط الحصة:\n{meetingLink}\n\nCode School 💻`,
       en: `{guardianSalutation},\n\n⏳ Reminder: {childTitle} *{studentName}*'s session *{sessionName}* starts in *15 minutes* at {time} ⏰\n\n🔗 Meeting link:\n{meetingLink}\n\nCode School 💻`,
@@ -489,42 +775,82 @@ function getFallbackTemplates() {
     // ═══════════════════════════════════════════════════════════
     credit_low_balance_4h_student: {
       variables: [
-        { key: "salutation_ar", label: "تحية الطالب (عربي)", example: "عزيزي الطالب ممدوح" },
-        { key: "salutation_en", label: "تحية الطالب (إنجليزي)", example: "Dear student Mamdouh" },
+        {
+          key: "salutation_ar",
+          label: "تحية الطالب (عربي)",
+          example: "عزيزي الطالب ممدوح",
+        },
+        {
+          key: "salutation_en",
+          label: "تحية الطالب (إنجليزي)",
+          example: "Dear student Mamdouh",
+        },
         { key: "remainingHours", label: "الساعات المتبقية", example: "4" },
-        { key: "packageName", label: "اسم الباقة", example: "الباقة الشهرية (12 ساعة)" },
+        {
+          key: "packageName",
+          label: "اسم الباقة",
+          example: "الباقة الشهرية (12 ساعة)",
+        },
       ],
       ar: `{salutation_ar} 👋\n\n⚠️ تنبيه: رصيد الساعات المتبقية في باقتك قارب على الانتهاء.\n\n🔋 الساعات المتبقية: *{remainingHours}* ساعة\n📦 الباقة: {packageName}\n\nلتجنب توقف الجلسات، بننصحك بتجديد الباقة قبل ما الرصيد ينفذ.\n\nفريق Code School 💻`,
       en: `{salutation_en} 👋\n\n⚠️ Heads-up: Your remaining credit hours are running low.\n\n🔋 Remaining hours: *{remainingHours}*\n📦 Package: {packageName}\n\nTo avoid any session interruption, we recommend renewing your package before the balance runs out.\n\nCode School Team 💻`,
     },
     credit_low_balance_4h_guardian: {
       variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
         { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
         { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
         { key: "remainingHours", label: "الساعات المتبقية", example: "4" },
-        { key: "packageName", label: "اسم الباقة", example: "الباقة الشهرية (12 ساعة)" },
+        {
+          key: "packageName",
+          label: "اسم الباقة",
+          example: "الباقة الشهرية (12 ساعة)",
+        },
       ],
       ar: `{guardianSalutation} 👋\n\n⚠️ تنبيه: رصيد ساعات {childTitle} *{studentName}* قارب على الانتهاء.\n\n🔋 الساعات المتبقية: *{remainingHours}* ساعة\n📦 الباقة: {packageName}\n\nلتجنب توقف الجلسات، بننصح حضرتك بتجديد الباقة قبل ما الرصيد ينفذ.\n\nفريق Code School 💻`,
       en: `{guardianSalutation} 👋\n\n⚠️ Heads-up: {childTitle} *{studentName}*'s credit hours are running low.\n\n🔋 Remaining hours: *{remainingHours}*\n📦 Package: {packageName}\n\nTo avoid any session interruption, we recommend renewing the package before the balance runs out.\n\nCode School Team 💻`,
     },
     credit_low_balance_2h_student: {
       variables: [
-        { key: "salutation_ar", label: "تحية الطالب (عربي)", example: "عزيزي الطالب ممدوح" },
-        { key: "salutation_en", label: "تحية الطالب (إنجليزي)", example: "Dear student Mamdouh" },
+        {
+          key: "salutation_ar",
+          label: "تحية الطالب (عربي)",
+          example: "عزيزي الطالب ممدوح",
+        },
+        {
+          key: "salutation_en",
+          label: "تحية الطالب (إنجليزي)",
+          example: "Dear student Mamdouh",
+        },
         { key: "remainingHours", label: "الساعات المتبقية", example: "2" },
-        { key: "packageName", label: "اسم الباقة", example: "الباقة الشهرية (12 ساعة)" },
+        {
+          key: "packageName",
+          label: "اسم الباقة",
+          example: "الباقة الشهرية (12 ساعة)",
+        },
       ],
       ar: `{salutation_ar} 🚨\n\n🚨 تنبيه عاجل: رصيد ساعاتك أوشك على النفاذ.\n\n🔋 الساعات المتبقية: *{remainingHours}* ساعة فقط\n📦 الباقة: {packageName}\n\nبرجاء التواصل مع الإدارة فورًا لتجديد الباقة، عشان ما توقفش الجلسات.\n\nفريق Code School 💻`,
       en: `{salutation_en} 🚨\n\n🚨 Urgent: Your credit hours are almost exhausted.\n\n🔋 Remaining hours: *{remainingHours}* only\n📦 Package: {packageName}\n\nPlease contact the administration immediately to renew your package, so your sessions don't stop.\n\nCode School Team 💻`,
     },
     credit_low_balance_2h_guardian: {
       variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
         { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
         { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
         { key: "remainingHours", label: "الساعات المتبقية", example: "2" },
-        { key: "packageName", label: "اسم الباقة", example: "الباقة الشهرية (12 ساعة)" },
+        {
+          key: "packageName",
+          label: "اسم الباقة",
+          example: "الباقة الشهرية (12 ساعة)",
+        },
       ],
       ar: `{guardianSalutation} 🚨\n\n🚨 تنبيه عاجل: رصيد ساعات {childTitle} *{studentName}* أوشك على النفاذ.\n\n🔋 الساعات المتبقية: *{remainingHours}* ساعة فقط\n📦 الباقة: {packageName}\n\nبرجاء التواصل مع الإدارة فورًا لتجديد الباقة، عشان ما توقفش جلسات {childTitle}.\n\nفريق Code School 💻`,
       en: `{guardianSalutation} 🚨\n\n🚨 Urgent: {childTitle} *{studentName}*'s credit hours are almost exhausted.\n\n🔋 Remaining hours: *{remainingHours}* only\n📦 Package: {packageName}\n\nPlease contact the administration immediately to renew the package, so {childTitle}'s sessions don't stop.\n\nCode School Team 💻`,
@@ -534,7 +860,11 @@ function getFallbackTemplates() {
     portfolio_inactivity_reminder: {
       variables: [
         { key: "ownerName", label: "اسم صاحب البورتفوليو", example: "أحمد" },
-        { key: "portfolioLink", label: "رابط البورتفوليو", example: "https://codeschool.com/portfolio/ahmed" },
+        {
+          key: "portfolioLink",
+          label: "رابط البورتفوليو",
+          example: "https://codeschool.com/portfolio/ahmed",
+        },
       ],
       ar: `أهلاً بيك يا {ownerName}،\n\nعارفين إن الـ Personal Portfolio بتاعك مش مجرد صفحة على النت، ده واجهة الـ Business بتاعك والمكان اللي بيعكس مجهودك وشغلك.\n\nعشان كده، صممنا البورتفوليو بتاعك ليكون صديق لمحركات البحث ومُحسن للـ SEO والـ GEO.. وده معناه Visibility أعلى وعملاء أكتر يقدروا يوصلولك بسهولة.\n\nادخل دلوقتي وضيف أي Updates جديدة في الـ Projects بتاعتك عشان تفضل دايماً في الصدارة والـ Ranking بتاعك يعلى!\n\nلينك البورتفوليو بتاعك:\n{portfolioLink}`,
       en: `Hi {ownerName},\n\nYour Personal Portfolio isn't just a page online — it's the face of your business and the place that reflects your effort and work.\n\nThat's why we designed your portfolio to be search-engine friendly and optimized for SEO & GEO.. which means higher visibility and more clients finding you easily.\n\nLog in now and add any new Updates to your Projects to stay ahead and keep your Ranking climbing!\n\nYour portfolio link:\n{portfolioLink}`,
@@ -542,7 +872,11 @@ function getFallbackTemplates() {
     portfolio_update_broadcast: {
       variables: [
         { key: "ownerName", label: "اسم صاحب البورتفوليو", example: "أحمد" },
-        { key: "updateLink", label: "رابط صفحة التحديثات", example: "https://codeschool.com/portfolio/ahmed" },
+        {
+          key: "updateLink",
+          label: "رابط صفحة التحديثات",
+          example: "https://codeschool.com/portfolio/ahmed",
+        },
       ],
       ar: `أهلاً يا {ownerName} ✨\n\nلأن الـ Personal Portfolio بتاعك هو واجهتك الرقمية، إحنا دايماً بنطور الـ System عشان نضمن إنك في الصدارة. 🎯\n\nنزلنا النهاردة Update جديد هيحسن الـ SEO والـ GEO لصفحتك بشكل ملحوظ عشان يضمنلك أعلى Visibility ممكنة.\n\nادخل شوف التحديثات واعمل Update لبياناتك من هنا:\n🔗 {updateLink}\n\nيومك جميل وموفق! 🌻`,
       en: `Hi {ownerName} ✨\n\nSince your Personal Portfolio is your digital face, we're always upgrading the System to keep you ahead. 🎯\n\nToday we shipped a new Update that noticeably improves the SEO & GEO of your page, giving you the highest possible Visibility.\n\nCheck out the updates and refresh your data here:\n🔗 {updateLink}\n\nHave a great day! 🌻`,
@@ -550,7 +884,11 @@ function getFallbackTemplates() {
     portfolio_contact_form_notification: {
       variables: [
         { key: "ownerName", label: "اسم صاحب البورتفوليو", example: "أحمد" },
-        { key: "dashboardLink", label: "رابط لوحة التحكم", example: "https://codeschool.com/dashboard" },
+        {
+          key: "dashboardLink",
+          label: "رابط لوحة التحكم",
+          example: "https://codeschool.com/dashboard",
+        },
       ],
       ar: `عزيزي {ownerName}،\n\nيعلمك نظام الإشعارات الآلي بتلقي رسالة جديدة عبر الـ Contact Form الخاص بالـ Personal Portfolio الخاص بك.\n\nلضمان الخصوصية وسرية البيانات، يتم توجيه جميع الرسائل وتشفيرها آلياً إلى حسابك دون أي تدخل بشري.\n\nلعرض محتوى الرسالة والرد عليها، برجاء تسجيل الدخول إلى الـ Dashboard:\n🔗 {dashboardLink}`,
       en: `Dear {ownerName},\n\nOur automated notification system informs you that a new message has been received via the Contact Form on your Personal Portfolio.\n\nTo ensure privacy and data confidentiality, all messages are automatically routed and encrypted to your account without any human intervention.\n\nTo view the message and reply, please log in to your Dashboard:\n🔗 {dashboardLink}`,
@@ -561,8 +899,16 @@ function getFallbackTemplates() {
     // ═══════════════════════════════════════════════════════════
     reminder_24h_offline_student: {
       variables: [
-        { key: "salutation_ar", label: "تحية الطالب (عربي)", example: "عزيزي الطالب ممدوح" },
-        { key: "salutation_en", label: "تحية الطالب (إنجليزي)", example: "Dear student Mamdouh" },
+        {
+          key: "salutation_ar",
+          label: "تحية الطالب (عربي)",
+          example: "عزيزي الطالب ممدوح",
+        },
+        {
+          key: "salutation_en",
+          label: "تحية الطالب (إنجليزي)",
+          example: "Dear student Mamdouh",
+        },
         { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
         { key: "date", label: "التاريخ", example: "غدًا" },
         { key: "time", label: "الوقت", example: "07:00 - 08:30 مساءً" },
@@ -573,7 +919,11 @@ function getFallbackTemplates() {
     },
     reminder_24h_offline_guardian: {
       variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
         { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
         { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
         { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
@@ -587,24 +937,40 @@ function getFallbackTemplates() {
     reminder_30min_offline_student: {
       variables: [
         { key: "salutation_ar", label: "تحية الطالب", example: "عزيزي ممدوح" },
-        { key: "salutation_en", label: "Student Salutation (EN)", example: "Dear Mamdouh" },
+        {
+          key: "salutation_en",
+          label: "Student Salutation (EN)",
+          example: "Dear Mamdouh",
+        },
         { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
         { key: "time", label: "الوقت", example: "07:00" },
         { key: "placeName", label: "المكان", example: "Code School - المعادي" },
-        { key: "mapsLink", label: "لينك الخريطة", example: "https://maps.google.com/..." },
+        {
+          key: "mapsLink",
+          label: "لينك الخريطة",
+          example: "https://maps.google.com/...",
+        },
       ],
       ar: `{salutation_ar} 👋\n\n⏰ فاضل 30 دقيقة على بداية الحصة *{sessionName}*\n\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\nيلا استعد للنزول 👍\nCode School 💻`,
       en: `{salutation_en} 👋\n\n⏰ 30 minutes left until *{sessionName}*\n\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\nGet ready to head out 👍\nCode School 💻`,
     },
     reminder_30min_offline_guardian: {
       variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
         { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
         { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
         { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
         { key: "time", label: "الوقت", example: "07:00" },
         { key: "placeName", label: "المكان", example: "Code School - المعادي" },
-        { key: "mapsLink", label: "لينك الخريطة", example: "https://maps.google.com/..." },
+        {
+          key: "mapsLink",
+          label: "لينك الخريطة",
+          example: "https://maps.google.com/...",
+        },
       ],
       ar: `{guardianSalutation} 👋\n\n🚗 تنبيه: حصة {childTitle} *{studentName}* هتبدأ بعد 30 دقيقة\n\n⏰ الوقت: {time}\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\nياريت تجهز {childTitle} للنزول في الميعاد 🙏\nCode School 💻`,
       en: `{guardianSalutation} 👋\n\n🚗 Heads-up: {childTitle} *{studentName}*'s session starts in 30 minutes\n\n⏰ Time: {time}\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\nPlease prepare {childTitle} to head out on time 🙏\nCode School 💻`,
@@ -612,7 +978,11 @@ function getFallbackTemplates() {
     pre_attendance_ping_student: {
       variables: [
         { key: "salutation_ar", label: "تحية الطالب", example: "عزيزي ممدوح" },
-        { key: "salutation_en", label: "Student Salutation (EN)", example: "Dear Mamdouh" },
+        {
+          key: "salutation_en",
+          label: "Student Salutation (EN)",
+          example: "Dear Mamdouh",
+        },
         { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
       ],
       ar: `{salutation_ar} 👋\n\nبنستعد نبدأ حصة *{sessionName}* دلوقتي، ياريت نتأكد إنك موجود وجاهز ✨\nCode School 💻`,
@@ -620,13 +990,156 @@ function getFallbackTemplates() {
     },
     pre_attendance_ping_guardian: {
       variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
         { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
         { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
         { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
       ],
       ar: `{guardianSalutation} 👋\n\nبنستعد نبدأ حصة {childTitle} *{studentName}* دلوقتي، ياريت نتأكد إنه موجود وجاهز ✨\nCode School 💻`,
       en: `{guardianSalutation} 👋\n\nWe're about to start {childTitle} *{studentName}*'s session now, please make sure they're ready ✨\nCode School 💻`,
+    },
+
+    // ═══════════════════════════════════════════════════════════
+    // ✅ ADULTS — Reminders
+    // ═══════════════════════════════════════════════════════════
+    reminder_24h_adult: {
+      variables: [
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب",
+          example: "عزيزي أحمد",
+        },
+        { key: "studentName", label: "اسم الطالب", example: "أحمد" },
+        { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
+        { key: "date", label: "التاريخ", example: "غدًا" },
+        { key: "time", label: "الوقت", example: "07:00 - 08:30 مساءً" },
+        {
+          key: "meetingLink",
+          label: "رابط الحصة",
+          example: "https://meet.google.com/xxx",
+        },
+      ],
+      ar: `{studentSalutation} 👋\n\nتذكير: حصتك *{sessionName}* بكرة إن شاء الله ✨\n\n📘 الحصة: {sessionName}\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 لينك الحصة:\n{meetingLink}\n\n💡 ياريت تتأكد إن اللاب مشحون، النت مستقر، والكاميرا جاهزة 👍\n\nمتحمسين نشوفك بكرة 💻🚀\nفريق Code School`,
+      en: `{studentSalutation} 👋\n\nJust a reminder that your session *{sessionName}* is tomorrow ✨\n\n📘 Session: {sessionName}\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n💡 Please make sure your laptop is charged, internet is stable, and camera is ready 👍\n\nExcited to see you tomorrow 💻🚀\nCode School Team`,
+    },
+    reminder_15min_adult: {
+      variables: [
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب",
+          example: "عزيزي أحمد",
+        },
+        { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
+        { key: "time", label: "الوقت", example: "07:00 - 08:30 مساءً" },
+        {
+          key: "meetingLink",
+          label: "رابط الحصة",
+          example: "https://meet.google.com/xxx",
+        },
+      ],
+      ar: `{studentSalutation} 👋\n\n⏳ تذكير: حصتك *{sessionName}* هتبدأ خلال *15 دقيقة* الساعة {time} ⏰\n\n🔗 رابط الحصة:\n{meetingLink}\n\nCode School 💻`,
+      en: `{studentSalutation} 👋\n\n⏳ Reminder: Your session *{sessionName}* starts in *15 minutes* at {time} ⏰\n\n🔗 Meeting link:\n{meetingLink}\n\nCode School 💻`,
+    },
+    reminder_24h_offline_adult: {
+      variables: [
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب",
+          example: "عزيزي أحمد",
+        },
+        { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
+        { key: "date", label: "التاريخ", example: "غدًا" },
+        { key: "time", label: "الوقت", example: "07:00 - 08:30 مساءً" },
+        ...offlineLocationVariables,
+      ],
+      ar: `{studentSalutation} 👋\n\nتذكير: حصتك *{sessionName}* بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن على الخريطة:\n{mapsLink}\n\nمنتظرينك في الميعاد 💻\nCode School`,
+      en: `{studentSalutation} 👋\n\nReminder: Your session *{sessionName}* is tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location on Maps:\n{mapsLink}\n\nSee you there 💻\nCode School`,
+    },
+    reminder_30min_offline_adult: {
+      variables: [
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب",
+          example: "عزيزي أحمد",
+        },
+        { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
+        { key: "time", label: "الوقت", example: "07:00" },
+        { key: "placeName", label: "المكان", example: "Code School - المعادي" },
+        {
+          key: "mapsLink",
+          label: "لينك الخريطة",
+          example: "https://maps.google.com/...",
+        },
+      ],
+      ar: `{studentSalutation} 👋\n\n⏰ فاضل 30 دقيقة على بداية الحصة *{sessionName}*\n\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\nيلا استعد للنزول 👍\nCode School 💻`,
+      en: `{studentSalutation} 👋\n\n⏰ 30 minutes left until *{sessionName}*\n\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\nGet ready to head out 👍\nCode School 💻`,
+    },
+
+    // ═══════════════════════════════════════════════════════════
+    // ✅ ADULTS — Attendance
+    // ═══════════════════════════════════════════════════════════
+    absence_notification_adult: {
+      variables: [
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب",
+          example: "عزيزي أحمد",
+        },
+        { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
+        { key: "date", label: "التاريخ", example: "الثلاثاء 20 مايو 2024" },
+        { key: "time", label: "الوقت", example: "07:00 - 08:30 مساءً" },
+      ],
+      ar: `{studentSalutation}،\n\nنود إعلامك بأنه تم تسجيل غيابك عن الحصة:\n\n📘 الحصة: {sessionName}\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\nيرجى التواصل معنا في حال وجود أي استفسار.\nفريق Code School 💻`,
+      en: `{studentSalutation},\n\nWe would like to inform you that your absence has been recorded for the session:\n\n📘 Session: {sessionName}\n📅 Date: {date}\n⏰ Time: {time}\n\nPlease contact us if you have any questions.\nCode School Team 💻`,
+    },
+    late_notification_adult: {
+      variables: [
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب",
+          example: "عزيزي أحمد",
+        },
+        { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
+        { key: "date", label: "التاريخ", example: "الثلاثاء 20 مايو 2024" },
+      ],
+      ar: `{studentSalutation}،\n\nنود إعلامك بأنه تم تسجيل وصولك متأخراً للحصة:\n\n📘 الحصة: {sessionName}\n📅 التاريخ: {date}\n\nيرجى الحرص على المواعيد في المرات القادمة.\nفريق Code School 💻`,
+      en: `{studentSalutation},\n\nWe would like to inform you that your late arrival has been recorded for the session:\n\n📘 Session: {sessionName}\n📅 Date: {date}\n\nPlease ensure punctuality in future sessions.\nCode School Team 💻`,
+    },
+    excused_notification_adult: {
+      variables: [
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب",
+          example: "عزيزي أحمد",
+        },
+        { key: "sessionName", label: "اسم الحصة", example: "الدرس الأول" },
+        { key: "date", label: "التاريخ", example: "الثلاثاء 20 مايو 2024" },
+      ],
+      ar: `{studentSalutation}،\n\nتم تسجيل غيابك بعذر عن الحصة:\n\n📘 الحصة: {sessionName}\n📅 التاريخ: {date}\n\nفريق Code School 💻`,
+      en: `{studentSalutation},\n\nYour absence has been recorded as excused for the session:\n\n📘 Session: {sessionName}\n📅 Date: {date}\n\nCode School Team 💻`,
+    },
+
+    // ═══════════════════════════════════════════════════════════
+    // ✅ ADULTS — Evaluation
+    // ═══════════════════════════════════════════════════════════
+    evaluation_pass_adult: {
+      variables: evalVariables,
+      ar: `{studentSalutation}،\n\nتقرير الحصة 📃✨\n📆 التاريخ : {sessionDate}\n📑 رقم الحصة : {sessionNumber}\n⏱️ مدة الحصة : ساعتين\n👥 الحضور : {attendanceStatus}\n📊 تقييم الأداء :\n⭐ الالتزام والتركيز : {starsCommitment}\n⭐ مستوى الاستيعاب : {starsUnderstanding}\n⭐ تنفيذ المهام : {starsTaskExecution}\n⭐ المشاركة داخل الحصة : {starsParticipation}\n📝 تعليق المدرب :\n{instructorComment}\n🔢 عدد الحصص المنتهية : {completedSessions}\n{recordingLink}\n🏆 النتيجة : {evaluationDecision}\n🙏 نشكرك على ثقتك في Code School\n📞 للتواصل : +2 011 40 474 129`,
+      en: `{studentSalutation},\n\nSession Report 📃✨\n📆 Date : {sessionDate}\n📑 Session No. : {sessionNumber}\n⏱️ Duration : 2 hours\n👥 Attendance : {attendanceStatus}\n📊 Performance Evaluation :\n⭐ Commitment & Focus : {starsCommitment}\n⭐ Understanding Level : {starsUnderstanding}\n⭐ Task Execution : {starsTaskExecution}\n⭐ Class Participation : {starsParticipation}\n📝 Instructor's Comment :\n{instructorComment}\n🔢 Sessions Completed : {completedSessions}\n{recordingLink}\n🏆 Result : {evaluationDecision}\n🙏 Thank you for trusting Code School\n📞 Contact : +2 011 40 474 129`,
+    },
+    evaluation_review_adult: {
+      variables: evalVariables,
+      ar: `{studentSalutation}،\n\nتقرير الحصة 📃✨\n📆 التاريخ : {sessionDate}\n📑 رقم الحصة : {sessionNumber}\n⏱️ مدة الحصة : ساعتين\n👥 الحضور : {attendanceStatus}\n📊 تقييم الأداء :\n⭐ الالتزام والتركيز : {starsCommitment}\n⭐ مستوى الاستيعاب : {starsUnderstanding}\n⭐ تنفيذ المهام : {starsTaskExecution}\n⭐ المشاركة داخل الحصة : {starsParticipation}\n📝 تعليق المدرب :\n{instructorComment}\n🔢 عدد الحصص المنتهية : {completedSessions}\n{recordingLink}\n🏆 النتيجة : {evaluationDecision}\n🙏 نشكرك على ثقتك في Code School\n📞 للتواصل : +2 011 40 474 129`,
+      en: `{studentSalutation},\n\nSession Report 📃✨\n📆 Date : {sessionDate}\n📑 Session No. : {sessionNumber}\n⏱️ Duration : 2 hours\n👥 Attendance : {attendanceStatus}\n📊 Performance Evaluation :\n⭐ Commitment & Focus : {starsCommitment}\n⭐ Understanding Level : {starsUnderstanding}\n⭐ Task Execution : {starsTaskExecution}\n⭐ Class Participation : {starsParticipation}\n📝 Instructor's Comment :\n{instructorComment}\n🔢 Sessions Completed : {completedSessions}\n{recordingLink}\n🏆 Result : {evaluationDecision}\n🙏 Thank you for trusting Code School\n📞 Contact : +2 011 40 474 129`,
+    },
+    evaluation_repeat_adult: {
+      variables: evalVariables,
+      ar: `{studentSalutation}،\n\nتقرير الحصة 📃✨\n📆 التاريخ : {sessionDate}\n📑 رقم الحصة : {sessionNumber}\n⏱️ مدة الحصة : ساعتين\n👥 الحضور : {attendanceStatus}\n📊 تقييم الأداء :\n⭐ الالتزام والتركيز : {starsCommitment}\n⭐ مستوى الاستيعاب : {starsUnderstanding}\n⭐ تنفيذ المهام : {starsTaskExecution}\n⭐ المشاركة داخل الحصة : {starsParticipation}\n📝 تعليق المدرب :\n{instructorComment}\n🔢 عدد الحصص المنتهية : {completedSessions}\n{recordingLink}\n🏆 النتيجة : {evaluationDecision}\n🙏 نشكرك على ثقتك في Code School\n📞 للتواصل : +2 011 40 474 129`,
+      en: `{studentSalutation},\n\nSession Report 📃✨\n📆 Date : {sessionDate}\n📑 Session No. : {sessionNumber}\n⏱️ Duration : 2 hours\n👥 Attendance : {attendanceStatus}\n📊 Performance Evaluation :\n⭐ Commitment & Focus : {starsCommitment}\n⭐ Understanding Level : {starsUnderstanding}\n⭐ Task Execution : {starsTaskExecution}\n⭐ Class Participation : {starsParticipation}\n📝 Instructor's Comment :\n{instructorComment}\n🔢 Sessions Completed : {completedSessions}\n{recordingLink}\n🏆 Result : {evaluationDecision}\n🙏 Thank you for trusting Code School\n📞 Contact : +2 011 40 474 129`,
     },
 
     // ═══════════════════════════════════════════════════════════

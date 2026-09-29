@@ -1,10 +1,12 @@
-//api/admin/certificates/route.js
+// /api/admin/certificates/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Student from "../../../models/Student";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
-import { uploadToCloudinary } from "@/lib/cloudinary";
+
+// ✅ Fallback آمن لو الكابشن فاضي (title بقى ملغي)
+const DEFAULT_CERT_CAPTION = "شهادة إتمام";
 
 // ============================================================
 // GET /api/admin/certificates
@@ -17,7 +19,12 @@ import { uploadToCloudinary } from "@/lib/cloudinary";
 //    واتساب خالص، فالـ cron ماولدش الصورة أصلاً
 //
 // ✅ الحقل moduleTitle بقى بيرجع الكابشن (certificateCaption) لو موجود،
-// وإلا بيرجع لاسم الموديول للموديولات القديمة — نفس منطق الكرون.
+// وإلا بيرجع default ثابت — نفس منطق الكرون.
+//
+// ✅ NEW: Kids/Adults guard — لو الطالب adults:
+//   - نعتبر شهادة ولي الأمر "مسلّمة" تلقائيًا (skipped_adult_student)
+//   - مايتحسبش in pending
+//   - notGenerated بيتخطى بالكامل للـ adults
 //
 // ملاحظة: نفس منطق الأهلية (حضور + hasCertificate) اللي في الـ cron job،
 // لكن هنا للعرض فقط — من غير توليد صور ولا إرسال رسائل.
@@ -37,18 +44,26 @@ export async function GET() {
       partiallyDelivered: 0,
       pendingNoPhone: 0, // مفيش رقم لأي طرف لسه معلق
       notGeneratedCount: 0, // أهل للشهادة بس معندوش سجل خالص (مفيش رقم من الأول)
+      adultGuardianSkipped: 0, // ✅ NEW: شهادات اتخطى فيها ولي الأمر (طالب بالغ)
     };
 
     for (const student of students) {
       const groupIds = student.academicInfo?.groupIds || [];
       if (!groupIds.length) continue;
 
+      // ✅ NEW: هل الطالب بالغ؟ (مرة واحدة لكل طالب)
+      const isAdult = student.studentType === "adults";
+
       const groups = await Group.find({ _id: { $in: groupIds }, isDeleted: false })
         .populate("courseId")
         .lean();
 
       const studentNumber = student.personalInfo?.whatsappNumber || "";
-      const guardianNumber = student.guardianInfo?.whatsappNumber || "";
+
+      // ✅ لو adult → مفيش ولي أمر
+      const guardianNumber = isAdult
+        ? ""
+        : student.guardianInfo?.whatsappNumber || "";
 
       for (const group of groups) {
         const course = group.courseId;
@@ -60,43 +75,62 @@ export async function GET() {
 
           const moduleId = `${course._id}-${moduleIndex}`;
 
-          // ✅ الكابشن اللي بيظهر في الشهادة (fallback على اسم الموديول)
-          const displayTitle = module.certificateCaption?.trim() || module.title;
+          // ✅ الكابشن هو المصدر الوحيد — fallback ثابت
+          const displayTitle =
+            module.certificateCaption?.trim() || DEFAULT_CERT_CAPTION;
 
           const certRecord = student.issuedCertificates?.find(
             (c) => c.moduleId === moduleId
           );
 
+          // ═══════════════════════════════════════════════════════
           // ✅ الحالة 1: فيه سجل شهادة اتعمل بالفعل (صورة موجودة)
+          // ═══════════════════════════════════════════════════════
           if (certRecord) {
             summary.totalCertificateRecords++;
 
+            // ✅ student reason
             const studentReason = certRecord.studentDelivered
               ? null
               : studentNumber
-              ? "send_failed_or_pending"
-              : "no_student_phone";
+                ? "send_failed_or_pending"
+                : "no_student_phone";
 
-            const guardianReason = certRecord.guardianDelivered
-              ? null
-              : guardianNumber
-              ? "send_failed_or_pending"
-              : "no_guardian_phone";
+            // ✅ guardian reason — للـ adults → "skipped_adult_student"
+            const guardianReason = isAdult
+              ? "skipped_adult_student"
+              : certRecord.guardianDelivered
+                ? null
+                : guardianNumber
+                  ? "send_failed_or_pending"
+                  : "no_guardian_phone";
+
+            // ✅ للـ adults: نعتبر شهادة ولي الأمر "متخطية" عشان مايتحسبش pending
+            const effectiveGuardianDelivered = isAdult
+              ? true
+              : certRecord.guardianDelivered;
 
             const fullyDelivered =
-              certRecord.studentDelivered && certRecord.guardianDelivered;
-            const partiallyDelivered =
-              (certRecord.studentDelivered || certRecord.guardianDelivered) &&
-              !fullyDelivered;
+              certRecord.studentDelivered && effectiveGuardianDelivered;
 
-            if (fullyDelivered) summary.fullyDelivered++;
-            else if (partiallyDelivered) summary.partiallyDelivered++;
-            else summary.pendingNoPhone++;
+            const partiallyDelivered =
+              !fullyDelivered &&
+              (certRecord.studentDelivered || certRecord.guardianDelivered);
+
+            if (fullyDelivered) {
+              summary.fullyDelivered++;
+              if (isAdult) summary.adultGuardianSkipped++;
+            } else if (partiallyDelivered) {
+              summary.partiallyDelivered++;
+            } else {
+              summary.pendingNoPhone++;
+            }
 
             issued.push({
               studentId: student._id,
               studentName: student.personalInfo?.fullName || "",
               studentGender: student.personalInfo?.gender || "male",
+              isAdult, // ✅ NEW
               groupId: group._id,
               groupName: group.name,
               courseId: course._id,
@@ -112,21 +146,39 @@ export async function GET() {
                 deliveredAt: certRecord.studentDeliveredAt || null,
                 pendingReason: studentReason,
               },
-              guardian: {
-                phone: guardianNumber || null,
-                delivered: !!certRecord.guardianDelivered,
-                deliveredAt: certRecord.guardianDeliveredAt || null,
-                pendingReason: guardianReason,
-              },
+              guardian: isAdult
+                ? {
+                    // ✅ للـ adults: متخطى بالكامل
+                    phone: null,
+                    delivered: true,
+                    deliveredAt: null,
+                    pendingReason: "skipped_adult_student",
+                    skipped: true,
+                  }
+                : {
+                    phone: guardianNumber || null,
+                    delivered: !!certRecord.guardianDelivered,
+                    deliveredAt: certRecord.guardianDeliveredAt || null,
+                    pendingReason: guardianReason,
+                    skipped: false,
+                  },
             });
             continue;
           }
 
-          // لو فيه رقم لأي طرف، الـ cron هيولد الشهادة في الدورة الجاية —
-          // مش محتاجين نعرضها كـ "notGenerated" (اللي دي مخصصة لحالة "مفيش رقم خالص")
-          if (studentNumber || guardianNumber) continue;
+          // ═══════════════════════════════════════════════════════
+          // ✅ الحالة 2: مفيش سجل خالص
+          // ═══════════════════════════════════════════════════════
 
-          // ✅ الحالة 2: مفيش سجل خالص — نتأكد إنه فعلاً أهل للشهادة (حضر)
+          // لو فيه رقم لأي طرف، الـ cron هيولد الشهادة في الدورة الجاية
+          // ✅ NEW: للـ adults — يكفي إن عنده رقم طالب (مش محتاج رقم ولي أمر)
+          const hasAnyRecipient = isAdult
+            ? !!studentNumber
+            : !!(studentNumber || guardianNumber);
+
+          if (hasAnyRecipient) continue;
+
+          // ✅ نتأكد إنه فعلاً أهل للشهادة (حضر)
           const sessions = await Session.find({
             groupId: group._id,
             moduleIndex,
@@ -155,6 +207,7 @@ export async function GET() {
             studentId: student._id,
             studentName: student.personalInfo?.fullName || "",
             studentGender: student.personalInfo?.gender || "male",
+            isAdult, // ✅ NEW
             groupId: group._id,
             groupName: group.name,
             courseId: course._id,
@@ -162,8 +215,25 @@ export async function GET() {
             moduleId,
             moduleIndex,
             moduleTitle: displayTitle,
-            student: { phone: null, delivered: false, pendingReason: "no_student_phone" },
-            guardian: { phone: null, delivered: false, pendingReason: "no_guardian_phone" },
+            student: {
+              phone: null,
+              delivered: false,
+              pendingReason: "no_student_phone",
+            },
+            guardian: isAdult
+              ? {
+                  // ✅ للـ adults: متخطى بالكامل
+                  phone: null,
+                  delivered: false,
+                  pendingReason: "skipped_adult_student",
+                  skipped: true,
+                }
+              : {
+                  phone: null,
+                  delivered: false,
+                  pendingReason: "no_guardian_phone",
+                  skipped: false,
+                },
           });
         }
       }

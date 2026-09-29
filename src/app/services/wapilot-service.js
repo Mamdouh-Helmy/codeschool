@@ -765,8 +765,8 @@ The Code School Team 💻`;
 
   // ============================================================
   // ✅ إرسال رسائل الترحيب (bilingual)
+  // ✅ NEW: لو الطالب adults → رسالة ولي الأمر تتخطى تلقائيًا
   // ============================================================
-
   async sendWelcomeMessages(
     studentId,
     studentName,
@@ -788,11 +788,20 @@ The Code School Team 💻`;
       const guardianNickname = student.guardianInfo?.nickname || null;
       const relationship = student.guardianInfo?.relationship || "father";
 
-      if (!studentPhone && !guardianPhone) {
+      // ✅ NEW: هل الطالب بالغ؟
+      const isAdult = student.studentType === "adults";
+
+      // ✅ لو adult → نتخطى رقم ولي الأمر تمامًا (حتى لو جاي من برا)
+      const effectiveGuardianPhone = isAdult ? null : guardianPhone;
+
+      if (!studentPhone && !effectiveGuardianPhone) {
         return {
           success: false,
           skipped: true,
-          reason: "No WhatsApp numbers provided",
+          reason: isAdult
+            ? "Adult student - guardian messages skipped"
+            : "No WhatsApp numbers provided",
+          isAdult,
         };
       }
 
@@ -910,6 +919,7 @@ The Code School Team 💻`;
                 studentNicknameEn: studentNickname?.en || null,
                 isBilingual: true,
                 languages: ["ar", "en"],
+                isAdult,
                 sentFromInstance: this.instanceId,
               },
             });
@@ -924,9 +934,11 @@ The Code School Team 💻`;
         }
       }
 
-      // ✅ 2. رسالة ولي الأمر
-      if (guardianPhone) {
-        const preparedGuardianNumber = this.preparePhoneNumber(guardianPhone);
+      // ✅ 2. رسالة ولي الأمر — تتخطى للـ adults
+      if (!isAdult && effectiveGuardianPhone) {
+        const preparedGuardianNumber = this.preparePhoneNumber(
+          effectiveGuardianPhone,
+        );
         if (preparedGuardianNumber) {
           let guardianMessage;
 
@@ -1039,6 +1051,10 @@ The Code School Team 💻`;
             });
           }
         }
+      } else if (isAdult && guardianPhone) {
+        console.log(
+          `⏭️ [ADULT] Skipping guardian welcome for student ${studentId}`,
+        );
       }
 
       return {
@@ -1047,11 +1063,17 @@ The Code School Team 💻`;
         studentId,
         studentName,
         studentGender: gender,
-        guardianName,
-        relationship,
-        whatsappNumbers: { student: studentPhone, guardian: guardianPhone },
+        isAdult,
+        guardianName: isAdult ? null : guardianName,
+        relationship: isAdult ? null : relationship,
+        whatsappNumbers: {
+          student: studentPhone,
+          guardian: isAdult ? null : effectiveGuardianPhone,
+        },
         mode: this.mode,
-        totalMessages: (studentPhone ? 1 : 0) + (guardianPhone ? 1 : 0),
+        totalMessages:
+          (studentPhone ? 1 : 0) +
+          (isAdult ? 0 : effectiveGuardianPhone ? 1 : 0),
         interactive: true,
         messageType: "bilingual_dual_messages",
         nextStep: "Waiting for student language selection",
@@ -1067,6 +1089,10 @@ The Code School Team 💻`;
   // ✅ إرسال رسائل تأكيد اللغة
   // ============================================================
 
+  // ============================================================
+  // ✅ إرسال رسائل تأكيد اللغة
+  // ✅ NEW: لو الطالب adults → رسالة ولي الأمر تتخطى
+  // ============================================================
   async sendLanguageConfirmationMessage(
     studentId,
     studentPhone,
@@ -1086,8 +1112,15 @@ The Code School Team 💻`;
       const guardianNickname = student.guardianInfo?.nickname || null;
       const relationship = student.guardianInfo?.relationship || "father";
 
+      // ✅ NEW: هل الطالب بالغ؟
+      const isAdult = student.studentType === "adults";
+
+      // ✅ لو adult → نتخطى رقم ولي الأمر تمامًا
+      const effectiveGuardianPhone = isAdult ? null : guardianPhone;
+
       const results = { student: null, guardian: null };
 
+      // ── Student message ─────────────────────────────────────
       if (studentPhone) {
         const preparedStudentNumber = this.preparePhoneNumber(studentPhone);
         if (preparedStudentNumber) {
@@ -1109,13 +1142,17 @@ The Code School Team 💻`;
               automationType: "language_selection_response",
               recipientType: "student",
               isBilingual: false,
+              isAdult,
             },
           });
         }
       }
 
-      if (guardianPhone) {
-        const preparedGuardianNumber = this.preparePhoneNumber(guardianPhone);
+      // ── Guardian message — ✅ يتخطى للـ adults ──────────────
+      if (!isAdult && effectiveGuardianPhone) {
+        const preparedGuardianNumber = this.preparePhoneNumber(
+          effectiveGuardianPhone,
+        );
         if (preparedGuardianNumber) {
           const guardianMessage =
             await this.prepareGuardianLanguageConfirmationMessage(
@@ -1142,17 +1179,23 @@ The Code School Team 💻`;
             },
           });
         }
+      } else if (isAdult && guardianPhone) {
+        console.log(
+          `⏭️ [ADULT] Skipping guardian language confirmation for student ${studentId}`,
+        );
       }
 
       return {
         success: results.student?.success || results.guardian?.success || false,
         results,
+        isAdult,
         summary: {
           studentConfirmed: !!results.student?.success,
           guardianNotified: !!results.guardian?.success,
           language: selectedLanguage,
           studentName,
           isBilingual: false,
+          isAdult,
         },
       };
     } catch (error) {
@@ -1309,11 +1352,16 @@ The Code School Team 💻`;
   // ✅ رسائل الشهادات
   // ============================================================
 
+  // ============================================================
+  // ✅ رسالة الشهادة للطالب
+  // ✅ NOTE: الباراميتر الرابع اسمه caption (مش moduleTitle) — الـ route
+  //    بيمرره كـ caption بغض النظر عن الاسم، فمفيش تعديل مطلوب هناك
+  // ============================================================
   async prepareCertificateStudentMessage(
     studentName,
     gender,
     language = "ar",
-    moduleTitle,
+    caption,
     nickname = null,
   ) {
     const arabicName = nickname?.ar || studentName.split(" ")[0] || studentName;
@@ -1326,9 +1374,9 @@ The Code School Team 💻`;
       englishName,
     );
 
-    // ✅ moduleTitle هنا هو الكابشن. بنحوّل أي سطور جديدة لمسافة عشان
-    // النجمتين (bold) في واتساب بيشتغلوا على سطر واحد بس
-    const captionText = String(moduleTitle || "")
+    // ✅ caption هو الكابشن اللي بيظهر في الشهادة. بنحوّل أي سطور جديدة
+    // لمسافة عشان النجمتين (bold) في واتساب بيشتغلوا على سطر واحد بس
+    const captionText = String(caption || "")
       .replace(/\s*\r?\n\s*/g, " ")
       .trim();
 
@@ -1351,6 +1399,11 @@ The Code School Team 💻`;
 فريق Code School 💻`;
   }
 
+  // ============================================================
+  // ✅ رسالة الشهادة لولي الأمر
+  // ✅ NOTE: نفس المنطق — الباراميتر اسمه caption، والـ route بيمرر
+  //    certCaption (اللي هو certificateCaption || module.title)
+  // ============================================================
   async prepareCertificateGuardianMessage(
     guardianName,
     relationship,
@@ -1359,7 +1412,7 @@ The Code School Team 💻`;
     language = "ar",
     guardianNickname = null,
     studentNickname = null,
-    moduleTitle,
+    caption,
   ) {
     const salutation = await this.getGuardianSalutation(
       guardianName,
@@ -1373,8 +1426,9 @@ The Code School Team 💻`;
       studentNickname?.en || studentName.split(" ")[0] || studentName;
     const male = isMaleGender(studentGender);
 
-    // ✅ moduleTitle هنا هو الكابشن (نفس المعالجة اللي فوق)
-    const captionText = String(moduleTitle || "")
+    // ✅ نفس التنظيف في الدالة بتاعة الطالب — عشان الـ bold في واتساب
+    // يشتغل صح على سطر واحد
+    const captionText = String(caption || "")
       .replace(/\s*\r?\n\s*/g, " ")
       .trim();
 
@@ -1397,55 +1451,7 @@ The Code School Team 💻`;
 
     return `${salutation}،
 
-يسعدنا إبلاغكم بأن ${childTitle} **${studentDisplayNameAr}** ${completedVerb} بنجاح *${captionText}* و${earnedVerb} على شهادة الإتمام. 🎉
-
-مبروك ونتمنى ${pronoun} المزيد من التقدم! 🌟
-
-فريق Code School 💻`;
-  }
-
-  async prepareCertificateGuardianMessage(
-    guardianName,
-    relationship,
-    studentName,
-    studentGender,
-    language = "ar",
-    guardianNickname = null,
-    studentNickname = null,
-    moduleTitle,
-  ) {
-    const salutation = await this.getGuardianSalutation(
-      guardianName,
-      relationship,
-      guardianNickname,
-      language,
-    );
-    const studentDisplayNameAr =
-      studentNickname?.ar || studentName.split(" ")[0] || studentName;
-    const studentDisplayNameEn =
-      studentNickname?.en || studentName.split(" ")[0] || studentName;
-    const male = isMaleGender(studentGender);
-
-    if (language === "en") {
-      const childTitle = await this.getStudentChildTitle(studentGender, "en");
-      const pronoun = male ? "his" : "her";
-      return `${salutation},
-
-We are pleased to inform you that your ${childTitle} **${studentDisplayNameEn}** has successfully completed the *${moduleTitle}* module and earned ${pronoun} completion certificate. 🎉
-
-Congratulations, and we wish continued progress!
-
-The Code School Team 💻`;
-    }
-
-    const childTitle = await this.getStudentChildTitle(studentGender, "ar");
-    const completedVerb = male ? "أكمل" : "أكملت";
-    const earnedVerb = male ? "حصل" : "حصلت";
-    const pronoun = male ? "له" : "لها";
-
-    return `${salutation}،
-
-يسعدنا إبلاغكم بأن ${childTitle} **${studentDisplayNameAr}** ${completedVerb} بنجاح وحدة *${moduleTitle}* و${earnedVerb} على شهادة الإتمام. 🎉
+يسعدنا إبلاغكم بأن ${childTitle} **${studentDisplayNameAr}** ${completedVerb} بنجاح وحدة *${captionText}* و${earnedVerb} على شهادة الإتمام. 🎉
 
 مبروك ونتمنى ${pronoun} المزيد من التقدم! 🌟
 

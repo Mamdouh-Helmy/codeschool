@@ -17,6 +17,9 @@ import { uploadToCloudinary } from "@/lib/cloudinary";
 // ✅ فك أي generation claim قديم اتعلق أكتر من ساعتين
 const STALE_CERT_CLAIM_MS = 2 * 60 * 60 * 1000;
 
+// ✅ Fallback آمن لو الكابشن فاضي (title بقى ملغي)
+const DEFAULT_CERT_CAPTION = "شهادة إتمام";
+
 // ============================================================
 // ✅ حماية بـ CRON_SECRET
 // ============================================================
@@ -207,6 +210,7 @@ async function uploadCertificateToCloudinary(filePath) {
 
 // ============================================================
 // ✅ مزامنة الشهادة مع بورتفوليو الطالب
+// ✅ NOTE: الكابشن هو المصدر الوحيد (module.title بقى ملغي)
 // ============================================================
 async function syncCertificateToStudentPortfolio(
   student,
@@ -218,8 +222,8 @@ async function syncCertificateToStudentPortfolio(
   const userId = student.authUserId;
   if (!userId) return { added: false, reason: "NO_LINKED_USER" };
 
-  // ✅ الكابشن هو اللي بيظهر في البورتفوليو (fallback على اسم الموديول)
-  const displayTitle = certCaption || module.title;
+  // ✅ الكابشن هو اللي بيظهر في البورتفوليو (fallback ثابت)
+  const displayTitle = certCaption || DEFAULT_CERT_CAPTION;
 
   try {
     const { added } = await Portfolio.addModuleCertificateIfMissing(userId, {
@@ -277,6 +281,8 @@ async function sendCertificateWithFallback(
 
 // ============================================================
 // ✅ GET — نقطة الدخول للكرون
+// ✅ NEW: Kids/Adults Guard — لو الطالب adults → مفيش رسالة لولي الأمر
+//         + نعتبر guardianDelivered = true تلقائيًا للـ adults
 // ============================================================
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -305,6 +311,7 @@ export async function GET(request) {
       kidsafe: certSettings.kidsafe,
     };
 
+    // ✅ studentType موجود تلقائيًا لأن مفيش .select()
     const students = await Student.find({ isDeleted: false }).lean();
     const baseUrl =
       process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -314,6 +321,7 @@ export async function GET(request) {
       generated: 0,
       studentSent: 0,
       guardianSent: 0,
+      adultGuardianSkipped: 0, // ✅ NEW: عدد الشهادات اللي اتخطى فيها ولي الأمر
       pendingNoRecipient: 0,
       cloudinaryUploads: 0,
       portfolioSynced: 0,
@@ -324,6 +332,9 @@ export async function GET(request) {
     };
 
     for (const student of students) {
+      // ✅ NEW: هل الطالب بالغ؟ (مرة واحدة لكل طالب — أنضف)
+      const isAdult = student.studentType === "adults";
+
       const groups = await Group.find({
         students: student._id,
         isDeleted: false,
@@ -346,6 +357,10 @@ export async function GET(request) {
 
           const moduleId = `${course._id}-${moduleIndex}`;
 
+          // ✅ الكابشن هو المصدر الوحيد — fallback ثابت لو فاضي
+          const certCaption =
+            module.certificateCaption?.trim() || DEFAULT_CERT_CAPTION;
+
           const certRecord = student.issuedCertificates?.find(
             (c) => c.moduleId === moduleId,
           );
@@ -354,7 +369,13 @@ export async function GET(request) {
           const guardianAlreadyDelivered =
             certRecord?.guardianDelivered === true;
 
-          if (studentAlreadyDelivered && guardianAlreadyDelivered) continue;
+          // ✅ لو adult → نعتبر شهادة ولي الأمر "مسلّمة" عشان الكرون
+          // مايعديش على الطالب كل دورة وهو أصلاً مش محتاج يبعت لولي الأمر
+          const guardianDeliveredEffective = isAdult
+            ? true
+            : guardianAlreadyDelivered;
+
+          if (studentAlreadyDelivered && guardianDeliveredEffective) continue;
 
           summary.checked++;
 
@@ -368,7 +389,7 @@ export async function GET(request) {
           if (!claimed) {
             summary.alreadyClaimed++;
             console.log(
-              `🔒 Certificate already being generated for ${student.personalInfo?.fullName} - ${module.title}`,
+              `🔒 Certificate already being generated for ${student.personalInfo?.fullName} - ${certCaption}`,
             );
             continue;
           }
@@ -398,38 +419,36 @@ export async function GET(request) {
             if (!hasAttended) {
               summary.noAttendanceYet++;
               console.log(
-                `⏭️ ${student.personalInfo.fullName} - ${module.title}: لا يوجد حضور لسه`,
+                `⏭️ ${student.personalInfo.fullName} - ${certCaption}: لا يوجد حضور لسه`,
               );
               await releaseCertificateClaim(student._id, moduleId);
               continue;
             }
 
             const studentNumber = student.personalInfo?.whatsappNumber;
-            const guardianNumber = student.guardianInfo?.whatsappNumber;
+
+            // ✅ لو adult → نتخطى رقم ولي الأمر تمامًا (حتى لو موجود)
+            const guardianNumber = isAdult
+              ? null
+              : student.guardianInfo?.whatsappNumber;
 
             const studentNeedsSend =
               !!studentNumber && !studentAlreadyDelivered;
             const guardianNeedsSend =
-              !!guardianNumber && !guardianAlreadyDelivered;
+              !isAdult && !!guardianNumber && !guardianAlreadyDelivered;
 
             if (!studentNeedsSend && !guardianNeedsSend) {
               summary.pendingNoRecipient++;
               console.log(
-                `⏳ ${student.personalInfo.fullName} - ${module.title}: مفيش رقم واتساب متاح`,
+                `⏳ ${student.personalInfo.fullName} - ${certCaption}: مفيش رقم واتساب متاح`,
               );
               await releaseCertificateClaim(student._id, moduleId);
               continue;
             }
 
             console.log(
-              `🎓 Generating certificate for ${student.personalInfo.fullName} - ${module.title}`,
+              `🎓 Generating certificate for ${student.personalInfo.fullName} - ${certCaption}${isAdult ? " [ADULT]" : ""}`,
             );
-
-            // ✅ الكابشن اللي بيظهر في الشهادة وفي رسائل الواتساب.
-            // fallback على اسم الموديول للموديولات القديمة اللي معندهاش كابشن،
-            // عشان الشهادة/الرسالة ما تطلعش فاضية.
-            const certCaption =
-              module.certificateCaption?.trim() || module.title;
 
             const browser = await getBrowser();
 
@@ -480,9 +499,9 @@ export async function GET(request) {
             let studentDelivered = studentAlreadyDelivered;
             let guardianDelivered = guardianAlreadyDelivered;
 
+            // ── Student message ─────────────────────────────
             if (studentNeedsSend) {
-              // ✅ بنمرر الكابشن مكان module.title (نفس الباراميتر moduleTitle
-              // في wapilot-service، فمفيش أي تعديل مطلوب هناك)
+              // ✅ بنمرر الكابشن كـ caption في wapilot-service
               const caption =
                 await wapilotService.prepareCertificateStudentMessage(
                   student.personalInfo.fullName,
@@ -509,6 +528,7 @@ export async function GET(request) {
               }
             }
 
+            // ── Guardian message — ✅ يتخطى للـ adults ────────
             if (guardianNeedsSend) {
               const guardianCaption =
                 await wapilotService.prepareCertificateGuardianMessage(
@@ -537,9 +557,20 @@ export async function GET(request) {
                   `⚠️ فشل إرسال الشهادة لولي أمر ${student.personalInfo.fullName}: ${result?.error}`,
                 );
               }
+            } else if (isAdult) {
+              summary.adultGuardianSkipped++;
+              console.log(
+                `   ⏭️ [ADULT] Skipping guardian certificate for ${student.personalInfo.fullName}`,
+              );
             }
 
             const now = new Date();
+
+            // ✅ لو adult → نخزّن guardianDelivered = true عشان الكرون
+            // مايرجعش يحاول يبعته لولي الأمر في الدورة الجاية
+            const finalGuardianDelivered = isAdult
+              ? true
+              : guardianDelivered;
 
             // ✅ تحديث الـ entry الموجودة (اتعملت في claimCertificateGeneration)
             await Student.updateOne(
@@ -550,16 +581,15 @@ export async function GET(request) {
               {
                 $set: {
                   "issuedCertificates.$.imageUrl": fullImageUrl,
-                  "issuedCertificates.$.studentDelivered":
-                    studentDelivered,
+                  "issuedCertificates.$.studentDelivered": studentDelivered,
                   "issuedCertificates.$.guardianDelivered":
-                    guardianDelivered,
+                    finalGuardianDelivered,
                   ...(studentDelivered && !studentAlreadyDelivered
                     ? {
                         "issuedCertificates.$.studentDeliveredAt": now,
                       }
                     : {}),
-                  ...(guardianDelivered && !guardianAlreadyDelivered
+                  ...(finalGuardianDelivered && !guardianAlreadyDelivered
                     ? {
                         "issuedCertificates.$.guardianDeliveredAt": now,
                       }
@@ -582,16 +612,20 @@ export async function GET(request) {
             }
 
             console.log(
-              `✅ ${student.personalInfo.fullName} - ${module.title}: الطالب=${
+              `✅ ${student.personalInfo.fullName} - ${certCaption}: الطالب=${
                 studentDelivered ? "اتبعتله" : "لسه معلّق"
               }, ولي الأمر=${
-                guardianDelivered ? "اتبعتله" : "لسه معلّق"
+                isAdult
+                  ? "متخطى (طالب بالغ)"
+                  : guardianDelivered
+                    ? "اتبعتله"
+                    : "لسه معلّق"
               }`,
             );
           } catch (moduleError) {
             summary.errors++;
             console.error(
-              `❌ Error with certificate for ${student.personalInfo?.fullName} - ${module?.title}:`,
+              `❌ Error with certificate for ${student.personalInfo?.fullName} - ${certCaption}:`,
               moduleError,
             );
 

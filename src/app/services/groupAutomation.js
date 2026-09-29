@@ -500,9 +500,12 @@ export async function getAttendanceTemplatesForFrontend(
   }
 }
 
-/**
- * ✅ إرسال إشعارات الغياب
- */
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ إرسال إشعارات الغياب
+// ✅ NEW: 
+//   - kids → إشعار لولي الأمر (زي ما كان)
+//   - adults → إشعار للطالب مباشرة باستخدام _adult templates
+// ═══════════════════════════════════════════════════════════════════════════
 export async function sendAbsenceNotifications(
   sessionId,
   attendanceData,
@@ -514,7 +517,7 @@ export async function sendAbsenceNotifications(
     const session = await Session.findById(sessionId).populate("groupId").lean();
     if (!session) throw new Error("Session not found");
 
-        const group = session.groupId;
+    const group = session.groupId;
 
     const holdCheck = await canSessionSendMessages(sessionId);
     if (!holdCheck.ok) {
@@ -548,6 +551,9 @@ export async function sendAbsenceNotifications(
         continue;
       }
 
+      // ✅ هل الطالب بالغ؟
+      const isAdult = student.studentType === "adults";
+
       const canSend = await canSendMessage(student);
       if (!canSend) {
         skippedCount++;
@@ -559,20 +565,37 @@ export async function sendAbsenceNotifications(
         continue;
       }
 
-      const guardianPhone =
-        student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
-      if (!guardianPhone) {
-        skippedCount++;
-        continue;
+      // ✅ تحديد الـ recipient والـ template حسب النوع
+      let recipientPhone, templateType, recipientLabel;
+
+      if (isAdult) {
+        // ✅ adults → إشعار للطالب مباشرة بقوالب _adult
+        recipientPhone = student.personalInfo?.whatsappNumber;
+        templateType = {
+          absent: "absence_notification_adult",
+          late: "late_notification_adult",
+          excused: "excused_notification_adult",
+        }[record.status];
+        recipientLabel = "student";
+      } else {
+        // ✅ kids → إشعار لولي الأمر (زي ما كان)
+        recipientPhone =
+          student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
+        templateType = {
+          absent: "absence_notification",
+          late: "late_notification",
+          excused: "excused_notification",
+        }[record.status];
+        recipientLabel = "guardian";
       }
 
-      let messageContent = customMessages[student._id.toString()];
-      if (!messageContent) {
-        const templates = await getAttendanceTemplates(record.status, student);
-        messageContent = templates.guardian?.content;
-      }
-      if (!messageContent) {
+      if (!recipientPhone) {
         skippedCount++;
+        results.push({
+          studentId: student._id,
+          status: "skipped",
+          reason: isAdult ? "no_student_phone" : "no_guardian_phone",
+        });
         continue;
       }
 
@@ -583,26 +606,34 @@ export async function sendAbsenceNotifications(
         { attendanceStatus: record.status },
       );
 
-      let finalMessage = replaceVariables(messageContent, variables);
+      let messageContent = customMessages[student._id.toString()];
+      if (!messageContent) {
+        const template = await getMessageTemplate(
+          templateType,
+          language,
+          recipientLabel,
+        );
+        messageContent = template.content;
+      }
+      if (!messageContent) {
+        skippedCount++;
+        continue;
+      }
 
-      const messageTypeMap = {
-        absent: "absence_notification",
-        late: "late_notification",
-        excused: "excused_notification",
-      };
-      const messageType = messageTypeMap[record.status] || "absence_notification";
+      const finalMessage = replaceVariables(messageContent, variables);
 
       const sendResult = await wapilotService.sendAndLogMessage({
         studentId: student._id,
-        phoneNumber: guardianPhone,
+        phoneNumber: recipientPhone,
         messageContent: finalMessage,
-        messageType,
+        messageType: templateType,
         language,
         metadata: {
           sessionId: session._id,
           sessionTitle: session.title,
           attendanceStatus: record.status,
-          recipientType: "guardian",
+          recipientType: recipientLabel,
+          isAdult,
           remainingHours: student.creditSystem?.currentPackage?.remainingHours,
         },
       });
@@ -612,7 +643,9 @@ export async function sendAbsenceNotifications(
         results.push({
           studentId: student._id,
           status: "sent",
+          recipient: recipientLabel,
           messageId: sendResult.messageId,
+          isAdult,
         });
       } else {
         skippedCount++;
@@ -626,9 +659,9 @@ export async function sendAbsenceNotifications(
     return { success: false, error: error.message, sentCount: 0, skippedCount: 0 };
   }
 }
-
 /**
  * ✅ القوالب الاحتياطية
+ * ✅ NEW: ضفنا قوالب _adult للـ reminders/attendance/evaluation
  */
 function getFallbackTemplate(
   templateType,
@@ -1116,6 +1149,300 @@ Please contact the administration immediately to renew the package, so {childTit
 
 Code School Team 💻`,
     },
+
+    // ═══════════════════════════════════════════════════════════
+    // ✅ ADULTS — Attendance (بيبعت للطالب مباشرة)
+    // ═══════════════════════════════════════════════════════════
+    absence_notification_adult: {
+      ar: `{studentSalutation}،
+
+نود إعلامك بأنه تم تسجيل غيابك عن الحصة:
+
+📘 الحصة: {sessionName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+
+يرجى التواصل معنا في حال وجود أي استفسار.
+فريق Code School 💻`,
+      en: `{studentSalutation},
+
+We would like to inform you that your absence has been recorded for the session:
+
+📘 Session: {sessionName}
+📅 Date: {date}
+⏰ Time: {time}
+
+Please contact us if you have any questions.
+Code School Team 💻`,
+    },
+    late_notification_adult: {
+      ar: `{studentSalutation}،
+
+نود إعلامك بأنه تم تسجيل وصولك متأخراً للحصة:
+
+📘 الحصة: {sessionName}
+📅 التاريخ: {date}
+
+يرجى الحرص على المواعيد في المرات القادمة.
+فريق Code School 💻`,
+      en: `{studentSalutation},
+
+We would like to inform you that your late arrival has been recorded for the session:
+
+📘 Session: {sessionName}
+📅 Date: {date}
+
+Please ensure punctuality in future sessions.
+Code School Team 💻`,
+    },
+    excused_notification_adult: {
+      ar: `{studentSalutation}،
+
+تم تسجيل غيابك بعذر عن الحصة:
+
+📘 الحصة: {sessionName}
+📅 التاريخ: {date}
+
+فريق Code School 💻`,
+      en: `{studentSalutation},
+
+Your absence has been recorded as excused for the session:
+
+📘 Session: {sessionName}
+📅 Date: {date}
+
+Code School Team 💻`,
+    },
+
+    // ═══════════════════════════════════════════════════════════
+    // ✅ ADULTS — Reminders (Online)
+    // ═══════════════════════════════════════════════════════════
+    reminder_24h_adult: {
+      ar: `{studentSalutation} 👋
+
+تذكير: حصتك *{sessionName}* بكرة إن شاء الله ✨
+
+📘 الحصة: {sessionName}
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+🔗 لينك الحصة:
+{meetingLink}
+
+💡 ياريت تتأكد إن اللاب مشحون، النت مستقر، والكاميرا جاهزة 👍
+
+متحمسين نشوفك بكرة 💻🚀
+فريق Code School`,
+      en: `{studentSalutation} 👋
+
+Just a reminder that your session *{sessionName}* is tomorrow ✨
+
+📘 Session: {sessionName}
+📅 Date: {date}
+⏰ Time: {time}
+🔗 Meeting Link:
+{meetingLink}
+
+💡 Please make sure your laptop is charged, internet is stable, and camera is ready 👍
+
+Excited to see you tomorrow 💻🚀
+Code School Team`,
+    },
+    reminder_15min_adult: {
+      ar: `{studentSalutation} 👋
+
+⏳ تذكير: حصتك *{sessionName}* هتبدأ خلال *15 دقيقة* الساعة {time} ⏰
+
+🔗 رابط الحصة:
+{meetingLink}
+
+Code School 💻`,
+      en: `{studentSalutation} 👋
+
+⏳ Reminder: Your session *{sessionName}* starts in *15 minutes* at {time} ⏰
+
+🔗 Meeting link:
+{meetingLink}
+
+Code School 💻`,
+    },
+
+    // ═══════════════════════════════════════════════════════════
+    // ✅ ADULTS — Reminders (Offline)
+    // ═══════════════════════════════════════════════════════════
+    reminder_24h_offline_adult: {
+      ar: `{studentSalutation} 👋
+
+تذكير: حصتك *{sessionName}* بكرة إن شاء الله ✨
+
+📅 التاريخ: {date}
+⏰ الوقت: {time}
+
+📍 المكان: {placeName}
+📌 العنوان: {address}
+🗺️ اللوكيشن على الخريطة:
+{mapsLink}
+
+منتظرينك في الميعاد 💻
+Code School`,
+      en: `{studentSalutation} 👋
+
+Reminder: Your session *{sessionName}* is tomorrow ✨
+
+📅 Date: {date}
+⏰ Time: {time}
+
+📍 Location: {placeName}
+📌 Address: {address}
+🗺️ Location on Maps:
+{mapsLink}
+
+See you there 💻
+Code School`,
+    },
+    reminder_30min_offline_adult: {
+      ar: `{studentSalutation} 👋
+
+⏰ فاضل 30 دقيقة على بداية الحصة *{sessionName}*
+
+📍 المكان: {placeName}
+🗺️ {mapsLink}
+
+يلا استعد للنزول 👍
+Code School 💻`,
+      en: `{studentSalutation} 👋
+
+⏰ 30 minutes left until *{sessionName}*
+
+📍 Location: {placeName}
+🗺️ {mapsLink}
+
+Get ready to head out 👍
+Code School 💻`,
+    },
+
+    // ═══════════════════════════════════════════════════════════
+    // ✅ ADULTS — Evaluation (بيبعت للطالب مباشرة)
+    // ═══════════════════════════════════════════════════════════
+    evaluation_pass_adult: {
+      ar: `{studentSalutation}،
+
+تقرير الحصة 📃✨
+📆 التاريخ : {sessionDate}
+📑 رقم الحصة : {sessionNumber}
+⏱️ مدة الحصة : ساعتين
+👥 الحضور : {attendanceStatus}
+📊 تقييم الأداء :
+⭐ الالتزام والتركيز : {starsCommitment}
+⭐ مستوى الاستيعاب : {starsUnderstanding}
+⭐ تنفيذ المهام : {starsTaskExecution}
+⭐ المشاركة داخل الحصة : {starsParticipation}
+📝 تعليق المدرب :
+{instructorComment}
+🔢 عدد الحصص المنتهية : {completedSessions}
+{recordingLink}
+🏆 النتيجة : {evaluationDecision}
+🙏 شكراً لثقتك في Code School
+📞 للتواصل : +2 011 40 474 129`,
+      en: `{studentSalutation},
+
+Session Report 📃✨
+📆 Date : {sessionDate}
+📑 Session No. : {sessionNumber}
+⏱️ Duration : 2 hours
+👥 Attendance : {attendanceStatus}
+📊 Performance Evaluation :
+⭐ Commitment & Focus : {starsCommitment}
+⭐ Understanding Level : {starsUnderstanding}
+⭐ Task Execution : {starsTaskExecution}
+⭐ Class Participation : {starsParticipation}
+📝 Instructor's Comment :
+{instructorComment}
+🔢 Sessions Completed : {completedSessions}
+{recordingLink}
+🏆 Result : {evaluationDecision}
+🙏 Thank you for trusting Code School
+📞 Contact : +2 011 40 474 129`,
+    },
+    evaluation_review_adult: {
+      ar: `{studentSalutation}،
+
+تقرير الحصة 📃✨
+📆 التاريخ : {sessionDate}
+📑 رقم الحصة : {sessionNumber}
+⏱️ مدة الحصة : ساعتين
+👥 الحضور : {attendanceStatus}
+📊 تقييم الأداء :
+⭐ الالتزام والتركيز : {starsCommitment}
+⭐ مستوى الاستيعاب : {starsUnderstanding}
+⭐ تنفيذ المهام : {starsTaskExecution}
+⭐ المشاركة داخل الحصة : {starsParticipation}
+📝 تعليق المدرب :
+{instructorComment}
+🔢 عدد الحصص المنتهية : {completedSessions}
+{recordingLink}
+🏆 النتيجة : {evaluationDecision}
+🙏 شكراً لثقتك في Code School
+📞 للتواصل : +2 011 40 474 129`,
+      en: `{studentSalutation},
+
+Session Report 📃✨
+📆 Date : {sessionDate}
+📑 Session No. : {sessionNumber}
+⏱️ Duration : 2 hours
+👥 Attendance : {attendanceStatus}
+📊 Performance Evaluation :
+⭐ Commitment & Focus : {starsCommitment}
+⭐ Understanding Level : {starsUnderstanding}
+⭐ Task Execution : {starsTaskExecution}
+⭐ Class Participation : {starsParticipation}
+📝 Instructor's Comment :
+{instructorComment}
+🔢 Sessions Completed : {completedSessions}
+{recordingLink}
+🏆 Result : {evaluationDecision}
+🙏 Thank you for trusting Code School
+📞 Contact : +2 011 40 474 129`,
+    },
+    evaluation_repeat_adult: {
+      ar: `{studentSalutation}،
+
+تقرير الحصة 📃✨
+📆 التاريخ : {sessionDate}
+📑 رقم الحصة : {sessionNumber}
+⏱️ مدة الحصة : ساعتين
+👥 الحضور : {attendanceStatus}
+📊 تقييم الأداء :
+⭐ الالتزام والتركيز : {starsCommitment}
+⭐ مستوى الاستيعاب : {starsUnderstanding}
+⭐ تنفيذ المهام : {starsTaskExecution}
+⭐ المشاركة داخل الحصة : {starsParticipation}
+📝 تعليق المدرب :
+{instructorComment}
+🔢 عدد الحصص المنتهية : {completedSessions}
+{recordingLink}
+🏆 النتيجة : {evaluationDecision}
+🙏 شكراً لثقتك في Code School
+📞 للتواصل : +2 011 40 474 129`,
+      en: `{studentSalutation},
+
+Session Report 📃✨
+📆 Date : {sessionDate}
+📑 Session No. : {sessionNumber}
+⏱️ Duration : 2 hours
+👥 Attendance : {attendanceStatus}
+📊 Performance Evaluation :
+⭐ Commitment & Focus : {starsCommitment}
+⭐ Understanding Level : {starsUnderstanding}
+⭐ Task Execution : {starsTaskExecution}
+⭐ Class Participation : {starsParticipation}
+📝 Instructor's Comment :
+{instructorComment}
+🔢 Sessions Completed : {completedSessions}
+{recordingLink}
+🏆 Result : {evaluationDecision}
+🙏 Thank you for trusting Code School
+📞 Contact : +2 011 40 474 129`,
+    },
   };
 
   const noSuffixTypes = [
@@ -1124,10 +1451,16 @@ Code School Team 💻`,
     "excused_notification",
     "guardian_notification",
     "student_welcome",
+    "absence_notification_adult",
+    "late_notification_adult",
+    "excused_notification_adult",
   ];
 
   let templateKey;
   if (noSuffixTypes.includes(templateType)) {
+    templateKey = templateType;
+  } else if (templateType.endsWith("_adult")) {
+    // ✅ القوالب اللي فيها _adult بتتاخد زي ما هي
     templateKey = templateType;
   } else {
     const baseKey = templateType
@@ -1147,6 +1480,7 @@ Code School Team 💻`,
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ prepareStudentVariables — EXPORTED (يستخدمها makeupAutomation كمان)
+// ✅ NEW: لو الطالب adults → متغيرات ولي الأمر تطلع فاضية ""
 // ═══════════════════════════════════════════════════════════════════════════
 export async function prepareStudentVariables(
   student,
@@ -1162,6 +1496,9 @@ export async function prepareStudentVariables(
   const isMale = gender !== "female";
   const isFather = relationship !== "mother";
   const genderCtx = { studentGender: gender, guardianType: relationship };
+
+  // ✅ NEW: هل الطالب بالغ؟
+  const isAdult = student.studentType === "adults";
 
   const dbVars = await fetchDbVars(genderCtx);
 
@@ -1233,9 +1570,16 @@ export async function prepareStudentVariables(
 
   const studentSalutation =
     language === "ar" ? studentSalutation_ar : studentSalutation_en;
-  const guardianSalutation =
-    language === "ar" ? guardianSalutation_ar : guardianSalutation_en;
-  const childTitle = language === "ar" ? childTitleAr : childTitleEn;
+
+  // ✅ لو الطالب بالغ → نحسب القيم برضه عشان لو احتاجناها في مكان تاني،
+  // لكن في القاموس النهائي هنطلعها فاضية
+  const guardianSalutation = isAdult
+    ? ""
+    : (language === "ar" ? guardianSalutation_ar : guardianSalutation_en);
+
+  const childTitle = isAdult
+    ? ""
+    : (language === "ar" ? childTitleAr : childTitleEn);
 
   const sessionDate = session?.scheduledDate
     ? new Date(session.scheduledDate).toLocaleDateString(
@@ -1281,21 +1625,18 @@ export async function prepareStudentVariables(
       ? `📍 المكان: ${placeName}\n📌 العنوان: ${address}${mapsLink ? `\n🗺️ اللوكيشن: ${mapsLink}` : ""}`
       : "";
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ القاموس النهائي — لو isAdult → متغيرات ولي الأمر تتطلع ""
+  // ═══════════════════════════════════════════════════════════════════════
   const variables = {
+    // Student
     studentSalutation,
     studentSalutation_ar,
     studentSalutation_en,
     salutation_ar: studentSalutation_ar,
     salutation_en: studentSalutation_en,
-    guardianSalutation,
-    guardianSalutation_ar,
-    guardianSalutation_en,
-    salutation: guardianSalutation,
     studentName: studentFirstName,
     studentFullName: student.personalInfo?.fullName || "",
-    guardianName: guardianFirstName,
-    guardianFullName: student.guardianInfo?.name || "",
-    childTitle,
     studentGender:
       language === "ar"
         ? isMale
@@ -1304,6 +1645,17 @@ export async function prepareStudentVariables(
         : isMale
           ? "son"
           : "daughter",
+
+    // ✅ Guardian — لو adult → فاضية
+    guardianSalutation:        isAdult ? "" : guardianSalutation,
+    guardianSalutation_ar:     isAdult ? "" : guardianSalutation_ar,
+    guardianSalutation_en:     isAdult ? "" : guardianSalutation_en,
+    salutation:                isAdult ? studentSalutation : guardianSalutation,
+    guardianName:              isAdult ? "" : guardianFirstName,
+    guardianFullName:          isAdult ? "" : (student.guardianInfo?.name || ""),
+    childTitle:                isAdult ? "" : childTitle,
+
+    // Group / Course
     groupName: group?.name || "",
     groupCode: group?.code || "",
     courseName: group?.courseSnapshot?.title || group?.courseId?.title || "",
@@ -1312,13 +1664,18 @@ export async function prepareStudentVariables(
     timeTo: group?.schedule?.timeTo || "",
     instructor: instructorNames,
     enrollmentNumber: student.enrollmentNumber || "",
+
+    // Location / Link
     firstMeetingLink: isOffline ? "" : firstMeetingLink || "",
-    meetingLink: isOffline ? "" : firstMeetingLink || "",
-    placeName: isOffline ? placeName : "",
-    address: isOffline ? address : "",
-    mapsLink: isOffline ? mapsLink : "",
+    meetingLink:      isOffline ? "" : firstMeetingLink || "",
+    placeName:        isOffline ? placeName : "",
+    address:          isOffline ? address : "",
+    mapsLink:         isOffline ? mapsLink : "",
     sessionLocationBlock: isOffline ? sessionLocationBlock : "",
     isOffline,
+
+    // ✅ flag إضافي مفيد للقوالب
+    isAdult,
   };
 
   if (session) {
@@ -1372,7 +1729,7 @@ export async function prepareStudentVariables(
   if (extra.moduleDescription)
     variables.moduleDescription = extra.moduleDescription;
 
-  return { variables, language, gender, relationship };
+  return { variables, language, gender, relationship, isAdult };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1595,6 +1952,10 @@ export async function sendInstructorSessionReminder(
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ sendLowBalanceAlerts
+// ✅ NEW: لو الطالب adults → رسالة ولي الأمر تتخطى
+// ═══════════════════════════════════════════════════════════════════════════
 export async function sendLowBalanceAlerts(students, sessionId = null) {
   try {
     console.log(`\n📤 Sending low balance alerts to ${students.length} students`);
@@ -1622,6 +1983,9 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
 
     for (const { student, remainingHours, alertType } of students) {
       try {
+        // ✅ NEW: هل الطالب بالغ؟
+        const isAdult = student.studentType === "adults";
+
         const canSend = await canSendMessageForLowBalance(student);
         if (!canSend) {
           failCount++;
@@ -1634,8 +1998,11 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
         }
 
         const studentPhone = student.personalInfo?.whatsappNumber;
-        const guardianPhone =
-          student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
+
+        // ✅ لو adult → نتخطى رقم ولي الأمر
+        const guardianPhone = isAdult
+          ? null
+          : (student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone);
 
         if (!studentPhone && !guardianPhone) {
           failCount++;
@@ -1647,12 +2014,7 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
           continue;
         }
 
-        // ✅ FIX: بنجيب الجروب الفعلي (من السيشن لو متوفرة، وإلا من أول
-        // جروب للطالب) وبنبني المتغيرات بنفس دالة prepareStudentVariables
-        // اللي بتستخدمها كل الرسايل التانية — ده اللي بيخلي
-        // {guardianSalutation} و {childTitle} ياخدوا القيم المحفوظة فعليًا
-        // في صفحة المتغيرات (TemplateVariable) بدل النص الثابت اللي كان
-        // متكتوب يدويًا هنا ("عزيزي الأستاذ"، "ابنك"...).
+        // جيب الجروب الفعلي
         let group = sessionGroup;
         if (!group) {
           const groupId = student.academicInfo?.groupIds?.[0];
@@ -1664,9 +2026,6 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
         const { variables: baseVariables, language } =
           await prepareStudentVariables(student, group || {}, null, {});
 
-        // ✅ FIX: بنحترم alertType الجاي من الـ caller بدل ما نعيد حسابه من
-        // remainingHours — ده اللي بيسمح بتبديل نقاط الإطلاق (عند 2 ساعة
-        // وعند الصفر) عن القالب المُستخدم (4h/2h) من غير ما نلمس القوالب نفسها
         const templateKey = alertType || (remainingHours <= 0 ? "2h" : "4h");
         const isCritical = templateKey === "2h";
 
@@ -1684,6 +2043,7 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
           packageName,
         };
 
+        // ── Student message ──
         if (studentPhone) {
           try {
             const studentTpl = await getMessageTemplate(
@@ -1706,6 +2066,7 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
                 studentName: baseVariables.studentName,
                 packageName,
                 threshold: templateKey,
+                isAdult,
               },
             });
           } catch (err) {
@@ -1716,6 +2077,7 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
           }
         }
 
+        // ── Guardian message — ✅ يتخطى للـ adults ──
         if (guardianPhone) {
           try {
             const guardianTpl = await getMessageTemplate(
@@ -1747,6 +2109,8 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
               err.message,
             );
           }
+        } else if (isAdult) {
+          console.log(`   ⏭️ [ADULT] Skipping guardian credit alert for ${student._id}`);
         }
 
         successCount++;
@@ -1755,6 +2119,7 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
           status: "sent",
           remainingHours,
           threshold: templateKey,
+          isAdult,
         });
 
         if (typeof student.logLowBalanceAlert === "function") {
@@ -1873,12 +2238,17 @@ export function replaceVariables(message, variables) {
   return result;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ getTemplatesForEvent
+// ✅ NEW: بيرجع القوالب الصح حسب نوع الطالب (kids/adults)
+// ═══════════════════════════════════════════════════════════════════════════
 export async function getTemplatesForEvent(eventType, student, extraData = {}) {
   try {
     const language =
       student.communicationPreferences?.preferredLanguage || "ar";
     const gender = student.personalInfo?.gender || "male";
     const relationship = student.guardianInfo?.relationship || "father";
+    const isAdult = student.studentType === "adults";
 
     let studentTemplateType = "";
     let guardianTemplateType = "";
@@ -1886,40 +2256,56 @@ export async function getTemplatesForEvent(eventType, student, extraData = {}) {
     switch (eventType) {
       case "session_cancelled":
         studentTemplateType = "session_cancelled_student";
-        guardianTemplateType = "session_cancelled_guardian";
+        guardianTemplateType = isAdult ? null : "session_cancelled_guardian";
         break;
       case "session_postponed":
         studentTemplateType = "session_postponed_student";
-        guardianTemplateType = "session_postponed_guardian";
+        guardianTemplateType = isAdult ? null : "session_postponed_guardian";
         break;
       case "reminder_24h":
-        studentTemplateType = "reminder_24h_student";
-        guardianTemplateType = "reminder_24h_guardian";
+        studentTemplateType = isAdult
+          ? "reminder_24h_adult"
+          : "reminder_24h_student";
+        guardianTemplateType = isAdult ? null : "reminder_24h_guardian";
         break;
       case "reminder_15min":
       case "reminder_1h":
-        studentTemplateType = "reminder_15min_student";
-        guardianTemplateType = "reminder_15min_guardian";
+        studentTemplateType = isAdult
+          ? "reminder_15min_adult"
+          : "reminder_15min_student";
+        guardianTemplateType = isAdult ? null : "reminder_15min_guardian";
         break;
       case "student_welcome":
         studentTemplateType = "student_welcome";
-        guardianTemplateType = "guardian_notification";
+        guardianTemplateType = isAdult ? null : "guardian_notification";
         break;
       case "group_completion":
         studentTemplateType = "group_completion_student";
-        guardianTemplateType = "group_completion_guardian";
+        guardianTemplateType = isAdult ? null : "group_completion_guardian";
         break;
       case "absence":
-        studentTemplateType = null;
-        guardianTemplateType = "absence_notification";
+        studentTemplateType = isAdult ? "absence_notification_adult" : null;
+        guardianTemplateType = isAdult ? null : "absence_notification";
         break;
       case "late":
-        studentTemplateType = null;
-        guardianTemplateType = "late_notification";
+        studentTemplateType = isAdult ? "late_notification_adult" : null;
+        guardianTemplateType = isAdult ? null : "late_notification";
         break;
       case "excused":
-        studentTemplateType = null;
-        guardianTemplateType = "excused_notification";
+        studentTemplateType = isAdult ? "excused_notification_adult" : null;
+        guardianTemplateType = isAdult ? null : "excused_notification";
+        break;
+      case "evaluation_pass":
+        studentTemplateType = isAdult ? "evaluation_pass_adult" : null;
+        guardianTemplateType = isAdult ? null : "evaluation_pass";
+        break;
+      case "evaluation_review":
+        studentTemplateType = isAdult ? "evaluation_review_adult" : null;
+        guardianTemplateType = isAdult ? null : "evaluation_review";
+        break;
+      case "evaluation_repeat":
+        studentTemplateType = isAdult ? "evaluation_repeat_adult" : null;
+        guardianTemplateType = isAdult ? null : "evaluation_repeat";
         break;
       default:
         throw new Error(`Unknown event type: ${eventType}`);
@@ -1941,8 +2327,11 @@ export async function getTemplatesForEvent(eventType, student, extraData = {}) {
         language,
         gender,
         relationship,
+        isAdult,
         studentName: student.personalInfo?.fullName?.split(" ")[0] || "الطالب",
-        guardianName: student.guardianInfo?.name?.split(" ")[0] || "ولي الأمر",
+        guardianName: isAdult
+          ? null
+          : (student.guardianInfo?.name?.split(" ")[0] || "ولي الأمر"),
       },
     };
   } catch (error) {
@@ -2193,6 +2582,10 @@ export async function sendInstructorWelcomeMessages(
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ sendToStudentWithLogging — إرسال للطالب + ولي الأمر مع logging
+// ✅ NEW: لو الطالب adults → رسالة ولي الأمر تتخطى تلقائيًا
+// ═══════════════════════════════════════════════════════════════════════════
 async function sendToStudentWithLogging({
   studentId,
   student,
@@ -2203,17 +2596,26 @@ async function sendToStudentWithLogging({
 }) {
   try {
     const studentWhatsApp = student.personalInfo?.whatsappNumber;
-    const guardianWhatsApp = student.guardianInfo?.whatsappNumber;
     const language =
       student.communicationPreferences?.preferredLanguage || "ar";
+
+    // ✅ NEW: هل الطالب بالغ؟
+    const isAdult = student.studentType === "adults";
+
+    // ✅ لو adult → نتخطى رقم ولي الأمر تمامًا
+    const guardianWhatsApp = isAdult
+      ? null
+      : student.guardianInfo?.whatsappNumber;
 
     const results = {
       guardian: false,
       student: false,
-      guardianError: null,
+      guardianError: isAdult ? "skipped_adult_student" : null,
       studentError: null,
+      isAdult,
     };
 
+    // ── Guardian message (نتخطاها تلقائيًا لو adult) ──
     if (guardianWhatsApp && guardianMessage) {
       try {
         await wapilotService.sendAndLogMessage({
@@ -2235,6 +2637,7 @@ async function sendToStudentWithLogging({
       }
     }
 
+    // ── Student message ──
     if (studentWhatsApp && studentMessage) {
       try {
         await wapilotService.sendAndLogMessage({
@@ -2256,6 +2659,7 @@ async function sendToStudentWithLogging({
       success: results.guardian || results.student,
       studentId,
       studentName: student.personalInfo?.fullName,
+      isAdult,
       sentTo: { guardian: results.guardian, student: results.student },
       errors: { guardian: results.guardianError, student: results.studentError },
     };
@@ -2265,6 +2669,10 @@ async function sendToStudentWithLogging({
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ onStudentAddedToGroup
+// ✅ NEW: لو الطالب adults → رسالة ولي الأمر + moduleOverview تتخطى
+// ═══════════════════════════════════════════════════════════════════════════
 export async function onStudentAddedToGroup(
   studentId,
   groupId,
@@ -2289,6 +2697,9 @@ export async function onStudentAddedToGroup(
       console.log(`⏭️ [HOLD GUARD] onStudentAddedToGroup skipped — group_on_hold`);
       throw new Error("لا يمكن إضافة طالب لجروب على Hold حاليًا");
     }
+
+    // ✅ NEW: هل الطالب بالغ؟
+    const isAdult = student.studentType === "adults";
 
     await Student.findByIdAndUpdate(
       studentId,
@@ -2367,6 +2778,7 @@ export async function onStudentAddedToGroup(
         },
       );
 
+      // ── Student welcome ─────────────────────────────────────────
       if (student.personalInfo?.whatsappNumber) {
         let finalStudentMessage = "";
 
@@ -2418,6 +2830,7 @@ export async function onStudentAddedToGroup(
               automationType: "group_enrollment",
               recipientType: "student",
               isOffline,
+              isAdult,
               templateType: groupTemplateType,
             },
           });
@@ -2427,7 +2840,8 @@ export async function onStudentAddedToGroup(
         }
       }
 
-      if (student.guardianInfo?.whatsappNumber) {
+      // ── Guardian welcome — ✅ يتخطى للـ adults ──────────────────
+      if (!isAdult && student.guardianInfo?.whatsappNumber) {
         let finalGuardianMessage = "";
 
         if (customMessages.guardian) {
@@ -2491,9 +2905,16 @@ export async function onStudentAddedToGroup(
         } catch (err) {
           console.error("   ❌ Guardian message failed:", err.message);
         }
+      } else if (isAdult) {
+        console.log(`   ⏭️ [ADULT] Skipping guardian welcome message`);
       }
 
-      if (customMessages.moduleOverview && customMessages.moduleOverview.trim()) {
+      // ── Module overview — ✅ يتخطى للـ adults ──────────────────
+      if (
+        !isAdult &&
+        customMessages.moduleOverview &&
+        customMessages.moduleOverview.trim()
+      ) {
         if (student.guardianInfo?.whatsappNumber) {
           try {
             await wapilotService.sendAndLogEvalMessage({
@@ -2519,6 +2940,8 @@ export async function onStudentAddedToGroup(
             console.error("   ❌ Module overview message failed:", err.message);
           }
         }
+      } else if (isAdult && customMessages.moduleOverview) {
+        console.log(`   ⏭️ [ADULT] Skipping module overview (guardian-targeted)`);
       }
     }
 
@@ -2528,13 +2951,14 @@ export async function onStudentAddedToGroup(
       groupId,
       groupCode: group.code,
       studentName: student.personalInfo.fullName,
+      isAdult,
       deliveryMode: group.deliveryMode,
       isOffline,
       templateType: groupTemplateType,
       messagesSent: {
         student: studentMessageSent,
-        guardian: guardianMessageSent,
-        moduleOverview: moduleOverviewSent,
+        guardian: isAdult ? false : guardianMessageSent,
+        moduleOverview: isAdult ? false : moduleOverviewSent,
       },
       timestamp: new Date(),
     };
@@ -2676,15 +3100,24 @@ export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ sendLowBalanceAlert (المفرد)
+// ✅ NEW: لو الطالب adults → رسالة ولي الأمر تتخطى
+// ═══════════════════════════════════════════════════════════════════════════
 export async function sendLowBalanceAlert(student) {
   try {
     const canSend = await canSendMessageForLowBalance(student);
     if (!canSend) return { success: false, reason: "not_eligible" };
 
+    // ✅ NEW: هل الطالب بالغ؟
+    const isAdult = student.studentType === "adults";
+
     const language = student.communicationPreferences?.preferredLanguage || "ar";
     const studentPhone = student.personalInfo?.whatsappNumber;
-    const guardianPhone =
-      student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
+    const guardianPhone = isAdult
+      ? null
+      : (student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone);
+
     const remainingHours = student.creditSystem?.currentPackage?.remainingHours || 0;
 
     const studentFirstName =
@@ -2724,6 +3157,7 @@ export async function sendLowBalanceAlert(student) {
 
     const results = [];
 
+    // ── Student message ──
     if (studentPhone) {
       const studentResult = await wapilotService.sendAndLogMessage({
         studentId: student._id,
@@ -2736,11 +3170,13 @@ export async function sendLowBalanceAlert(student) {
           alertType: remainingHours <= 2 ? "critical" : "low_balance",
           recipientType: "student",
           studentName: studentFirstName,
+          isAdult,
         },
       });
       if (studentResult.success) results.push({ recipient: "student", success: true });
     }
 
+    // ── Guardian message — ✅ يتخطى للـ adults ──
     if (guardianPhone) {
       const guardianMessage =
         language === "ar"
@@ -2762,9 +3198,11 @@ export async function sendLowBalanceAlert(student) {
         },
       });
       if (guardianResult.success) results.push({ recipient: "guardian", success: true });
+    } else if (isAdult) {
+      console.log(`   ⏭️ [ADULT] Skipping guardian credit alert for ${student._id}`);
     }
 
-    return { success: results.length > 0, results };
+    return { success: results.length > 0, results, isAdult };
   } catch (error) {
     console.error(`❌ Error sending low balance alert:`, error);
     return { success: false, error: error.message };
@@ -2909,6 +3347,12 @@ export async function onSessionStatusChanged(
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ sendManualSessionReminder
+// ✅ NEW:
+//   - kids → reminder_24h_student/guardian (زي ما كان)
+//   - adults → reminder_24h_adult (للطالب فقط)
+// ═══════════════════════════════════════════════════════════════════════════
 export async function sendManualSessionReminder(
   sessionId,
   reminderType,
@@ -2922,7 +3366,7 @@ export async function sendManualSessionReminder(
     const session = await Session.findById(sessionId).populate("groupId").lean();
     if (!session) throw new Error("Session not found");
 
-       const group = session.groupId;
+    const group = session.groupId;
 
     const holdCheck = await canSessionSendMessages(sessionId);
     if (!holdCheck.ok) {
@@ -2952,15 +3396,12 @@ export async function sendManualSessionReminder(
     const notificationResults = [];
 
     const is24h = reminderType === "24hours";
-    const guardianTemplateType = is24h
-      ? "reminder_24h_guardian"
-      : "reminder_15min_guardian";
-    const studentTemplateType = is24h
-      ? "reminder_24h_student"
-      : "reminder_15min_student";
 
     for (const student of students) {
       try {
+        // ✅ هل الطالب بالغ؟
+        const isAdult = student.studentType === "adults";
+
         const { variables, language } = await prepareStudentVariables(
           student,
           group,
@@ -2969,6 +3410,16 @@ export async function sendManualSessionReminder(
 
         const studentIdStr = student._id.toString();
 
+        // ✅ تحديد templates حسب النوع
+        const studentTemplateType = isAdult
+          ? (is24h ? "reminder_24h_adult" : "reminder_15min_adult")
+          : (is24h ? "reminder_24h_student" : "reminder_15min_student");
+
+        const guardianTemplateType = is24h
+          ? "reminder_24h_guardian"
+          : "reminder_15min_guardian";
+
+        // ── Student message ──
         let finalStudentMessage = "";
         const perStudentTemplate = metadata?.studentMessages?.[studentIdStr];
         const sharedStudentTemplate = metadata?.studentMessage;
@@ -2995,49 +3446,55 @@ export async function sendManualSessionReminder(
           finalStudentMessage = replaceVariables(template.content, variables);
         }
 
+        // ── Guardian message ──
+        // ✅ للـ adults → مش هنبعت رسالة لولي أمر خالص
         let finalGuardianMessage = "";
-        const perGuardianTemplate = metadata?.guardianMessages?.[studentIdStr];
-        const sharedGuardianTemplate = metadata?.guardianMessage;
+        if (!isAdult) {
+          const perGuardianTemplate = metadata?.guardianMessages?.[studentIdStr];
+          const sharedGuardianTemplate = metadata?.guardianMessage;
 
-        if (perGuardianTemplate) {
-          finalGuardianMessage = replaceVariables(perGuardianTemplate, variables);
-        } else if (sharedGuardianTemplate) {
-          if (language === "ar") {
-            finalGuardianMessage = replaceVariables(sharedGuardianTemplate, variables);
+          if (perGuardianTemplate) {
+            finalGuardianMessage = replaceVariables(perGuardianTemplate, variables);
+          } else if (sharedGuardianTemplate) {
+            if (language === "ar") {
+              finalGuardianMessage = replaceVariables(sharedGuardianTemplate, variables);
+            } else {
+              const template = await getMessageTemplate(
+                guardianTemplateType,
+                "en",
+                "guardian",
+              );
+              finalGuardianMessage = replaceVariables(template.content, variables);
+            }
           } else {
             const template = await getMessageTemplate(
               guardianTemplateType,
-              "en",
+              language,
               "guardian",
             );
             finalGuardianMessage = replaceVariables(template.content, variables);
           }
-        } else {
-          const template = await getMessageTemplate(
-            guardianTemplateType,
-            language,
-            "guardian",
-          );
-          finalGuardianMessage = replaceVariables(template.content, variables);
         }
 
+        // ✅ للـ adults → guardianMessage: null عشان sendToStudentWithLogging تتخطاه
         const result = await sendToStudentWithLogging({
           studentId: student._id,
           student,
           studentMessage: finalStudentMessage,
-          guardianMessage: finalGuardianMessage,
-          messageType: guardianTemplateType,
+          guardianMessage: isAdult ? null : finalGuardianMessage,
+          messageType: studentTemplateType,
           metadata: {
             sessionId,
             sessionTitle: session.title,
             groupId: group._id,
             reminderType,
+            isAdult,
           },
         });
 
         if (result.success) {
           successCount++;
-          notificationResults.push({ ...result, language });
+          notificationResults.push({ ...result, language, isAdult });
         } else {
           failCount++;
         }
@@ -3097,6 +3554,11 @@ export async function sendManualSessionReminder(
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ onGroupCompleted
+// ✅ NEW: ضفنا "studentType" في الـ select عشان الـ Kids/Adults يشتغل صح
+//         (sendToStudentWithLogging هيستخدمه لتخطي رسالة ولي الأمر للـ adults)
+// ═══════════════════════════════════════════════════════════════════════════
 export async function onGroupCompleted(
   groupId,
   customMessage = null,
@@ -3116,16 +3578,18 @@ export async function onGroupCompleted(
       return { success: false, error: "Group is on hold", reason: "group_on_hold" };
     }
 
+    // ✅ FIX: ضفنا "studentType" في الـ select عشان الـ Kids/Adults يشتغل
     const students = await Student.find({
       "academicInfo.groupIds": new mongoose.Types.ObjectId(groupId),
       isDeleted: false,
     })
       .select(
-        "personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem issuedCertificates",
+        "personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem issuedCertificates studentType",
       )
       .lean();
 
-    if (students.length === 0) return { success: false, error: "No students in group" };
+    if (students.length === 0)
+      return { success: false, error: "No students in group" };
 
     const totalSessions =
       group.totalSessionsCount ||
@@ -3154,6 +3618,9 @@ export async function onGroupCompleted(
 
     for (const student of students) {
       try {
+        // ✅ NEW: هل الطالب بالغ؟
+        const isAdult = student.studentType === "adults";
+
         const { variables, language } = await prepareStudentVariables(
           student,
           group,
@@ -3198,6 +3665,7 @@ export async function onGroupCompleted(
           }
         }
 
+        // ── Student message ─────────────────────────────────────────
         let finalStudentMessage = "";
         const studentIdStr = student._id.toString();
         const perStudentMsgs = customMessages[studentIdStr];
@@ -3215,39 +3683,61 @@ export async function onGroupCompleted(
           finalStudentMessage = replaceVariables(template.content, enhancedVars);
         }
 
+        // ── Guardian message ────────────────────────────────────────
+        // ✅ لو الطالب بالغ → نتخطى بناء رسالة ولي الأمر بالكامل
         let finalGuardianMessage = "";
-        if (perStudentMsgs?.guardian?.trim()) {
-          finalGuardianMessage = perStudentMsgs.guardian;
-        } else if (customMessage) {
-          finalGuardianMessage = replaceVariables(customMessage, enhancedVars);
+        if (!isAdult) {
+          if (perStudentMsgs?.guardian?.trim()) {
+            finalGuardianMessage = perStudentMsgs.guardian;
+          } else if (customMessage) {
+            finalGuardianMessage = replaceVariables(customMessage, enhancedVars);
+          } else {
+            const template = await getMessageTemplate(
+              "group_completion_guardian",
+              language,
+              "guardian",
+            );
+            finalGuardianMessage = replaceVariables(template.content, enhancedVars);
+          }
         } else {
-          const template = await getMessageTemplate(
-            "group_completion_guardian",
-            language,
-            "guardian",
+          console.log(
+            `   ⏭️ [ADULT] Skipping guardian completion message for ${student._id}`,
           );
-          finalGuardianMessage = replaceVariables(template.content, enhancedVars);
         }
 
+        // ✅ إضافة سطر الشهادات — للطالب دايمًا، ولولي الأمر بس لو kids
         if (certificateLine) {
-          if (!finalStudentMessage.includes("🏆")) finalStudentMessage += certificateLine;
-          if (!finalGuardianMessage.includes("🏆")) finalGuardianMessage += certificateLine;
+          if (!finalStudentMessage.includes("🏆")) {
+            finalStudentMessage += certificateLine;
+          }
+          if (!isAdult && finalGuardianMessage && !finalGuardianMessage.includes("🏆")) {
+            finalGuardianMessage += certificateLine;
+          }
         }
 
+        // ✅ إضافة رابط التقييم — للطالب دايمًا، ولولي الأمر بس لو kids
         if (feedbackLink) {
           const feedbackSuffix =
             language === "ar"
               ? `\n\n📋 نرجو منك تقييم الدورة:\n${feedbackLink}`
               : `\n\n📋 Please rate the course:\n${feedbackLink}`;
-          if (!finalStudentMessage.includes(feedbackLink)) finalStudentMessage += feedbackSuffix;
-          if (!finalGuardianMessage.includes(feedbackLink)) finalGuardianMessage += feedbackSuffix;
+
+          if (!finalStudentMessage.includes(feedbackLink)) {
+            finalStudentMessage += feedbackSuffix;
+          }
+          if (!isAdult && finalGuardianMessage && !finalGuardianMessage.includes(feedbackLink)) {
+            finalGuardianMessage += feedbackSuffix;
+          }
         }
 
+        // ✅ sendToStudentWithLogging هيتخطى رسالة ولي الأمر تلقائيًا
+        //    لو isAdult، حتى لو بعتناله guardianMessage (بس إحنا أصلاً
+        //    مش بنبعته فاضي — كده أوضح)
         const result = await sendToStudentWithLogging({
           studentId: student._id,
           student,
           studentMessage: finalStudentMessage,
-          guardianMessage: finalGuardianMessage,
+          guardianMessage: isAdult ? null : finalGuardianMessage,
           messageType: "group_completion",
           metadata: {
             groupId: group._id,
@@ -3255,6 +3745,7 @@ export async function onGroupCompleted(
             groupCode: group.code,
             certificatesCount: certificates.length,
             totalSessions,
+            isAdult,
           },
         });
 
@@ -3267,6 +3758,7 @@ export async function onGroupCompleted(
             sentTo: result.sentTo,
             language,
             certificatesSent: certificates.length,
+            isAdult,
           });
         } else {
           failCount++;
@@ -3979,6 +4471,10 @@ async function releaseModuleOverviewClaim(studentId, groupId, moduleIdx) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ checkAndSendModuleOverviewNotifications (CRON)
+// ✅ NEW: لو الطالب adults → نتخطى الـ module overview بالكامل
+// ═══════════════════════════════════════════════════════════════════════════
 export async function checkAndSendModuleOverviewNotifications() {
   const groups = await Group.find({
     status: "active",
@@ -4008,6 +4504,18 @@ export async function checkAndSendModuleOverviewNotifications() {
 
       for (const student of studentsInGroup) {
         if (!student) continue;
+
+        // ✅ NEW: لو الطالب بالغ → نتخطى module overviews تمامًا
+        //    (لأن القوالب دي أصلاً موجهة لولي الأمر)
+        if (student.studentType === "adults") {
+          results.push({
+            studentId: student._id,
+            groupId: group._id,
+            success: false,
+            skipped: "adult_student",
+          });
+          continue;
+        }
 
         for (let moduleIdx = 1; moduleIdx <= highestCompleted + 1; moduleIdx++) {
           if (moduleIdx >= curriculum.length) continue;
@@ -4247,6 +4755,12 @@ async function prepareOfflineLocationVariables(group, session, language = "ar") 
   return { placeName, address, mapsLink };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ sendOfflineLocationReminder (24h)
+// ✅ NEW:
+//   - kids → reminder_24h_offline_student/guardian
+//   - adults → reminder_24h_offline_adult (للطالب فقط)
+// ═══════════════════════════════════════════════════════════════════════════
 export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
   try {
     console.log(`\n📍 OFFLINE 24h Reminder ==========`);
@@ -4260,7 +4774,7 @@ export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
       .lean();
     if (!group) throw new Error("Group not found");
 
-       const holdCheck = await canSessionSendMessages(sessionId);
+    const holdCheck = await canSessionSendMessages(sessionId);
     if (!holdCheck.ok) {
       console.log(
         `⏭️ [HOLD GUARD] sendOfflineLocationReminder skipped — ${holdCheck.reason}`,
@@ -4294,24 +4808,34 @@ export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
           continue;
         }
 
+        // ✅ هل الطالب بالغ؟
+        const isAdult = student.studentType === "adults";
+
         const { variables, language } = await prepareStudentVariables(student, group, session);
         const locVars = await prepareOfflineLocationVariables(group, session, language);
         Object.assign(variables, locVars);
 
-        const studentTemplateType = "reminder_24h_offline_student";
+        // ✅ تحديد student template حسب النوع
+        const studentTemplateType = isAdult
+          ? "reminder_24h_offline_adult"
+          : "reminder_24h_offline_student";
         const studentTpl = await getMessageTemplate(studentTemplateType, language, "student");
         const finalStudentMessage = replaceVariables(studentTpl.content, variables);
 
-        const guardianTemplateType = "reminder_24h_offline_guardian";
-        const guardianTpl = await getMessageTemplate(guardianTemplateType, language, "guardian");
-        const finalGuardianMessage = replaceVariables(guardianTpl.content, variables);
+        // ✅ للـ adults → مش هنبعت رسالة لولي أمر خالص
+        let finalGuardianMessage = null;
+        if (!isAdult) {
+          const guardianTemplateType = "reminder_24h_offline_guardian";
+          const guardianTpl = await getMessageTemplate(guardianTemplateType, language, "guardian");
+          finalGuardianMessage = replaceVariables(guardianTpl.content, variables);
+        }
 
         const result = await sendToStudentWithLogging({
           studentId: student._id,
           student,
           studentMessage: finalStudentMessage,
           guardianMessage: finalGuardianMessage,
-          messageType: "reminder_24h_offline",
+          messageType: studentTemplateType,
           metadata: {
             sessionId,
             sessionTitle: session.title,
@@ -4319,12 +4843,13 @@ export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
             reminderType: "24hours_offline",
             mapsLink: locVars.mapsLink,
             placeName: locVars.placeName,
+            isAdult,
           },
         });
 
         if (result.success) {
           sentCount++;
-          results.push({ studentId: student._id, status: "sent" });
+          results.push({ studentId: student._id, status: "sent", isAdult });
         } else {
           failCount++;
         }
@@ -4347,6 +4872,12 @@ export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ sendOfflineDropoffAlert (30min)
+// ✅ NEW:
+//   - kids → reminder_30min_offline_student/guardian
+//   - adults → reminder_30min_offline_adult (للطالب فقط)
+// ═══════════════════════════════════════════════════════════════════════════
 export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
   try {
     console.log(`\n🚗 OFFLINE 30min Drop-off Alert ==========`);
@@ -4358,7 +4889,7 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
       .lean();
     if (!group) throw new Error("Group not found");
 
-       const holdCheck = await canSessionSendMessages(sessionId);
+    const holdCheck = await canSessionSendMessages(sessionId);
     if (!holdCheck.ok) {
       console.log(
         `⏭️ [HOLD GUARD] sendOfflineDropoffAlert skipped — ${holdCheck.reason}`,
@@ -4388,30 +4919,34 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
           continue;
         }
 
+        // ✅ هل الطالب بالغ؟
+        const isAdult = student.studentType === "adults";
+
         const { variables, language } = await prepareStudentVariables(student, group, session);
         const locVars = await prepareOfflineLocationVariables(group, session, language);
         Object.assign(variables, locVars);
 
-        const studentTpl = await getMessageTemplate(
-          "reminder_30min_offline_student",
-          language,
-          "student",
-        );
+        // ✅ تحديد student template حسب النوع
+        const studentTemplateType = isAdult
+          ? "reminder_30min_offline_adult"
+          : "reminder_30min_offline_student";
+        const studentTpl = await getMessageTemplate(studentTemplateType, language, "student");
         const finalStudentMessage = replaceVariables(studentTpl.content, variables);
 
-        const guardianTpl = await getMessageTemplate(
-          "reminder_30min_offline_guardian",
-          language,
-          "guardian",
-        );
-        const finalGuardianMessage = replaceVariables(guardianTpl.content, variables);
+        // ✅ للـ adults → مش هنبعت رسالة لولي أمر خالص
+        let finalGuardianMessage = null;
+        if (!isAdult) {
+          const guardianTemplateType = "reminder_30min_offline_guardian";
+          const guardianTpl = await getMessageTemplate(guardianTemplateType, language, "guardian");
+          finalGuardianMessage = replaceVariables(guardianTpl.content, variables);
+        }
 
         const result = await sendToStudentWithLogging({
           studentId: student._id,
           student,
           studentMessage: finalStudentMessage,
           guardianMessage: finalGuardianMessage,
-          messageType: "reminder_30min_offline",
+          messageType: studentTemplateType,
           metadata: {
             sessionId,
             sessionTitle: session.title,
@@ -4419,12 +4954,13 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
             reminderType: "30min_offline",
             mapsLink: locVars.mapsLink,
             placeName: locVars.placeName,
+            isAdult,
           },
         });
 
         if (result.success) {
           sentCount++;
-          results.push({ studentId: student._id, status: "sent" });
+          results.push({ studentId: student._id, status: "sent", isAdult });
         } else {
           failCount++;
         }

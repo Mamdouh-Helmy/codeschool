@@ -1,4 +1,4 @@
-// app/api/allStudents/[id]route.js
+// app/api/allStudents/[id]/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Student from "../../../models/Student";
@@ -23,6 +23,24 @@ function validateJsonContentType(req) {
   }
   return null;
 }
+
+// ✅ NEW: توحيد قيمة studentType — أي قيمة غير معروفة → "kids"
+function sanitizeStudentType(value) {
+  const lower = String(value || "").toLowerCase().trim();
+  if (lower === "adults" || lower === "adult") return "adults";
+  if (lower === "kids" || lower === "kid") return "kids";
+  return "kids";
+}
+
+// ✅ NEW: بيانات ولي الأمر الفاضية للـ adults
+const EMPTY_GUARDIAN_INFO = {
+  name: "",
+  nickname: { ar: "", en: "" },
+  relationship: "father",
+  phone: "",
+  whatsappNumber: "",
+  email: "",
+};
 
 // ✅ مزامنة رقم التلفون / النوع / اللغة مع حساب الـ User المرتبط بالطالب
 function normalizeGenderForUser(gender) {
@@ -113,6 +131,15 @@ export async function GET(req, context) {
       );
     }
 
+    // ✅ NEW: هل الطالب بالغ؟
+    const studentType = student.studentType || "kids";
+    const isAdult = studentType === "adults";
+
+    // ✅ NEW: لو adult → نرجع بيانات ولي الأمر فاضية للواجهة
+    const guardianInfoOut = isAdult
+      ? { ...EMPTY_GUARDIAN_INFO }
+      : student.guardianInfo;
+
     return NextResponse.json({
       success: true,
       message: "Student retrieved successfully",
@@ -120,11 +147,13 @@ export async function GET(req, context) {
         id:               student._id,
         enrollmentNumber: student.enrollmentNumber,
         authUserId:       student.authUserId,
+        studentType,      // ✅ NEW
+        isAdult,          // ✅ NEW
         personalInfo:     student.personalInfo,
-        guardianInfo:     student.guardianInfo,
+        guardianInfo:     guardianInfoOut, // ✅ فاضي للـ adults
         enrollmentInfo:   student.enrollmentInfo,
         academicInfo:     student.academicInfo,
-        tags:             student.tags, // ✅
+        tags:             student.tags,
         communicationPreferences: student.communicationPreferences,
         creditSystem:     student.creditSystem,
         metadata: {
@@ -169,7 +198,9 @@ export async function PUT(req, context) {
     const body = await req.json();
 
     // ── Verify student exists ──────────────────────────────────────────────
-    const existing = await Student.findOne({ _id: id, isDeleted: false }).select("_id personalInfo.whatsappNumber").lean();
+    const existing = await Student.findOne({ _id: id, isDeleted: false })
+      .select("_id personalInfo.whatsappNumber studentType")
+      .lean();
     if (!existing) {
       return NextResponse.json(
         { success: false, message: "Student not found" },
@@ -186,6 +217,35 @@ export async function PUT(req, context) {
       updateData.enrollmentInfo.referredBy = null;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // ✅ NEW: منطق Kids/Adults
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // القيمة النهائية للـ studentType بعد التحديث:
+    // - لو body فيه studentType → نستخدمها (بعد التوحيد)
+    // - لو مش فيه → نستخدم القيمة الحالية في الداتا
+    const finalStudentType = updateData.studentType !== undefined
+      ? sanitizeStudentType(updateData.studentType)
+      : (existing.studentType || "kids");
+
+    const finalIsAdult = finalStudentType === "adults";
+
+    // نضبط القيمة النهائية في الـ updateData
+    updateData.studentType = finalStudentType;
+
+    // ✅ لو الطالب adults (أصلاً أو بعد التحديث) → نفرّغ guardianInfo بالكامل
+    // ده بيغطي 3 حالات:
+    //   1. kids → adults (تحويل): نفرّغ البيانات القديمة
+    //   2. adults → adults (تحديث عادي): نضمن إن مفيش بيانات ولي أمر متسربة
+    //   3. adults → kids (عودة): نستخدم اللي جاي في body (لو جاي) أو نسيبها
+    //      فاضية لو مش جاي — لأن مفيش بيانات قديمة نحتفظ بها
+    if (finalIsAdult) {
+      // ✅ لو body بعت guardianInfo → نتجاهله تمامًا ونفرّغ
+      // ✅ لو مش بعت guardianInfo → نفرّغ برضه (يمكن يكون متسرب من قبل)
+      updateData.guardianInfo = { ...EMPTY_GUARDIAN_INFO };
+    }
+
+    // ── whatsappChanged check ──────────────────────────────────────────────
     const whatsappChanged =
       updateData.personalInfo?.whatsappNumber &&
       updateData.personalInfo.whatsappNumber !== existing.personalInfo?.whatsappNumber;
@@ -204,7 +264,7 @@ export async function PUT(req, context) {
     )
       .populate("metadata.lastModifiedBy", "name email")
       .populate("authUserId",              "name email")
-      .populate("tags"); // ✅
+      .populate("tags");
 
     if (!updated) {
       return NextResponse.json(
@@ -222,6 +282,11 @@ export async function PUT(req, context) {
       });
     }
 
+    // ✅ NEW: لو الطالب بقى adults بعد التحديث → نرجّع guardianInfo فاضية للواجهة
+    const guardianInfoOut = finalIsAdult
+      ? { ...EMPTY_GUARDIAN_INFO }
+      : updated.guardianInfo;
+
     return NextResponse.json({
       success: true,
       message: "Student updated successfully",
@@ -229,8 +294,11 @@ export async function PUT(req, context) {
         id:               updated._id,
         enrollmentNumber: updated.enrollmentNumber,
         fullName:         updated.personalInfo.fullName,
+        studentType:      updated.studentType, // ✅ NEW
+        isAdult:          finalIsAdult,         // ✅ NEW
         updatedFields:    Object.keys(updateData),
-        tags:             updated.tags, // ✅
+        tags:             updated.tags,
+        guardianInfo:     guardianInfoOut,      // ✅ فاضي للـ adults
         metadata: {
           lastModifiedBy: updated.metadata?.lastModifiedBy,
           updatedAt:      updated.metadata?.updatedAt,
@@ -266,6 +334,7 @@ export async function PUT(req, context) {
 }
 
 // ─── DELETE /api/allStudents/[id] ──────────────────────────────────────────────
+// ✅ مفيش تعديل — الكود زي ما هو
 export async function DELETE(req, context) {
   try {
     const { id } = await context.params;
@@ -282,7 +351,6 @@ export async function DELETE(req, context) {
 
     await connectDB();
 
-    // Hard delete — permanently removes from DB
     const deleted = await Student.findByIdAndDelete(id);
 
     if (!deleted) {
@@ -314,6 +382,7 @@ export async function DELETE(req, context) {
 }
 
 // ─── PATCH /api/allStudents/[id] — restore soft-deleted student ────────────────
+// ✅ مفيش تعديل — الكود زي ما هو
 export async function PATCH(req, context) {
   try {
     const { id } = await context.params;

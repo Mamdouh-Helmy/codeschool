@@ -30,13 +30,22 @@ interface RecipientStatus {
     phone: string | null;
     delivered: boolean;
     deliveredAt?: string | null;
-    pendingReason: "no_student_phone" | "no_guardian_phone" | "send_failed_or_pending" | null;
+    pendingReason:
+        | "no_student_phone"
+        | "no_guardian_phone"
+        | "send_failed_or_pending"
+        | "skipped_adult_student"
+        | null;
+    // ✅ NEW: بيتحدد من الـ backend للـ adults — يوضّح إن ولي الأمر متخطى بقرار
+    skipped?: boolean;
 }
 
 interface CertRow {
     studentId: string;
     studentName: string;
     studentGender: string;
+    // ✅ NEW: طالب بالغ → مفيش رسائل لولي الأمر
+    isAdult?: boolean;
     groupId: string;
     groupName: string;
     courseId: string;
@@ -56,6 +65,8 @@ interface Summary {
     partiallyDelivered: number;
     pendingNoPhone: number;
     notGeneratedCount: number;
+    // ✅ NEW: عدد الشهادات اللي اتخطى فيها ولي الأمر (طالب بالغ)
+    adultGuardianSkipped?: number;
 }
 
 interface CertificateAssets {
@@ -99,6 +110,8 @@ const reasonLabel: Record<string, string> = {
     no_student_phone: "مفيش رقم واتساب للطالب",
     no_guardian_phone: "مفيش رقم واتساب لولي الأمر",
     send_failed_or_pending: "فيه رقم بس الإرسال متأخر/فشل",
+    // ✅ NEW: طالب بالغ → ولي الأمر متخطى
+    skipped_adult_student: "طالب بالغ — مش محتاج رسالة ولي أمر",
 };
 
 // ✅ عرض تصميم الشهادة الثابت (نفس viewport بتاع Puppeteer في certificateHtml.js)
@@ -177,9 +190,13 @@ export default function CertificatesAdmin() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [lightboxUrl]);
 
+    // ✅ NEW: للـ adults بنحسب حالة الطالب بس — ولي الأمر متخطى بطبيعته
     const pendingRows = useMemo(
         () => [
-            ...issued.filter((r) => !r.student.delivered || !r.guardian.delivered),
+            ...issued.filter((r) => {
+                if (r.isAdult) return !r.student.delivered;
+                return !r.student.delivered || !r.guardian.delivered;
+            }),
             ...notGenerated,
         ],
         [issued, notGenerated]
@@ -232,7 +249,7 @@ export default function CertificatesAdmin() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <StatCard
                     icon={<Award className="w-5 h-5 text-primary" />}
                     iconBg="bg-primary/10"
@@ -244,7 +261,7 @@ export default function CertificatesAdmin() {
                     icon={<CheckCircle2 className="w-5 h-5 text-Aquamarine" />}
                     iconBg="bg-Aquamarine/10"
                     accent="bg-Aquamarine"
-                    label="اتبعتت كاملة (طالب + ولي أمر)"
+                    label="اتبعتت كاملة"
                     value={summary?.fullyDelivered ?? 0}
                 />
                 <StatCard
@@ -253,6 +270,14 @@ export default function CertificatesAdmin() {
                     accent="bg-LightYellow"
                     label="اتبعتت جزئياً"
                     value={summary?.partiallyDelivered ?? 0}
+                />
+                {/* ✅ NEW: كارت للطلاب البالغين (متخطى ولي الأمر) */}
+                <StatCard
+                    icon={<Users className="w-5 h-5 text-indigo-500" />}
+                    iconBg="bg-indigo-500/10"
+                    accent="bg-indigo-500"
+                    label="طلاب بالغين (متخطى ولي الأمر)"
+                    value={summary?.adultGuardianSkipped ?? 0}
                 />
                 <StatCard
                     icon={<PhoneOff className="w-5 h-5 text-red-500" />}
@@ -312,9 +337,20 @@ export default function CertificatesAdmin() {
                                             <td className="p-3">
                                                 <div className="flex items-center gap-2.5">
                                                     <InitialsAvatar name={row.studentName} />
-                                                    <span className="font-medium text-MidnightNavyText dark:text-white">
-                                                        {row.studentName}
-                                                    </span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="font-medium text-MidnightNavyText dark:text-white">
+                                                            {row.studentName}
+                                                        </span>
+                                                        {/* ✅ NEW: شارة "طالب بالغ" */}
+                                                        {row.isAdult && (
+                                                            <span
+                                                                className="inline-flex items-center px-1.5 py-0.5 rounded-full text-10 font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+                                                                title="طالب بالغ — مش محتاج رسالة ولي أمر"
+                                                            >
+                                                                🧑 بالغ
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td className="p-3 text-SlateBlueText dark:text-darktext">
@@ -577,7 +613,6 @@ function CertificateDesignModal({ onClose }: { onClose: () => void }) {
             setPreviewScale(+next.toFixed(4));
         }
     }, [availableSize, naturalHeight]);
-
 
     // ✅ بيقيس الارتفاع الحقيقي لمحتوى الـ iframe (scrollHeight) ويحدّث
     // naturalHeight لو القيمة الجديدة أكبر من اللي محفوظة. بنستخدم "أكبر
@@ -1184,7 +1219,17 @@ function TabButton({
     );
 }
 
+// ✅ NEW: بيتعامل مع حالة "طالب بالغ" — ولي الأمر متخطى بقرار مش معلّق
 function RecipientBadge({ status }: { status: RecipientStatus }) {
+    // ✅ حالة الطالب البالغ — ولي الأمر متخطى، مش معلّق ولا فشل
+    if (status.skipped || status.pendingReason === "skipped_adult_student") {
+        return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                <XCircle className="w-3 h-3" /> متخطى — طالب بالغ
+            </span>
+        );
+    }
+
     if (status.delivered) {
         return (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-Aquamarine/20 text-Salem">
@@ -1232,7 +1277,11 @@ function CertCard({
     row: CertRow;
     onOpenImage: (url: string) => void;
 }) {
-    const fullyDelivered = row.student.delivered && row.guardian.delivered;
+    // ✅ للـ adults: خلاص ولي الأمر متخطى، فالمكتملة بتعتمد على الطالب بس
+    const fullyDelivered = row.isAdult
+        ? row.student.delivered
+        : row.student.delivered && row.guardian.delivered;
+
     return (
         <div className="group/card rounded-xl border border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-darkmode overflow-hidden hover:shadow-lg transition-shadow duration-300">
             <div
@@ -1249,6 +1298,12 @@ function CertCard({
                         {fullyDelivered && (
                             <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-10 font-semibold bg-Aquamarine/90 text-white shadow-sm">
                                 <CheckCircle2 className="w-3 h-3" /> مكتملة
+                            </span>
+                        )}
+                        {/* ✅ NEW: شارة "طالب بالغ" فوق الكارت */}
+                        {row.isAdult && (
+                            <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-10 font-semibold bg-indigo-500/90 text-white shadow-sm">
+                                🧑 بالغ
                             </span>
                         )}
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-200 flex items-center justify-center">
@@ -1295,6 +1350,14 @@ function CertCard({
                         </span>
                         <RecipientBadge status={row.guardian} />
                     </div>
+                    {/* ✅ NEW: تنبيه "طالب بالغ" — بس لو adult */}
+                    {row.isAdult && (
+                        <div className="flex items-center justify-end text-11 pt-1 border-t border-PowderBlueBorder dark:border-dark_border">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-semibold">
+                                🧑 طالب بالغ — ولي الأمر متخطى
+                            </span>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

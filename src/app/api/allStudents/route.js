@@ -1,3 +1,4 @@
+// /api/allStudents/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Student from "../../models/Student";
@@ -15,6 +16,24 @@ function normalizeGender(gender) {
   if (["male", "female", "other"].includes(lower)) return lower;
   return "male";
 }
+
+// ✅ NEW: توحيد قيمة studentType — أي قيمة غير معروفة → "kids"
+function sanitizeStudentType(value) {
+  const lower = String(value || "").toLowerCase().trim();
+  if (lower === "adults" || lower === "adult") return "adults";
+  if (lower === "kids" || lower === "kid") return "kids";
+  return "kids";
+}
+
+// ✅ NEW: بيانات ولي الأمر الفاضية للـ adults
+const EMPTY_GUARDIAN_INFO = {
+  name: "",
+  nickname: { ar: "", en: "" },
+  relationship: "father",
+  phone: "",
+  whatsappNumber: "",
+  email: "",
+};
 
 function nullIfEmpty(value) {
   if (value === null || value === undefined) return null;
@@ -71,10 +90,16 @@ function formatStudent(student) {
   const pkg = cs.currentPackage || null;
   const activeExceptions = (cs.exceptions || []).filter(e => e.status === "active");
 
+  // ✅ NEW: لو الطالب بالغ → نرجع بيانات ولي الأمر فاضية للواجهة
+  const isAdult = student.studentType === "adults";
+
   return {
     id:               student._id,
     _id:              student._id,
     enrollmentNumber: student.enrollmentNumber,
+    // ✅ NEW: نوع الطالب kids/adults
+    studentType: student.studentType || "kids",
+    isAdult,
     personalInfo: {
       ...student.personalInfo,
       nickname: {
@@ -82,13 +107,15 @@ function formatStudent(student) {
         en: student.personalInfo?.nickname?.en || null,
       },
     },
-    guardianInfo: {
-      ...student.guardianInfo,
-      nickname: {
-        ar: student.guardianInfo?.nickname?.ar || null,
-        en: student.guardianInfo?.nickname?.en || null,
-      },
-    },
+    guardianInfo: isAdult
+      ? { ...EMPTY_GUARDIAN_INFO }
+      : {
+          ...student.guardianInfo,
+          nickname: {
+            ar: student.guardianInfo?.nickname?.ar || null,
+            en: student.guardianInfo?.nickname?.en || null,
+          },
+        },
     enrollmentInfo:           student.enrollmentInfo,
     academicInfo:             student.academicInfo,
     communicationPreferences: student.communicationPreferences,
@@ -130,7 +157,7 @@ function formatStudent(student) {
     },
     inGroup:     (student.academicInfo?.groupIds?.length || 0) > 0,
     groupCount:  student.academicInfo?.groupIds?.length || 0,
-    tags:        student.tags || [], // ✅ الوسوم
+    tags:        student.tags || [],
     metadata:    student.metadata,
     createdAt:   student.metadata?.createdAt,
     authUserId:  student.authUserId,
@@ -155,8 +182,9 @@ export async function GET(req) {
     const level        = searchParams.get("level");
     const source       = searchParams.get("source");
     const creditStatus = searchParams.get("creditStatus");
-    const inGroup      = searchParams.get("inGroup"); // "true" | "false" | null
-    const tags         = searchParams.get("tags");    // ✅ CSV من tag IDs
+    const inGroup      = searchParams.get("inGroup");
+    const tags         = searchParams.get("tags");
+    const studentType  = searchParams.get("studentType"); // ✅ NEW: "kids" | "adults" | null
 
     // ── Build query ────────────────────────────────────────────────────────
     const query = { isDeleted: false };
@@ -164,6 +192,11 @@ export async function GET(req) {
     if (status) query["enrollmentInfo.status"] = status;
     if (level)  query["academicInfo.level"]     = level;
     if (source) query["enrollmentInfo.source"]  = source;
+
+    // ✅ NEW: فلتر نوع الطالب
+    if (studentType === "kids" || studentType === "adults") {
+      query.studentType = studentType;
+    }
 
     // inGroup filter
     if (inGroup === "true") {
@@ -227,7 +260,6 @@ export async function GET(req) {
       ];
 
       if (query.$or) {
-        // inGroup=false already set $or — wrap both in $and
         query.$and = [{ $or: query.$or }, { $or: searchOr }];
         delete query.$or;
       } else {
@@ -244,7 +276,7 @@ export async function GET(req) {
         .populate("authUserId",             "name email role")
         .populate("metadata.createdBy",     "name email")
         .populate("enrollmentInfo.referredBy", "personalInfo.fullName enrollmentNumber")
-        .populate("tags") // ✅
+        .populate("tags")
         .sort({ "metadata.createdAt": -1 })
         .skip(skip)
         .limit(limit)
@@ -289,6 +321,10 @@ export async function POST(req) {
 
     const body = await req.json();
 
+    // ✅ NEW: نحدد نوع الطالب أول حاجة عشان نبني الـ payload عليه
+    const studentType = sanitizeStudentType(body.studentType);
+    const isAdult = studentType === "adults";
+
     // ── Sanitize input ─────────────────────────────────────────────────────
     const customMessages = {
       firstMessage:  body.whatsappCustomMessages?.firstMessage  || "",
@@ -297,6 +333,8 @@ export async function POST(req) {
 
     const cleanData = {
       ...body,
+      // ✅ NEW: نوع الطالب بعد التوحيد
+      studentType,
       authUserId: nullIfEmpty(body.authUserId),
       personalInfo: {
         ...body.personalInfo,
@@ -307,13 +345,16 @@ export async function POST(req) {
           en: body.personalInfo?.nickname?.en || "",
         },
       },
-      guardianInfo: {
-        ...body.guardianInfo,
-        nickname: {
-          ar: body.guardianInfo?.nickname?.ar || "",
-          en: body.guardianInfo?.nickname?.en || "",
-        },
-      },
+      // ✅ NEW: لو adults → بيانات ولي الأمر تتشال بالكامل قبل الحفظ
+      guardianInfo: isAdult
+        ? { ...EMPTY_GUARDIAN_INFO }
+        : {
+            ...body.guardianInfo,
+            nickname: {
+              ar: body.guardianInfo?.nickname?.ar || "",
+              en: body.guardianInfo?.nickname?.en || "",
+            },
+          },
       enrollmentInfo: {
         ...body.enrollmentInfo,
         referredBy: nullIfEmpty(body.enrollmentInfo?.referredBy),
@@ -407,7 +448,10 @@ export async function POST(req) {
     }
 
     // ── Fire-and-forget: WhatsApp welcome ──────────────────────────────────
-    const guardianPhone = savedStudent.guardianInfo?.whatsappNumber || savedStudent.guardianInfo?.phone || null;
+    // ✅ NEW: لو الطالب بالغ → مش بنبعت رقم ولي الأمر خالص، وبنسجل skip
+    const guardianPhone = isAdult
+      ? null
+      : (savedStudent.guardianInfo?.whatsappNumber || savedStudent.guardianInfo?.phone || null);
 
     setImmediate(async () => {
       try {
@@ -448,6 +492,8 @@ export async function POST(req) {
         id:               savedStudent._id,
         enrollmentNumber: savedStudent.enrollmentNumber,
         fullName:         savedStudent.personalInfo.fullName,
+        studentType:      savedStudent.studentType, // ✅ NEW
+        isAdult,          // ✅ NEW
       },
     }, { status: 201 });
 

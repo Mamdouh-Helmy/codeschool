@@ -123,7 +123,7 @@ const whatsappMessageSchema = new mongoose.Schema(
       ],
       required: true,
     },
-messageContent: { type: String, default: "" },
+    messageContent: { type: String, default: "" },
     language: { type: String, enum: ["ar", "en", "bilingual"], default: "ar" },
     status: {
       type: String,
@@ -347,6 +347,14 @@ const StudentSchema = new mongoose.Schema(
         enum: ["Website", "Referral", "Marketing", "Walk-in"],
       },
       referredBy: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
+    },
+
+    // في StudentSchema، بعد authUserId أو في الأول
+    studentType: {
+      type: String,
+      enum: ["kids", "adults"],
+      default: "kids",
+      required: true,
     },
 
     academicInfo: {
@@ -709,7 +717,7 @@ StudentSchema.methods.addCreditPackage = async function (packageData) {
       this.communicationPreferences.notificationChannels.whatsapp = true;
     }
 
-      await this.save({ validateModifiedOnly: true });
+    await this.save({ validateModifiedOnly: true });
     return { success: true, data: newPackage };
   } catch (error) {
     console.error("❌ Error adding credit package:", error);
@@ -854,7 +862,7 @@ StudentSchema.methods.editCreditPackage = async function (updates) {
       updates.editedBy || this.metadata.lastModifiedBy;
     this.metadata.updatedAt = new Date();
 
-await this.save({ validateModifiedOnly: true });
+    await this.save({ validateModifiedOnly: true });
     return {
       success: true,
       data: pkg,
@@ -984,7 +992,7 @@ StudentSchema.methods.addCreditException = async function (exceptionData) {
       }
     }
 
-     await this.save({ validateModifiedOnly: true });
+    await this.save({ validateModifiedOnly: true });
     console.log("✅ Exception added successfully");
     console.log(
       `📊 Final totalHoursRemaining: ${this.creditSystem.stats.totalHoursRemaining}`,
@@ -1025,7 +1033,7 @@ StudentSchema.methods.endCreditException = async function (exceptionId) {
       }
     }
 
-       await this.save({ validateModifiedOnly: true });
+    await this.save({ validateModifiedOnly: true });
     return { success: true, data: exception };
   } catch (error) {
     console.error("❌ Error ending credit exception:", error);
@@ -1098,7 +1106,7 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
       hoursToDeduct -= deductFromPackage;
       deductedFromPackage += deductFromPackage;
 
-            if (currentPackage.remainingHours === 0) {
+      if (currentPackage.remainingHours === 0) {
         currentPackage.status = "completed";
         this.creditSystem.status = "expired";
         this.creditSystem.stats.zeroBalanceDate = new Date();
@@ -1159,7 +1167,7 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
       (this.creditSystem.stats.totalSessionsAttended || 0) + 1;
     this.creditSystem.stats.lastUsageDate = new Date();
 
-     await this.save({ validateModifiedOnly: true });
+    await this.save({ validateModifiedOnly: true });
 
     // ✅ NEW: تفعيل بداية الإسكرو (14 يوم) لو ده أول سيشن بتتخصم منها ساعات
     // في الجروب ده — بأي حالة حضور. العملية غير حرجة: لو فشلت متأثرش على
@@ -1243,7 +1251,7 @@ StudentSchema.methods.addCreditHours = async function (addData) {
       this.communicationPreferences.notificationChannels.whatsapp = true;
     }
 
-      await this.save({ validateModifiedOnly: true });
+    await this.save({ validateModifiedOnly: true });
 
     return {
       success: true,
