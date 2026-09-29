@@ -4835,6 +4835,7 @@ const en = {
   "dashboard.campaigns": "Marketing Campaigns",
   "dashboard.leads": "Leads",
   "dashboard.integrations": "API Integrations",
+  "sidebar.report": "My report",
 };
 
 export default en;

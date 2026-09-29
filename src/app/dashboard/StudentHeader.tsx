@@ -1,23 +1,11 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import Link from "next/link";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useLocale } from "@/app/context/LocaleContext";
-import { useI18n } from "@/i18n/I18nProvider";
 import {
-  Bell,
-  Menu,
-  X,
-  LogOut,
-  Moon,
-  Sun,
-  ChevronDown,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  Sparkles,
+  Bell, Menu, X, LogOut, Moon, Sun, ChevronDown, Search, Sparkles,
 } from "lucide-react";
 
 interface InstructorUser {
@@ -29,15 +17,46 @@ interface InstructorUser {
   image?: string | null;
 }
 
+interface NotificationItem {
+  id?: string;
+  title?: string;
+  titleAr?: string;
+  message?: string;
+  time?: string;
+  date?: string;
+  type?: string;
+  isRead?: boolean;
+  icon?: string;
+}
+
 interface InstructorHeaderProps {
   user: InstructorUser;
-  notifications?: any[];
+  notifications?: NotificationItem[];
   onMenuClick?: () => void;
   sidebarOpen?: boolean;
   onRefresh?: () => void;
 }
 
-export default function InstructorHeader({
+// ✅ مفتاح ثابت لكل إشعار (الـ API بيرجّع id لكل إشعار)
+const getNotificationKey = (n: NotificationItem, idx: number) =>
+  n.id
+    ? String(n.id)
+    : `${n.type || "n"}-${n.date || n.time || idx}-${n.title || ""}`;
+
+// ✅ تسجيل الإشعارات المقروءة على السيرفر (keepalive عشان يكمل حتى لو الصفحة اتغيّرت)
+const markSeenOnServer = (ids: string[], all = false) => {
+  fetch("/api/student/notifications/seen", {
+    method: "POST",
+    credentials: "include",
+    keepalive: true,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids, all }),
+  }).catch(() => {
+    /* ignore — هيتعلّم تاني في المحاولة الجاية */
+  });
+};
+
+export default function StudentHeader({
   user,
   notifications = [],
   onMenuClick,
@@ -55,9 +74,22 @@ export default function InstructorHeader({
   const [searchQuery, setSearchQuery] = useState("");
   const [isScrolled, setIsScrolled] = useState(false);
 
+  // ✅ إخفاء فوري (optimistic) لحد ما الـ API يرجّع القائمة المفلترة من السيرفر
+  const [seenKeys, setSeenKeys] = useState<string[]>([]);
+
   const notificationsRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // ✅ الإشعارات غير المقروءة بس
+  const visibleNotifications = useMemo(() => {
+    const seen = new Set(seenKeys);
+    return notifications
+      .map((n, idx) => ({ n, key: getNotificationKey(n, idx) }))
+      .filter(({ key }) => !seen.has(key));
+  }, [notifications, seenKeys]);
+
+  const unreadCount = visibleNotifications.length;
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 10);
@@ -93,7 +125,8 @@ export default function InstructorHeader({
   const getUserInitial = () =>
     user?.name?.length > 0 ? user.name.charAt(0).toUpperCase() : (isArabic ? "م" : "I");
 
-  const getFirstName = () => (user?.name || (isArabic ? "طالب" : "Student")).split(" ")[0];
+  const getFirstName = () =>
+    (user?.name || (isArabic ? "طالب" : "Student")).split(" ")[0];
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -105,9 +138,26 @@ export default function InstructorHeader({
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      router.push(`/instructor/search?q=${encodeURIComponent(searchQuery)}`);
+      router.push(`/dashboard/messages?q=${encodeURIComponent(searchQuery)}`);
       setShowMobileSearch(false);
     }
+  };
+
+  // ✅ دوس على إشعار واحد → يتعلّم مقروء (محليًا + على السيرفر) ويفتح الرسايل
+  const openNotification = (key: string) => {
+    setSeenKeys((prev) => (prev.includes(key) ? prev : [...prev, key]));
+    markSeenOnServer([key]);
+    setShowNotifications(false);
+    router.push("/dashboard/messages");
+  };
+
+  // ✅ "عرض كل الإشعارات" → كل الحالي يتعلّم مقروء على السيرفر
+  const openAllNotifications = () => {
+    const keys = visibleNotifications.map(({ key }) => key);
+    setSeenKeys((prev) => Array.from(new Set([...prev, ...keys])));
+    markSeenOnServer(keys, true);
+    setShowNotifications(false);
+    router.push("/dashboard/messages");
   };
 
   const dropdownClass = `
@@ -156,7 +206,7 @@ export default function InstructorHeader({
               </h1>
               <p className="text-xs xl:text-sm text-gray-500 dark:text-[#8b949e] mt-1 flex items-center gap-2">
                 <Sparkles className="w-3 h-3" style={{ color: "#feaf00" }} />
-                {isArabic ? "لوحة تحكم الطالب - رحلتك التعليمية" : "Student Dashboard — Your teaching journey"}
+                {isArabic ? "لوحة تحكم الطالب - رحلتك التعليمية" : "Student Dashboard — Your learning journey"}
               </p>
             </div>
           </div>
@@ -181,7 +231,7 @@ export default function InstructorHeader({
           </div>
 
           {/* Right: action buttons */}
-          <div className={`flex items-center gap-1 sm:gap-2 order-3 flex-shrink-0`}>
+          <div className="flex items-center gap-1 sm:gap-2 order-3 flex-shrink-0">
 
             {/* Desktop search */}
             <div className="relative hidden xl:block group">
@@ -267,13 +317,13 @@ export default function InstructorHeader({
                 <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                   style={{ background: "linear-gradient(135deg, #004d5910, #ff670010)" }} />
                 <Bell className="relative z-10 w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-[#8b949e] group-hover:scale-110 transition-transform" />
-                {notifications.length > 0 && (
+                {unreadCount > 0 && (
                   <>
                     <span
                       className="absolute -top-1 -right-1 min-w-[18px] h-[18px] text-white text-[10px] rounded-full flex items-center justify-center font-bold px-1 shadow-lg animate-pulse"
                       style={{ background: "linear-gradient(135deg, #ff6700, #f67d00)" }}
                     >
-                      {notifications.length > 9 ? "9+" : notifications.length}
+                      {unreadCount > 9 ? "9+" : unreadCount}
                     </span>
                     <span
                       className="absolute -top-1 -right-1 w-[18px] h-[18px] rounded-full animate-ping opacity-75"
@@ -284,24 +334,78 @@ export default function InstructorHeader({
               </button>
 
               {showNotifications && (
-                <div className={`${dropdownClass} sm:w-80 animate-slide-down`}>
+                <div className={`${dropdownClass} min-w-80 animate-slide-down`}>
                   <div
-                    className="px-4 py-3 border-b border-gray-100 dark:border-[#30363d]"
+                    className="px-4 py-3 border-b border-gray-100 dark:border-[#30363d] flex items-center justify-between"
                     style={{ background: "linear-gradient(135deg, #004d5908, #ff670008)" }}
                   >
                     <h3 className="font-semibold text-sm text-gray-900 dark:text-[#e6edf3] flex items-center gap-2">
                       <Bell className="w-4 h-4" style={{ color: "#ff6700" }} />
                       {isArabic ? "الإشعارات" : "Notifications"}
                     </h3>
+                    {unreadCount > 0 && (
+                      <span
+                        className="text-[10px] font-bold text-white px-2 py-0.5 rounded-full"
+                        style={{ background: "linear-gradient(135deg, #ff6700, #f67d00)" }}
+                      >
+                        {unreadCount}
+                      </span>
+                    )}
                   </div>
-                  <div className="p-8 text-center">
-                    <div className="w-16 h-16 mx-auto bg-gray-100 dark:bg-[#21262d] rounded-full flex items-center justify-center mb-4">
-                      <Bell className="w-8 h-8 text-gray-400 dark:text-[#6e7681]" />
+
+                  {unreadCount > 0 ? (
+                    <>
+                      <div className="max-h-80 overflow-y-auto">
+                        {visibleNotifications.slice(0, 6).map(({ n, key }) => (
+                          <button
+                            key={key}
+                            onClick={() => openNotification(key)}
+                            className="w-full text-start px-4 py-3 border-b border-gray-50 dark:border-[#21262d] hover:bg-gray-50 dark:hover:bg-[#1c2128] transition-colors"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div
+                                className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm"
+                                style={{ background: "linear-gradient(135deg, #ff6700, #f67d00)" }}
+                              >
+                                <Bell className="w-4 h-4 text-white" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[13px] font-semibold text-gray-900 dark:text-[#e6edf3] truncate">
+                                  {isArabic ? (n.titleAr || n.title || "إشعار") : (n.title || "Notification")}
+                                </p>
+                                {n.message && (
+                                  <p className="text-[11px] text-gray-500 dark:text-[#8b949e] mt-0.5 line-clamp-2">
+                                    {n.message}
+                                  </p>
+                                )}
+                                {n.time && (
+                                  <p className="text-[10px] text-gray-400 dark:text-[#6e7681] mt-1">
+                                    {n.time}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={openAllNotifications}
+                        className="w-full px-4 py-3 text-center text-sm font-bold border-t border-gray-100 dark:border-[#30363d] hover:bg-gray-50 dark:hover:bg-[#1c2128] transition-colors"
+                        style={{ color: "#ff6700" }}
+                      >
+                        {isArabic ? "عرض كل الإشعارات" : "View all notifications"}
+                      </button>
+                    </>
+                  ) : (
+                    <div className="p-8 text-center">
+                      <div className="w-16 h-16 mx-auto bg-gray-100 dark:bg-[#21262d] rounded-full flex items-center justify-center mb-4">
+                        <Bell className="w-8 h-8 text-gray-400 dark:text-[#6e7681]" />
+                      </div>
+                      <p className="text-sm text-gray-500 dark:text-[#8b949e]">
+                        {isArabic ? "لا توجد إشعارات جديدة" : "No new notifications"}
+                      </p>
                     </div>
-                    <p className="text-sm text-gray-500 dark:text-[#8b949e]">
-                      {isArabic ? "لا توجد إشعارات جديدة" : "No new notifications"}
-                    </p>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -364,7 +468,6 @@ export default function InstructorHeader({
                       onClick={() => { setShowUserMenu(false); handleLogout(); }}
                       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all group/item relative overflow-hidden"
                     >
-                      <div className="absolute inset-0 bg-gradient-to-r from-red-500/0 to-red-500/0 group-hover/item:from-red-500/5 group-hover/item:to-red-500/5 transition-all duration-300" />
                       <LogOut className="relative z-10 w-4 h-4 group-hover/item:-translate-x-1 transition-transform" />
                       <span className="relative z-10">{isArabic ? "تسجيل الخروج" : "Logout"}</span>
                     </button>

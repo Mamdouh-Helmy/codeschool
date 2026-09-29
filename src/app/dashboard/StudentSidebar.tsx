@@ -5,18 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale } from "@/app/context/LocaleContext";
 import {
-  LayoutDashboard,
-  Users,
-  FileText,
-  MessageSquare,
-  Calendar,
-  BookOpen,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  GraduationCap,
-  LogOut,
-  Home,
+  LayoutDashboard, Users, Calendar, MessageSquare,
+  ChevronLeft, ChevronRight, GraduationCap, LogOut, Home,
+  BarChart3,
 } from "lucide-react";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -56,7 +47,7 @@ export default function StudentSidebar({
 
   const navigationItems: NavigationItem[] = [
     {
-      name: t("sidebar.home"),
+      name: t("sidebar.home") || "Home",
       nameAr: "الرئيسية",
       href: "/",
       icon: Home,
@@ -64,7 +55,7 @@ export default function StudentSidebar({
       exact: true,
     },
     {
-      name: t("sidebar.dashboard"),
+      name: t("sidebar.dashboard") || "Dashboard",
       nameAr: "لوحة التحكم",
       href: "/dashboard",
       icon: LayoutDashboard,
@@ -72,39 +63,44 @@ export default function StudentSidebar({
       exact: true,
     },
     {
-      name: t("sidebar.groups"),
+      name: t("sidebar.groups") || "My Groups",
       nameAr: "مجموعاتي",
       href: "/dashboard/groups",
       icon: Users,
       activeGradient: "linear-gradient(135deg, #ff6700, #f67d00)",
     },
     {
-      name: t("sidebar.sessions"),
+      name: t("sidebar.sessions") || "My Sessions",
       nameAr: "جلساتي",
       href: "/dashboard/sessions",
       icon: Calendar,
       activeGradient: "linear-gradient(135deg, #ff6700, #feaf00)",
     },
     {
-      name: t("sidebar.schedule"),
+      name: t("sidebar.schedule") || "Schedule",
       nameAr: "الجدول",
       href: "/dashboard/schedule",
       icon: Calendar,
       activeGradient: "linear-gradient(135deg, #004d59, #feaf00)",
     },
     {
-      name: t("sidebar.messages"),
+      name: t("sidebar.messages") || "Messages",
       nameAr: "الرسائل",
       href: "/dashboard/messages",
       icon: MessageSquare,
       activeGradient: "linear-gradient(135deg, #ff6437, #ff6700)",
     },
+    {
+      name: t("sidebar.report") || "My Report",
+      nameAr: "تقريري",
+      href: "/dashboard/report",
+      icon: BarChart3,
+      activeGradient: "linear-gradient(135deg, #004d59, #ff6700)",
+    },
   ];
 
   const isActive = (item: NavigationItem): boolean => {
-    if (item.exact) {
-      return pathname === item.href;
-    }
+    if (item.exact) return pathname === item.href;
     return pathname === item.href || pathname.startsWith(item.href + "/");
   };
 
@@ -125,20 +121,6 @@ export default function StudentSidebar({
     return "student@example.com";
   };
 
-  const getCollapseButtonText = () => {
-    if (isCollapsed) {
-      return isRTL ? "توسيع" : "Expand";
-    }
-    return isRTL ? "طي" : "Collapse";
-  };
-
-  const getCollapseAriaLabel = () => {
-    if (isCollapsed) {
-      return isRTL ? "توسيع القائمة الجانبية" : "Expand sidebar";
-    }
-    return isRTL ? "طي القائمة الجانبية" : "Collapse sidebar";
-  };
-
   return (
     <aside
       dir={isRTL ? "rtl" : "ltr"}
@@ -150,7 +132,6 @@ export default function StudentSidebar({
         dark:bg-[#161b22] dark:border-[#30363d]
       `}
     >
-      {/* ── Logo ── */}
       <div className="p-6 border-b border-gray-200 dark:border-[#30363d]">
         <Link href="/" className="flex items-center gap-3">
           <div
@@ -178,7 +159,6 @@ export default function StudentSidebar({
         </Link>
       </div>
 
-      {/* ── Nav ── */}
       <nav className="flex-1 overflow-y-auto py-6 px-3">
         <div className="space-y-1">
           {navigationItems.map((item: NavigationItem) => {
@@ -204,7 +184,6 @@ export default function StudentSidebar({
                 style={active ? { background: item.activeGradient } : {}}
                 aria-current={active ? "page" : undefined}
               >
-                {/* Icon */}
                 <div
                   className={`
                     w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
@@ -219,7 +198,6 @@ export default function StudentSidebar({
                   />
                 </div>
 
-                {/* Label + Badge */}
                 {!isCollapsed && (
                   <>
                     <div className="flex-1 flex items-center justify-between">
@@ -228,30 +206,23 @@ export default function StudentSidebar({
                       </span>
                       {item.badge !== undefined && item.badge > 0 && (
                         <span
-                          className={`px-2 py-0.5 text-xs font-bold rounded-full text-white`}
-                          style={
-                            active
-                              ? { background: "rgba(255,255,255,0.3)" }
-                              : { background: "linear-gradient(135deg, #ff6700, #f67d00)" }
-                          }
+                          className="px-2 py-0.5 text-xs font-bold rounded-full text-white"
+                          style={active
+                            ? { background: "rgba(255,255,255,0.3)" }
+                            : { background: "linear-gradient(135deg, #ff6700, #f67d00)" }}
                         >
                           {item.badge}
                         </span>
                       )}
                     </div>
                     {active && (
-                      <>
-                        {isRTL ? (
-                          <ChevronRight className="w-4 h-4 text-white animate-pulse" />
-                        ) : (
-                          <ChevronLeft className="w-4 h-4 text-white animate-pulse" />
-                        )}
-                      </>
+                      isRTL
+                        ? <ChevronRight className="w-4 h-4 text-white animate-pulse" />
+                        : <ChevronLeft className="w-4 h-4 text-white animate-pulse" />
                     )}
                   </>
                 )}
 
-                {/* Collapsed tooltip */}
                 {isCollapsed && (
                   <div
                     className={`
@@ -263,13 +234,6 @@ export default function StudentSidebar({
                     `}
                   >
                     {isRTL ? item.nameAr : item.name}
-                    <div
-                      className={`absolute top-1/2 -translate-y-1/2 ${
-                        isRTL ? "right-full" : "left-full"
-                      } border-8 border-transparent ${
-                        isRTL ? "border-r-[#30363d]" : "border-l-[#30363d]"
-                      }`}
-                    />
                   </div>
                 )}
               </Link>
@@ -278,14 +242,9 @@ export default function StudentSidebar({
         </div>
       </nav>
 
-      {/* ── User Profile ── */}
       <div className="border-t border-gray-200 dark:border-[#30363d] p-4">
         <div
-          className={`
-            flex items-center gap-3 p-3 rounded-xl
-            border
-            ${isCollapsed ? "justify-center" : ""}
-          `}
+          className={`flex items-center gap-3 p-3 rounded-xl border ${isCollapsed ? "justify-center" : ""}`}
           style={{
             background: "linear-gradient(135deg, #004d5908, #ff670008)",
             borderColor: "#004d5920",
@@ -320,14 +279,12 @@ export default function StudentSidebar({
               onClick={onLogout}
               className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-gray-400 dark:text-[#8b949e] hover:text-red-500 dark:hover:text-red-400 transition-colors"
               title={isRTL ? "تسجيل الخروج" : "Logout"}
-              aria-label={isRTL ? "تسجيل الخروج" : "Logout"}
             >
               <LogOut className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Collapse Toggle */}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="
@@ -336,23 +293,17 @@ export default function StudentSidebar({
             hover:bg-gray-200 dark:hover:bg-[#30363d]
             text-gray-600 dark:text-[#8b949e]
             transition-all duration-200 flex items-center justify-center gap-2
-            border border-transparent dark:border-[#30363d]
-            group
+            border border-transparent dark:border-[#30363d] group
           "
-          aria-label={getCollapseAriaLabel()}
         >
           {isRTL ? (
-            <ChevronRight
-              className={`w-4 h-4 transition-transform duration-300 group-hover:text-[#ff6700] ${isCollapsed ? "" : "rotate-180"}`}
-            />
+            <ChevronRight className={`w-4 h-4 transition-transform duration-300 group-hover:text-[#ff6700] ${isCollapsed ? "" : "rotate-180"}`} />
           ) : (
-            <ChevronLeft
-              className={`w-4 h-4 transition-transform duration-300 group-hover:text-[#ff6700] ${isCollapsed ? "rotate-180" : ""}`}
-            />
+            <ChevronLeft className={`w-4 h-4 transition-transform duration-300 group-hover:text-[#ff6700] ${isCollapsed ? "rotate-180" : ""}`} />
           )}
           {!isCollapsed && (
             <span className="text-xs font-medium group-hover:text-[#ff6700] transition-colors">
-              {getCollapseButtonText()}
+              {isCollapsed ? (isRTL ? "توسيع" : "Expand") : (isRTL ? "طي" : "Collapse")}
             </span>
           )}
         </button>

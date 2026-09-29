@@ -1,3 +1,4 @@
+// /app/api/student/dashboard/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getUserFromRequest } from "@/lib/auth";
@@ -20,7 +21,7 @@ export async function GET(req) {
           message: "غير مصرح بالوصول",
           code: "UNAUTHORIZED",
         },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -34,12 +35,15 @@ export async function GET(req) {
 
     const student = await Student.findOne({ authUserId: user.id })
       .select(
-        "_id personalInfo.fullName personalInfo.email academicInfo.groupIds academicInfo.currentCourses enrollmentInfo.status"
+        "_id personalInfo.fullName personalInfo.email academicInfo.groupIds academicInfo.currentCourses enrollmentInfo.status",
       )
       .lean();
 
     if (!student) {
-      console.log("⚠️ [Dashboard API] No student record found for user:", user.id);
+      console.log(
+        "⚠️ [Dashboard API] No student record found for user:",
+        user.id,
+      );
       return NextResponse.json({
         success: true,
         data: {
@@ -68,7 +72,7 @@ export async function GET(req) {
           },
           progressData: {
             stages: [],
-            statsCards: []
+            statsCards: [],
           },
           nextSession: null,
           groups: [],
@@ -88,7 +92,6 @@ export async function GET(req) {
     // ✅ حساب إحصائيات الحضور من جميع الجلسات
     console.log("📈 [Dashboard API] Calculating attendance stats...");
 
-    // جلب جميع الجلسات (المكتملة والمجدولة) لحساب إجمالي الجلسات
     const allSessions = await Session.find({
       groupId: { $in: groupIds },
       isDeleted: false,
@@ -98,17 +101,21 @@ export async function GET(req) {
 
     console.log(`📊 Found ${allSessions.length} total sessions`);
 
-    // تقسيم الجلسات إلى مكتملة ومجدولة
-    const completedSessions = allSessions.filter(s => s.status === "completed");
-    const scheduledSessions = allSessions.filter(s => s.status === "scheduled");
-    
+    const completedSessions = allSessions.filter(
+      (s) => s.status === "completed",
+    );
+    const scheduledSessions = allSessions.filter(
+      (s) => s.status === "scheduled",
+    );
+
     const totalSessionsCount = allSessions.length;
     const completedSessionsCount = completedSessions.length;
     const remainingSessionsCount = scheduledSessions.length;
 
-    console.log(`📊 Sessions breakdown: Total=${totalSessionsCount}, Completed=${completedSessionsCount}, Remaining=${remainingSessionsCount}`);
+    console.log(
+      `📊 Sessions breakdown: Total=${totalSessionsCount}, Completed=${completedSessionsCount}, Remaining=${remainingSessionsCount}`,
+    );
 
-    // حساب إحصائيات الحضور للجلسات المكتملة فقط
     let attendedSessions = 0;
     let absentSessions = 0;
     let lateSessions = 0;
@@ -116,7 +123,7 @@ export async function GET(req) {
 
     completedSessions.forEach((session) => {
       const attendanceRecord = session.attendance?.find(
-        (a) => a.studentId.toString() === studentId.toString()
+        (a) => a.studentId.toString() === studentId.toString(),
       );
 
       if (attendanceRecord) {
@@ -137,23 +144,26 @@ export async function GET(req) {
             absentSessions++;
         }
       } else {
-        // لو مفيش سجل حضور للطالب في الجلسة، يعتبر غائب
         absentSessions++;
       }
     });
 
-    // ✅ الجلسات المكتملة = الحضور + المتأخر + المعذور
-    const completedWithAttendance = attendedSessions + lateSessions + excusedSessions;
-    
-    // ✅ نسبة التقدم = (الجلسات المكتملة / إجمالي الجلسات) × 100
-    const progressPercentage = totalSessionsCount > 0
-      ? Math.round((completedSessionsCount / totalSessionsCount) * 100)
-      : 0;
+    const completedWithAttendance =
+      attendedSessions + lateSessions + excusedSessions;
 
-    // ✅ نسبة الحضور = (الحاضر + متأخر + معذور) / الجلسات المكتملة × 100
-    const attendanceRate = completedSessionsCount > 0
-      ? Math.round(((attendedSessions + lateSessions + excusedSessions) / completedSessionsCount) * 100)
-      : 0;
+    const progressPercentage =
+      totalSessionsCount > 0
+        ? Math.round((completedSessionsCount / totalSessionsCount) * 100)
+        : 0;
+
+    const attendanceRate =
+      completedSessionsCount > 0
+        ? Math.round(
+            ((attendedSessions + lateSessions + excusedSessions) /
+              completedSessionsCount) *
+              100,
+          )
+        : 0;
 
     console.log("📊 Attendance breakdown:", {
       totalSessions: totalSessionsCount,
@@ -177,9 +187,11 @@ export async function GET(req) {
     })
       .populate({
         path: "courseId",
-        select: "title description level thumbnail curriculum duration"
+        select: "title description level thumbnail curriculum duration",
       })
-      .select("name code status currentStudentsCount schedule metadata courseSnapshot")
+      .select(
+        "name code status currentStudentsCount schedule metadata courseSnapshot",
+      )
       .sort({ status: 1, "schedule.startDate": -1 })
       .lean();
 
@@ -187,59 +199,74 @@ export async function GET(req) {
     console.log("📚 [Dashboard API] Calculating detailed course progress...");
     const currentCourses = await Promise.all(
       groups
-        .filter(g => g.status === "active")
+        .filter((g) => g.status === "active")
         .map(async (group) => {
           const courseId = group.courseId?._id || group.courseId;
 
-          // إجمالي جلسات الكورس
           const totalCourseSessions = await Session.countDocuments({
             groupId: group._id,
             isDeleted: false,
           });
 
-          // الجلسات المكتملة في الكورس
           const completedCourseSessions = await Session.countDocuments({
             groupId: group._id,
             isDeleted: false,
             status: "completed",
           });
 
-          // نسبة التقدم
-          const progressPercentage = totalCourseSessions > 0
-            ? Math.round((completedCourseSessions / totalCourseSessions) * 100)
-            : 0;
+          const progressPercentage =
+            totalCourseSessions > 0
+              ? Math.round(
+                  (completedCourseSessions / totalCourseSessions) * 100,
+                )
+              : 0;
 
-          // الساعات المتبقية (كل جلسة = ساعتين)
-          const remainingSessions = totalCourseSessions - completedCourseSessions;
+          const remainingSessions =
+            totalCourseSessions - completedCourseSessions;
           const hoursLeft = remainingSessions * 2;
 
-          // حساب إجمالي الدروس في الكورس
           let totalLessons = 0;
           if (group.courseId?.curriculum) {
-            totalLessons = group.courseId.curriculum.reduce((sum, module) =>
-              sum + (module.lessons?.length || 0), 0
+            totalLessons = group.courseId.curriculum.reduce(
+              (sum, module) => sum + (module.lessons?.length || 0),
+              0,
             );
           }
 
-          // تحديد الألوان والأيقونات حسب نوع الكورس
-          const courseTitle = (group.courseId?.title || group.name).toLowerCase();
+          const courseTitle = (
+            group.courseId?.title || group.name
+          ).toLowerCase();
           let gradient, icon;
 
-          if (courseTitle.includes('web') || courseTitle.includes('html') || courseTitle.includes('javascript')) {
-            gradient = 'from-purple-500 to-indigo-600';
-            icon = 'code';
-          } else if (courseTitle.includes('design') || courseTitle.includes('ui') || courseTitle.includes('ux')) {
-            gradient = 'from-green-400 to-emerald-500';
-            icon = 'design';
-          } else if (courseTitle.includes('data') || courseTitle.includes('python')) {
-            gradient = 'from-blue-500 to-cyan-500';
-            icon = 'database';
-          } else if (courseTitle.includes('mobile') || courseTitle.includes('app')) {
-            gradient = 'from-pink-500 to-rose-600';
-            icon = 'smartphone';
+          if (
+            courseTitle.includes("web") ||
+            courseTitle.includes("html") ||
+            courseTitle.includes("javascript")
+          ) {
+            gradient = "from-purple-500 to-indigo-600";
+            icon = "code";
+          } else if (
+            courseTitle.includes("design") ||
+            courseTitle.includes("ui") ||
+            courseTitle.includes("ux")
+          ) {
+            gradient = "from-green-400 to-emerald-500";
+            icon = "design";
+          } else if (
+            courseTitle.includes("data") ||
+            courseTitle.includes("python")
+          ) {
+            gradient = "from-blue-500 to-cyan-500";
+            icon = "database";
+          } else if (
+            courseTitle.includes("mobile") ||
+            courseTitle.includes("app")
+          ) {
+            gradient = "from-pink-500 to-rose-600";
+            icon = "smartphone";
           } else {
-            gradient = 'from-purple-500 to-indigo-600';
-            icon = 'code';
+            gradient = "from-purple-500 to-indigo-600";
+            icon = "code";
           }
 
           return {
@@ -260,21 +287,24 @@ export async function GET(req) {
             gradient,
             icon,
           };
-        })
+        }),
     );
 
     // ✅ الإنجازات بناءً على الجلسات المكتملة
     const achievements = [];
     if (attendanceRate >= 90) achievements.push("Perfect Attendance");
-    if (completedSessionsCount >= 10) achievements.push("10 Sessions Milestone");
-    if (completedSessionsCount >= 25) achievements.push("25 Sessions Milestone");
-    if (completedSessionsCount >= 50) achievements.push("50 Sessions Milestone");
-    if (completedSessionsCount >= 100) achievements.push("100 Sessions Milestone");
+    if (completedSessionsCount >= 10)
+      achievements.push("10 Sessions Milestone");
+    if (completedSessionsCount >= 25)
+      achievements.push("25 Sessions Milestone");
+    if (completedSessionsCount >= 50)
+      achievements.push("50 Sessions Milestone");
+    if (completedSessionsCount >= 100)
+      achievements.push("100 Sessions Milestone");
 
-    // ✅ ساعات التعلم = الجلسات المكتملة × 2
     const hoursLearned = completedSessionsCount * 2;
 
-    // ✅ [مُعدَّل] جلب الجلسة التالية
+    // ✅ جلب الجلسة التالية
     console.log("📅 [Dashboard API] Fetching next session...");
     const now = new Date();
 
@@ -283,7 +313,6 @@ export async function GET(req) {
     const todayEnd = new Date(now);
     todayEnd.setHours(23, 59, 59, 999);
 
-    // 1️⃣ جرب تجيب جلسة اليوم
     let nextSession = await Session.findOne({
       groupId: { $in: groupIds },
       scheduledDate: { $gte: todayStart, $lte: todayEnd },
@@ -292,12 +321,11 @@ export async function GET(req) {
     })
       .populate("groupId", "name code")
       .select(
-        "title scheduledDate startTime endTime status meetingLink recordingLink moduleIndex sessionNumber attendanceTaken meetingPlatform"
+        "title scheduledDate startTime endTime status meetingLink recordingLink moduleIndex sessionNumber attendanceTaken meetingPlatform",
       )
       .sort({ startTime: 1 })
       .lean();
 
-    // 2️⃣ لو مفيش جلسة اليوم، جيب أول جلسة مستقبلية
     if (!nextSession) {
       nextSession = await Session.findOne({
         groupId: { $in: groupIds },
@@ -307,13 +335,13 @@ export async function GET(req) {
       })
         .populate("groupId", "name code")
         .select(
-          "title scheduledDate startTime endTime status meetingLink recordingLink moduleIndex sessionNumber attendanceTaken meetingPlatform"
+          "title scheduledDate startTime endTime status meetingLink recordingLink moduleIndex sessionNumber attendanceTaken meetingPlatform",
         )
         .sort({ scheduledDate: 1, startTime: 1 })
         .lean();
     }
 
-    // ✅ جلب الجلسات القادمة (للأحداث)
+    // ✅ جلب الجلسات القادمة
     console.log("📋 [Dashboard API] Fetching upcoming sessions...");
     const upcomingSessions = await Session.find({
       groupId: { $in: groupIds },
@@ -323,14 +351,13 @@ export async function GET(req) {
     })
       .populate("groupId", "name")
       .select(
-        "title scheduledDate startTime endTime status meetingLink moduleIndex sessionNumber"
+        "title scheduledDate startTime endTime status meetingLink moduleIndex sessionNumber",
       )
       .sort({ scheduledDate: 1, startTime: 1 })
       .limit(10)
       .lean();
 
-    // ✅ تحويل الجلسات لأحداث في Calendar
-    const upcomingEvents = upcomingSessions.slice(0, 5).map(session => {
+    const upcomingEvents = upcomingSessions.slice(0, 5).map((session) => {
       const sessionDate = new Date(session.scheduledDate);
       const formattedDate = sessionDate.toLocaleDateString("en-US", {
         month: "short",
@@ -347,7 +374,7 @@ export async function GET(req) {
         type: "session",
         groupName: session.groupId?.name || "مجموعة",
         color: "green",
-        icon: "Calendar"
+        icon: "Calendar",
       };
     });
 
@@ -358,28 +385,29 @@ export async function GET(req) {
     // ✅ إحصائيات إجمالية
     const totalStudents = await Student.countDocuments({
       "enrollmentInfo.status": "Active",
-      isDeleted: false
+      isDeleted: false,
     });
 
     const totalActiveCourses = await Course.countDocuments({
-      isActive: true
+      isActive: true,
     });
 
     const allCompletedSessions = await Session.countDocuments({
       status: "completed",
       attendanceTaken: true,
-      isDeleted: false
+      isDeleted: false,
     });
 
     const allSessionsCount = await Session.countDocuments({
-      isDeleted: false
+      isDeleted: false,
     });
 
-    const systemCompletionRate = allSessionsCount > 0
-      ? Math.round((allCompletedSessions / allSessionsCount) * 100)
-      : 87;
+    const systemCompletionRate =
+      allSessionsCount > 0
+        ? Math.round((allCompletedSessions / allSessionsCount) * 100)
+        : 87;
 
-    // ✅ تنسيق البيانات مع القيم المصححة
+    // ✅ تنسيق البيانات
     const response = {
       success: true,
       data: {
@@ -402,7 +430,8 @@ export async function GET(req) {
           totalGroups: groupIds.length,
           activeGroups: groups.filter((g) => g.status === "active").length,
           pendingAssignments: 0,
-          completedCourses: groups.filter((g) => g.status === "completed").length,
+          completedCourses: groups.filter((g) => g.status === "completed")
+            .length,
         },
         systemStats: {
           totalStudents,
@@ -427,19 +456,23 @@ export async function GET(req) {
               status: "completed",
               icon: "Play",
               color: "green",
-              gradient: "from-green-400 to-emerald-500"
+              gradient: "from-green-400 to-emerald-500",
             },
             {
               id: "current",
               label: "Current Level",
               labelAr: "المستوى الحالي",
-              percentage: progressPercentage, // ✅ النسبة الصحيحة للتقدم
-              status: progressPercentage >= 100 ? "completed" : 
-                      progressPercentage >= 80 ? "almost_there" : "active",
+              percentage: progressPercentage,
+              status:
+                progressPercentage >= 100
+                  ? "completed"
+                  : progressPercentage >= 80
+                    ? "almost_there"
+                    : "active",
               icon: "BookOpen",
               color: "blue",
               gradient: "from-blue-400 to-cyan-500",
-              isActive: progressPercentage < 100
+              isActive: progressPercentage < 100,
             },
             {
               id: "target",
@@ -449,7 +482,7 @@ export async function GET(req) {
               status: progressPercentage >= 75 ? "almost_there" : "pending",
               icon: "Award",
               color: "purple",
-              gradient: "from-purple-400 to-pink-500"
+              gradient: "from-purple-400 to-pink-500",
             },
             {
               id: "completion",
@@ -459,8 +492,8 @@ export async function GET(req) {
               status: progressPercentage >= 100 ? "completed" : "pending",
               icon: "CheckCircle",
               color: "gray",
-              gradient: "from-gray-400 to-slate-400"
-            }
+              gradient: "from-gray-400 to-slate-400",
+            },
           ],
           statsCards: [
             {
@@ -471,7 +504,7 @@ export async function GET(req) {
               icon: "CheckCircle",
               iconColor: "text-green-600 dark:text-green-400",
               bgColor: "bg-green-50 dark:bg-green-900/10",
-              borderColor: "border-green-100 dark:border-green-900/30"
+              borderColor: "border-green-100 dark:border-green-900/30",
             },
             {
               id: "absent_sessions",
@@ -481,7 +514,7 @@ export async function GET(req) {
               icon: "X",
               iconColor: "text-red-600 dark:text-red-400",
               bgColor: "bg-red-50 dark:bg-red-900/10",
-              borderColor: "border-red-100 dark:border-red-900/30"
+              borderColor: "border-red-100 dark:border-red-900/30",
             },
             {
               id: "late_sessions",
@@ -491,8 +524,8 @@ export async function GET(req) {
               icon: "Clock",
               iconColor: "text-yellow-600 dark:text-yellow-400",
               bgColor: "bg-yellow-50 dark:bg-yellow-900/10",
-              borderColor: "border-yellow-100 dark:border-yellow-900/30"
-            }
+              borderColor: "border-yellow-100 dark:border-yellow-900/30",
+            },
           ],
           summaryCards: [
             {
@@ -503,7 +536,7 @@ export async function GET(req) {
               icon: "CheckCircle",
               iconColor: "text-green-600 dark:text-green-400",
               bgColor: "bg-green-50 dark:bg-green-900/10",
-              borderColor: "border-green-100 dark:border-green-900/30"
+              borderColor: "border-green-100 dark:border-green-900/30",
             },
             {
               id: "hours_learned",
@@ -513,7 +546,7 @@ export async function GET(req) {
               icon: "Clock",
               iconColor: "text-blue-600 dark:text-blue-400",
               bgColor: "bg-blue-50 dark:bg-blue-900/10",
-              borderColor: "border-blue-100 dark:border-blue-900/30"
+              borderColor: "border-blue-100 dark:border-blue-900/30",
             },
             {
               id: "achievements",
@@ -523,9 +556,9 @@ export async function GET(req) {
               icon: "Award",
               iconColor: "text-purple-600 dark:text-purple-400",
               bgColor: "bg-purple-50 dark:bg-purple-900/10",
-              borderColor: "border-purple-100 dark:border-purple-900/30"
-            }
-          ]
+              borderColor: "border-purple-100 dark:border-purple-900/30",
+            },
+          ],
         },
         nextSession: nextSession ? formatSession(nextSession) : null,
         groups: groups.map(formatGroup),
@@ -559,7 +592,7 @@ export async function GET(req) {
         error: error.message,
         code: "DASHBOARD_ERROR",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -578,12 +611,14 @@ function formatTime(timeStr) {
 }
 
 /**
- * ✅ [مُعدَّل] تنسيق بيانات الجلسة
+ * ✅ تنسيق بيانات الجلسة
  */
 function formatSession(session) {
   const today = new Date();
   const sessionDate = new Date(session.scheduledDate);
-  const sessionEndDateTime = new Date(`${sessionDate.toDateString()} ${session.endTime}`);
+  const sessionEndDateTime = new Date(
+    `${sessionDate.toDateString()} ${session.endTime}`,
+  );
 
   const formattedDate = sessionDate.toLocaleDateString("en-US", {
     month: "short",
@@ -632,33 +667,62 @@ function formatGroup(group) {
     currentStudentsCount: group.currentStudentsCount || 0,
     schedule: group.schedule,
     metadata: group.metadata || {},
-    course: group.courseId ? {
-      title: group.courseId.title,
-      level: group.courseId.level,
-      thumbnail: group.courseId.thumbnail,
-    } : null,
+    course: group.courseId
+      ? {
+          title: group.courseId.title,
+          level: group.courseId.level,
+          thumbnail: group.courseId.thumbnail,
+        }
+      : null,
   };
 }
 
+/**
+ * ✅ رتّب بالأحدث الأول، استبعد رسائل الجارديان،
+ * واستبعد أي إشعار الطالب شافه بالفعل (ids أو قبل seenAt)
+ */
 async function fetchNotifications(studentId) {
   try {
     const student = await Student.findById(studentId)
-      .select("whatsappMessages sessionReminders")
+      .select("whatsappMessages sessionReminders notificationsSeen")
       .lean();
+
+    if (!student) return [];
+
+    const seenIds = new Set((student.notificationsSeen?.ids || []).map(String));
+    const seenAt = student.notificationsSeen?.seenAt
+      ? new Date(student.notificationsSeen.seenAt).getTime()
+      : 0;
+
+    // مقروء لو الـ id متسجل، أو لو وقته قبل/يساوي "عرض كل الإشعارات"
+    const isUnseen = (id, date) => {
+      if (id && seenIds.has(String(id))) return false;
+      if (seenAt && date && new Date(date).getTime() <= seenAt) return false;
+      return true;
+    };
 
     const notifications = [];
 
-    if (student.whatsappMessages && student.whatsappMessages.length > 0) {
-      student.whatsappMessages
+    // ── WhatsApp messages ──
+    if (student.whatsappMessages?.length) {
+      [...student.whatsappMessages]
+        .sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt))
         .filter((msg) => msg.status === "sent")
+        .filter((msg) => {
+          // استبعد رسائل الجارديان عشان الهيدر يبقى متوافق مع صفحة الرسائل
+          if (msg.messageType?.includes("guardian")) return false;
+          if (msg.metadata?.recipientType === "guardian") return false;
+          return true;
+        })
+        .filter((msg) => isUnseen(msg._id, msg.sentAt))
         .slice(0, 5)
         .forEach((msg) => {
           notifications.push({
-            id: msg._id,
+            id: String(msg._id),
             type: "whatsapp",
             title: getWhatsAppMessageTitle(msg.messageType),
             titleAr: getWhatsAppMessageTitleAr(msg.messageType),
-            message: msg.messageContent.substring(0, 100) + "...",
+            message: (msg.messageContent || "").substring(0, 100) + "...",
             date: msg.sentAt,
             time: formatRelativeTime(msg.sentAt),
             icon: "MessageSquare",
@@ -666,13 +730,16 @@ async function fetchNotifications(studentId) {
         });
     }
 
-    if (student.sessionReminders && student.sessionReminders.length > 0) {
-      student.sessionReminders
+    // ── Session reminders ──
+    if (student.sessionReminders?.length) {
+      [...student.sessionReminders]
+        .sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt))
         .filter((reminder) => reminder.status === "sent")
+        .filter((reminder) => isUnseen(reminder._id, reminder.sentAt))
         .slice(0, 5)
         .forEach((reminder) => {
           notifications.push({
-            id: reminder._id,
+            id: String(reminder._id),
             type: "reminder",
             title: "Session Reminder",
             titleAr: "تذكير جلسة",
@@ -708,23 +775,69 @@ function formatRelativeTime(date) {
 function getWhatsAppMessageTitle(messageType) {
   const titles = {
     welcome: "Welcome Message",
+    student_welcome: "Welcome Message",
     session_reminder: "Session Reminder",
+    session_reminder_student: "Session Reminder",
+    reminder_24h_student: "24h Reminder",
+    reminder_1h_student: "1h Reminder",
+    reminder_15min_student: "15min Reminder",
     absence_notification: "Absence Alert",
+    late_notification: "Late Alert",
+    excused_notification: "Excused Notification",
     session_cancelled: "Session Cancelled",
+    session_cancelled_student: "Session Cancelled",
     session_postponed: "Session Postponed",
+    session_postponed_student: "Session Postponed",
+    session_recording: "Session Recording",
     group_welcome: "Group Welcome",
+    group_welcome_student: "Group Welcome",
+    group_completion: "Course Completed",
+    group_completion_student: "Course Completed",
+    module_overview: "Module Overview",
+    evaluation_pass: "Evaluation Passed",
+    evaluation_review: "Evaluation Review",
+    evaluation_repeat: "Evaluation Repeat",
+    credit_alert: "Credit Alert",
+    credit_exhausted: "Credit Exhausted",
+    credit_low_balance_4h_student: "Low Balance",
+    credit_low_balance_2h_student: "Low Balance",
+    makeup_session_student: "Makeup Session",
+    makeup_session_student_offline: "Makeup Session",
   };
-  return titles[messageType] || "WhatsApp Message";
+  return titles[messageType] || "Notification";
 }
 
 function getWhatsAppMessageTitleAr(messageType) {
   const titles = {
     welcome: "رسالة ترحيب",
+    student_welcome: "رسالة ترحيب",
     session_reminder: "تذكير جلسة",
+    session_reminder_student: "تذكير جلسة",
+    reminder_24h_student: "تذكير قبل 24 ساعة",
+    reminder_1h_student: "تذكير قبل ساعة",
+    reminder_15min_student: "تذكير قبل 15 دقيقة",
     absence_notification: "تنبيه غياب",
+    late_notification: "تنبيه تأخر",
+    excused_notification: "إشعار غياب مبرر",
     session_cancelled: "إلغاء جلسة",
+    session_cancelled_student: "إلغاء جلسة",
     session_postponed: "تأجيل جلسة",
+    session_postponed_student: "تأجيل جلسة",
+    session_recording: "تسجيل الجلسة",
     group_welcome: "ترحيب بالمجموعة",
+    group_welcome_student: "ترحيب بالمجموعة",
+    group_completion: "إكمال الدورة",
+    group_completion_student: "إكمال الدورة",
+    module_overview: "نظرة عامة على الوحدة",
+    evaluation_pass: "تقييم - ناجح",
+    evaluation_review: "تقييم - مراجعة",
+    evaluation_repeat: "تقييم - إعادة",
+    credit_alert: "تنبيه رصيد",
+    credit_exhausted: "نفاد الرصيد",
+    credit_low_balance_4h_student: "رصيد منخفض",
+    credit_low_balance_2h_student: "رصيد منخفض جداً",
+    makeup_session_student: "حصة تعويضية",
+    makeup_session_student_offline: "حصة تعويضية",
   };
-  return titles[messageType] || "رسالة واتساب";
+  return titles[messageType] || "إشعار";
 }

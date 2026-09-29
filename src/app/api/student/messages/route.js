@@ -6,69 +6,122 @@ import Student from "../../../models/Student";
 
 // ── Types that belong to the STUDENT (not guardian) ──
 const STUDENT_TYPES = new Set([
+  // Welcome / language
   "welcome",
+  "student_welcome",
   "language_selection",
   "language_confirmation",
+  "bilingual_language_selection",
+  "bilingual_language_confirmation",
+
+  // Group / course
   "group_welcome",
   "group_welcome_student",
+  "group_completion",
+  "group_completion_student",
+  "module_overview",
+  "learning_supervisor_intro",
+  "session_blog",
+
+  // Reminders
   "session_reminder",
   "session_reminder_student",
   "reminder_24h_student",
   "reminder_1h_student",
+  "reminder_15min_student",
+  "reminder_24h_offline",
+  "reminder_30min_offline",
+  "pre_attendance_ping",
+
+  // Attendance
   "absence_notification",
   "late_notification",
   "excused_notification",
+
+  // Session updates
   "session_cancelled",
   "session_cancelled_student",
   "session_postponed",
   "session_postponed_student",
-  "group_completion",
-  "group_completion_student",
+  "session_recording",
+
+  // Evaluations
+  "evaluation_pass",
+  "evaluation_review",
+  "evaluation_repeat",
+
+  // Credit
   "credit_alert",
   "credit_exhausted",
+  "credit_low_balance_4h_student",
+  "credit_low_balance_2h_student",
+
+  // Makeup
+  "makeup_session_student",
+  "makeup_session_student_offline",
+
+  // Misc
   "custom",
   "other",
-  "bilingual_language_selection",
-  "bilingual_language_confirmation",
 ]);
 
 // ── Display config per type ──
 const TYPE_CONFIG = {
   // Reminders
-  session_reminder:          { labelEn: "Session Reminder",  labelAr: "تذكير جلسة",       icon: "clock",   color: "blue",   filter: "reminder" },
-  session_reminder_student:  { labelEn: "Session Reminder",  labelAr: "تذكير جلسة",       icon: "clock",   color: "blue",   filter: "reminder" },
-  reminder_24h_student:      { labelEn: "24h Reminder",      labelAr: "تذكير قبل 24 ساعة", icon: "clock",   color: "blue",   filter: "reminder" },
-  reminder_1h_student:       { labelEn: "1h Reminder",       labelAr: "تذكير قبل ساعة",   icon: "clock",   color: "cyan",   filter: "reminder" },
+  session_reminder:          { labelEn: "Session Reminder",  labelAr: "تذكير جلسة",         icon: "clock",   color: "blue",      filter: "reminder" },
+  session_reminder_student:  { labelEn: "Session Reminder",  labelAr: "تذكير جلسة",         icon: "clock",   color: "blue",      filter: "reminder" },
+  reminder_24h_student:      { labelEn: "24h Reminder",      labelAr: "تذكير قبل 24 ساعة",  icon: "clock",   color: "blue",      filter: "reminder" },
+  reminder_1h_student:       { labelEn: "1h Reminder",       labelAr: "تذكير قبل ساعة",     icon: "clock",   color: "cyan",      filter: "reminder" },
+  reminder_15min_student:    { labelEn: "15min Reminder",    labelAr: "تذكير قبل 15 دقيقة", icon: "clock",   color: "cyan",      filter: "reminder" },
+  reminder_24h_offline:      { labelEn: "24h Reminder",      labelAr: "تذكير قبل 24 ساعة",  icon: "clock",   color: "blue",      filter: "reminder" },
+  reminder_30min_offline:    { labelEn: "30min Drop-off",    labelAr: "تنبيه قبل 30 دقيقة", icon: "clock",   color: "cyan",      filter: "reminder" },
+  pre_attendance_ping:       { labelEn: "Attendance Ping",   labelAr: "تنبيه قبل الحضور",   icon: "clock",   color: "cyan",      filter: "reminder" },
 
   // Attendance
-  absence_notification:      { labelEn: "Absence",           labelAr: "غياب",              icon: "x",       color: "red",    filter: "attendance" },
-  late_notification:         { labelEn: "Late",              labelAr: "تأخر",              icon: "warning", color: "amber",  filter: "attendance" },
-  excused_notification:      { labelEn: "Excused",           labelAr: "غياب مبرر",         icon: "check",   color: "green",  filter: "attendance" },
+  absence_notification:      { labelEn: "Absence",           labelAr: "غياب",               icon: "x",       color: "red",       filter: "attendance" },
+  late_notification:         { labelEn: "Late",              labelAr: "تأخر",               icon: "warning", color: "amber",     filter: "attendance" },
+  excused_notification:      { labelEn: "Excused",           labelAr: "غياب مبرر",          icon: "check",   color: "green",     filter: "attendance" },
 
   // Session updates
-  session_cancelled:         { labelEn: "Cancelled",         labelAr: "إلغاء جلسة",       icon: "cancel",  color: "red",    filter: "session" },
-  session_cancelled_student: { labelEn: "Cancelled",         labelAr: "إلغاء جلسة",       icon: "cancel",  color: "red",    filter: "session" },
-  session_postponed:         { labelEn: "Postponed",         labelAr: "تأجيل جلسة",       icon: "refresh", color: "amber",  filter: "session" },
-  session_postponed_student: { labelEn: "Postponed",         labelAr: "تأجيل جلسة",       icon: "refresh", color: "amber",  filter: "session" },
+  session_cancelled:         { labelEn: "Cancelled",         labelAr: "إلغاء جلسة",         icon: "cancel",  color: "red",       filter: "session" },
+  session_cancelled_student: { labelEn: "Cancelled",         labelAr: "إلغاء جلسة",         icon: "cancel",  color: "red",       filter: "session" },
+  session_postponed:         { labelEn: "Postponed",         labelAr: "تأجيل جلسة",         icon: "refresh", color: "amber",     filter: "session" },
+  session_postponed_student: { labelEn: "Postponed",         labelAr: "تأجيل جلسة",         icon: "refresh", color: "amber",     filter: "session" },
+  session_recording:         { labelEn: "Session Recording", labelAr: "تسجيل الجلسة",       icon: "star",    color: "purple",    filter: "session" },
+  session_blog:              { labelEn: "Session Blog",      labelAr: "مدونة الجلسة",       icon: "msg",     color: "secondary", filter: "session" },
 
   // Group / course
-  group_welcome:             { labelEn: "Welcome",           labelAr: "ترحيب",             icon: "star",    color: "purple", filter: "group" },
-  group_welcome_student:     { labelEn: "Welcome",           labelAr: "ترحيب",             icon: "star",    color: "purple", filter: "group" },
-  welcome:                   { labelEn: "Welcome",           labelAr: "ترحيب",             icon: "star",    color: "purple", filter: "group" },
-  group_completion:          { labelEn: "Course Completed",  labelAr: "إكمال الدورة",      icon: "award",   color: "green",  filter: "group" },
-  group_completion_student:  { labelEn: "Course Completed",  labelAr: "إكمال الدورة",      icon: "award",   color: "green",  filter: "group" },
+  group_welcome:             { labelEn: "Welcome",           labelAr: "ترحيب",              icon: "star",    color: "purple",    filter: "group" },
+  group_welcome_student:     { labelEn: "Welcome",           labelAr: "ترحيب",              icon: "star",    color: "purple",    filter: "group" },
+  welcome:                   { labelEn: "Welcome",           labelAr: "ترحيب",              icon: "star",    color: "purple",    filter: "group" },
+  student_welcome:           { labelEn: "Welcome",           labelAr: "ترحيب",              icon: "star",    color: "purple",    filter: "group" },
+  group_completion:          { labelEn: "Course Completed",  labelAr: "إكمال الدورة",       icon: "award",   color: "green",     filter: "group" },
+  group_completion_student:  { labelEn: "Course Completed",  labelAr: "إكمال الدورة",       icon: "award",   color: "green",     filter: "group" },
+  module_overview:           { labelEn: "Module Overview",   labelAr: "نظرة عامة على الوحدة", icon: "msg",   color: "secondary", filter: "group" },
+  learning_supervisor_intro: { labelEn: "Supervisor Intro",  labelAr: "تعريف المشرف",       icon: "star",    color: "secondary", filter: "group" },
+
+  // Evaluations
+  evaluation_pass:           { labelEn: "Evaluation Pass",   labelAr: "تقييم - ناجح",       icon: "award",   color: "green",     filter: "group" },
+  evaluation_review:         { labelEn: "Evaluation Review", labelAr: "تقييم - مراجعة",     icon: "warning", color: "amber",     filter: "group" },
+  evaluation_repeat:         { labelEn: "Evaluation Repeat", labelAr: "تقييم - إعادة",      icon: "x",       color: "red",       filter: "group" },
 
   // Credit
-  credit_alert:              { labelEn: "Credit Alert",      labelAr: "تنبيه رصيد",        icon: "warning", color: "amber",  filter: "credit" },
-  credit_exhausted:          { labelEn: "No Credit",         labelAr: "نفاد الرصيد",       icon: "x",       color: "red",    filter: "credit" },
+  credit_alert:              { labelEn: "Credit Alert",      labelAr: "تنبيه رصيد",         icon: "warning", color: "amber",     filter: "credit" },
+  credit_exhausted:          { labelEn: "No Credit",         labelAr: "نفاد الرصيد",        icon: "x",       color: "red",       filter: "credit" },
+  credit_low_balance_4h_student: { labelEn: "Low Balance (4h)", labelAr: "رصيد منخفض",      icon: "warning", color: "amber",     filter: "credit" },
+  credit_low_balance_2h_student: { labelEn: "Low Balance (2h)", labelAr: "رصيد منخفض جداً", icon: "warning", color: "red",       filter: "credit" },
+
+  // Makeup
+  makeup_session_student:         { labelEn: "Makeup Session", labelAr: "حصة تعويضية",      icon: "star",    color: "primary",   filter: "session" },
+  makeup_session_student_offline: { labelEn: "Makeup Session", labelAr: "حصة تعويضية",      icon: "star",    color: "primary",   filter: "session" },
 
   // System / language
-  language_selection:        { labelEn: "Language Setup",    labelAr: "اختيار اللغة",      icon: "globe",   color: "gray",   filter: "system" },
-  language_confirmation:     { labelEn: "Language Confirmed",labelAr: "تأكيد اللغة",       icon: "check",   color: "gray",   filter: "system" },
-  bilingual_language_selection:    { labelEn: "Language Setup", labelAr: "اختيار اللغة",   icon: "globe",   color: "gray",   filter: "system" },
-  bilingual_language_confirmation: { labelEn: "Language Confirmed", labelAr: "تأكيد اللغة",icon: "check",   color: "gray",   filter: "system" },
-  custom:                    { labelEn: "Message",           labelAr: "رسالة",             icon: "msg",     color: "primary",filter: "system" },
-  other:                     { labelEn: "Notification",      labelAr: "إشعار",             icon: "bell",    color: "gray",   filter: "system" },
+  language_selection:        { labelEn: "Language Setup",    labelAr: "اختيار اللغة",       icon: "globe",   color: "gray",      filter: "system" },
+  language_confirmation:     { labelEn: "Language Confirmed", labelAr: "تأكيد اللغة",       icon: "check",   color: "gray",      filter: "system" },
+  bilingual_language_selection:    { labelEn: "Language Setup", labelAr: "اختيار اللغة",   icon: "globe",   color: "gray",      filter: "system" },
+  bilingual_language_confirmation: { labelEn: "Language Confirmed", labelAr: "تأكيد اللغة", icon: "check", color: "gray",      filter: "system" },
+  custom:                    { labelEn: "Message",           labelAr: "رسالة",              icon: "msg",     color: "primary",   filter: "system" },
+  other:                     { labelEn: "Notification",      labelAr: "إشعار",              icon: "bell",    color: "gray",      filter: "system" },
 };
 
 const getCfg = (type) =>
@@ -76,12 +129,33 @@ const getCfg = (type) =>
 
 // ── Filter groups (for tabs) ──
 const FILTER_GROUPS = {
-  reminder:   ["session_reminder","session_reminder_student","reminder_24h_student","reminder_1h_student"],
-  attendance: ["absence_notification","late_notification","excused_notification"],
-  session:    ["session_cancelled","session_cancelled_student","session_postponed","session_postponed_student"],
-  group:      ["group_welcome","group_welcome_student","welcome","group_completion","group_completion_student"],
-  credit:     ["credit_alert","credit_exhausted"],
-  system:     ["language_selection","language_confirmation","bilingual_language_selection","bilingual_language_confirmation","custom","other"],
+  reminder: [
+    "session_reminder", "session_reminder_student",
+    "reminder_24h_student", "reminder_1h_student", "reminder_15min_student",
+    "reminder_24h_offline", "reminder_30min_offline", "pre_attendance_ping",
+  ],
+  attendance: ["absence_notification", "late_notification", "excused_notification"],
+  session: [
+    "session_cancelled", "session_cancelled_student",
+    "session_postponed", "session_postponed_student",
+    "session_recording", "session_blog",
+    "makeup_session_student", "makeup_session_student_offline",
+  ],
+  group: [
+    "group_welcome", "group_welcome_student", "welcome", "student_welcome",
+    "group_completion", "group_completion_student",
+    "module_overview", "learning_supervisor_intro",
+    "evaluation_pass", "evaluation_review", "evaluation_repeat",
+  ],
+  credit: [
+    "credit_alert", "credit_exhausted",
+    "credit_low_balance_4h_student", "credit_low_balance_2h_student",
+  ],
+  system: [
+    "language_selection", "language_confirmation",
+    "bilingual_language_selection", "bilingual_language_confirmation",
+    "custom", "other",
+  ],
 };
 
 export async function GET(req) {
@@ -100,7 +174,7 @@ export async function GET(req) {
     const filter = searchParams.get("filter") || "all";
     const search = searchParams.get("search") || "";
     const page   = Math.max(1, parseInt(searchParams.get("page") || "1"));
-    const limit  = Math.min(50, parseInt(searchParams.get("limit") || "20"));
+    const limit  = Math.min(500, parseInt(searchParams.get("limit") || "20"));
 
     const student = await Student.findOne({ authUserId: user.id })
       .select("whatsappMessages personalInfo.fullName")
@@ -113,13 +187,10 @@ export async function GET(req) {
       });
     }
 
-    // ── 1. Keep only STUDENT messages (exclude guardian types + guardian recipientType) ──
+    // ── 1. Keep only STUDENT messages ──
     let msgs = (student.whatsappMessages || []).filter((m) => {
-      // Exclude any guardian-specific type names
       if (m.messageType?.includes("guardian")) return false;
-      // Exclude if metadata explicitly marks this as guardian recipient
       if (m.metadata?.recipientType === "guardian") return false;
-      // Only keep types we know belong to student
       return STUDENT_TYPES.has(m.messageType);
     });
 
@@ -163,9 +234,9 @@ export async function GET(req) {
         color: cfg.color,
         filterGroup: cfg.filter,
         metadata: {
-          groupName:    m.metadata?.groupName    || null,
-          groupCode:    m.metadata?.groupCode    || null,
-          sessionTitle: m.metadata?.sessionTitle || null,
+          groupName:        m.metadata?.groupName        || null,
+          groupCode:        m.metadata?.groupCode        || null,
+          sessionTitle:     m.metadata?.sessionTitle     || null,
           attendanceStatus: m.metadata?.attendanceStatus || null,
           remainingHours:   m.metadata?.remainingHours   ?? null,
           alertType:        m.metadata?.alertType        || null,
@@ -173,8 +244,7 @@ export async function GET(req) {
       };
     });
 
-    // ── 7. Stats for filter tabs ──
-    // Count from ALL student messages (before search filter)
+    // ── 7. Stats for filter tabs (before search) ──
     const allStudentMsgs = (student.whatsappMessages || []).filter((m) => {
       if (m.messageType?.includes("guardian")) return false;
       if (m.metadata?.recipientType === "guardian") return false;
@@ -202,7 +272,8 @@ export async function GET(req) {
     );
   }
 }
-// ── PATCH: delete a whatsapp message by _id (pulls it from the array) ──
+
+// ── PATCH: delete a whatsapp message by _id ──
 export async function PATCH(req) {
   try {
     const user = await getUserFromRequest(req);
@@ -225,7 +296,6 @@ export async function PATCH(req) {
       );
     }
 
-    // Pull the subdocument with matching _id from whatsappMessages array
     const result = await Student.updateOne(
       { authUserId: user.id },
       { $pull: { whatsappMessages: { _id: id } } }

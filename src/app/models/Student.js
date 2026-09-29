@@ -404,6 +404,13 @@ const StudentSchema = new mongoose.Schema(
     sessionReminders: [sessionReminderSchema],
     whatsappMessages: [whatsappMessageSchema],
 
+    // ✅ NEW: الإشعارات اللي الطالب شافها (متزامنة بين الأجهزة)
+    // ids: إشعارات اتفتحت واحد واحد | seenAt: "عرض كل الإشعارات" (أي حاجة قبله مقروءة)
+    notificationsSeen: {
+      seenAt: { type: Date, default: null },
+      ids: { type: [String], default: [] },
+    },
+
     // ✅ NEW: Certificates issued to the student
     // تخزين معرفات الشهادات التي تم إرسالها للطالب لمنع التكرار
     issuedCertificates: [

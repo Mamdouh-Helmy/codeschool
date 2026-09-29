@@ -76,13 +76,35 @@ const TABS = [
   { key: "system",     en: "System",     ar: "النظام",   Icon: Globe },
 ];
 
+// ✅ FIXED: متطابق تمامًا مع الـ API
 const FILTER_GROUPS: Record<string, string[]> = {
-  reminder:   ["session_reminder","session_reminder_student","reminder_24h_student","reminder_1h_student"],
-  attendance: ["absence_notification","late_notification","excused_notification"],
-  session:    ["session_cancelled","session_cancelled_student","session_postponed","session_postponed_student"],
-  group:      ["group_welcome","group_welcome_student","welcome","group_completion","group_completion_student"],
-  credit:     ["credit_alert","credit_exhausted"],
-  system:     ["language_selection","language_confirmation","bilingual_language_selection","bilingual_language_confirmation","custom","other"],
+  reminder: [
+    "session_reminder", "session_reminder_student",
+    "reminder_24h_student", "reminder_1h_student", "reminder_15min_student",
+    "reminder_24h_offline", "reminder_30min_offline", "pre_attendance_ping",
+  ],
+  attendance: ["absence_notification", "late_notification", "excused_notification"],
+  session: [
+    "session_cancelled", "session_cancelled_student",
+    "session_postponed", "session_postponed_student",
+    "session_recording", "session_blog",
+    "makeup_session_student", "makeup_session_student_offline",
+  ],
+  group: [
+    "group_welcome", "group_welcome_student", "welcome", "student_welcome",
+    "group_completion", "group_completion_student",
+    "module_overview", "learning_supervisor_intro",
+    "evaluation_pass", "evaluation_review", "evaluation_repeat",
+  ],
+  credit: [
+    "credit_alert", "credit_exhausted",
+    "credit_low_balance_4h_student", "credit_low_balance_2h_student",
+  ],
+  system: [
+    "language_selection", "language_confirmation",
+    "bilingual_language_selection", "bilingual_language_confirmation",
+    "custom", "other",
+  ],
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -116,18 +138,18 @@ function groupByDate(msgs: Msg[], ar: boolean) {
 
 // ─── Message Card ────────────────────────────────────────────────────────────
 const MsgCard = React.memo(({ msg, isRTL, onDelete, deleting, idx }: {
-  msg: Msg; 
-  isRTL: boolean; 
-  onDelete: (id:string)=>void; 
-  deleting: boolean; 
+  msg: Msg;
+  isRTL: boolean;
+  onDelete: (id:string)=>void;
+  deleting: boolean;
   idx: number;
 }) => {
   const [expanded,    setExpanded]    = useState(false);
   const [confirmDel,  setConfirmDel]  = useState(false);
   const [hovered,     setHovered]     = useState(false);
-  
+
   const timerRef = useRef<number>(undefined);
-  
+
   const p = PALETTE[msg.color] || PALETTE.gray;
   const icon = ICON_EL[msg.icon] || ICON_EL.bell;
   const label = isRTL ? msg.label.ar : msg.label.en;
@@ -137,13 +159,13 @@ const MsgCard = React.memo(({ msg, isRTL, onDelete, deleting, idx }: {
 
   const onDelClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirmDel) { 
-      clearTimeout(timerRef.current); 
-      onDelete(msg._id); 
+    if (confirmDel) {
+      clearTimeout(timerRef.current);
+      onDelete(msg._id);
     }
-    else { 
-      setConfirmDel(true); 
-      timerRef.current = window.setTimeout(() => setConfirmDel(false), 3000); 
+    else {
+      setConfirmDel(true);
+      timerRef.current = window.setTimeout(() => setConfirmDel(false), 3000);
     }
   };
 
@@ -356,7 +378,7 @@ export default function MessagesPage() {
   const [searchInput, setSearchInput] = useState("");
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [page, setPage]               = useState(1);
-  
+
   const debRef = useRef<number>(undefined);
   const PAGE_SIZE = 25;
 
@@ -369,7 +391,7 @@ export default function MessagesPage() {
         const dj = await d.json();
         if (dj.success) { setUser(dj.data.user); setNotifications(dj.data.notifications||[]); }
       }
-      const res  = await fetch("/api/student/messages?filter=all&page=1&limit=200", { credentials: "include" });
+      const res  = await fetch("/api/student/messages?filter=all&page=1&limit=500", { credentials: "include" });
       const json = await res.json();
       if (json.success) { setAllMsgs(json.data.messages||[]); setStats(json.data.stats||null); }
       else setError(json.message||"Failed");
@@ -421,7 +443,7 @@ export default function MessagesPage() {
         body: JSON.stringify({ action: "delete", id }),
       });
     } catch (e) { console.error(e); }
-    
+
     window.setTimeout(() => {
       setAllMsgs(prev => prev.filter(m => m._id !== id));
       setStats(prev => prev ? { ...prev, all: Math.max(0, prev.all-1) } : prev);
