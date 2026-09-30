@@ -10,6 +10,7 @@ import {
   Zap,
   Clock,
   Save,
+  MapPin,
 } from "lucide-react";
 import ModalShell from "./ModalShell";
 
@@ -67,10 +68,14 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// buildVariables — بيطلع guardian variables فاضية للطالب البالغ
+// buildVariables
+// ✅ NEW: يدعم Offline (placeName, address, mapsLink, sessionLocationBlock)
+// ✅ NEW: لو الطالب adults → guardian variables تطلع ""
 // ─────────────────────────────────────────────────────────────────────────────
-function buildVariables(student, session, dbVars = {}) {
+function buildVariables(student, session, dbVars = {}, options = {}) {
   if (!student) return {};
+
+  const { isOffline = false, group = null } = options;
 
   const lang = (student.communicationPreferences?.preferredLanguage || "ar").toLowerCase();
   const gender = (student.personalInfo?.gender || "male").toLowerCase().trim();
@@ -79,7 +84,7 @@ function buildVariables(student, session, dbVars = {}) {
   const isFather = relationship !== "mother";
   const genderCtx = { studentGender: gender, guardianType: relationship };
 
-  // ✅ NEW
+  // ✅ هل الطالب بالغ؟
   const isAdult = student.studentType === "adults";
 
   const studentFirstName =
@@ -101,8 +106,7 @@ function buildVariables(student, session, dbVars = {}) {
     (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
 
   const salutationBase_en =
-    resolveVar(dbVars, "salutation_en", "en", genderCtx) ||
-    "Dear";
+    resolveVar(dbVars, "salutation_en", "en", genderCtx) || "Dear";
 
   const guardianSalBase_ar =
     resolveVar(dbVars, "guardianSalutation_ar", "ar", genderCtx) ||
@@ -137,6 +141,50 @@ function buildVariables(student, session, dbVars = {}) {
       )
     : "";
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ Offline Location — من الجروب أو من الـ session.group
+  // ═══════════════════════════════════════════════════════════════════════
+  const loc =
+    group?.locationDetails ||
+    session?.group?.locationDetails ||
+    session?.locationDetails ||
+    {};
+
+  const groupLocation =
+    group?.location ||
+    session?.group?.location ||
+    session?.location ||
+    "";
+
+  const placeName = loc.placeName || groupLocation || "";
+  const address = loc.address || loc.extraDetails || "";
+
+  let mapsLink = "";
+  if (isOffline) {
+    if (loc.lat != null && loc.lng != null) {
+      mapsLink = `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
+    } else if (address) {
+      mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+    } else if (placeName) {
+      mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeName)}`;
+    }
+  }
+
+  // ✅ Smart block (نفس اللي في الباك إند — عشان المعاينة تبقى مطابقة للرسالة الفعلية)
+  const meetingLink = !isOffline ? (session?.meetingLink || "") : "";
+
+  const sessionLocationBlock = isOffline
+    ? [
+        placeName && `📍 ${lang === "ar" ? "المكان" : "Location"}: ${placeName}`,
+        address && `📌 ${lang === "ar" ? "العنوان" : "Address"}: ${address}`,
+        mapsLink && `🗺️ ${lang === "ar" ? "اللوكيشن" : "Maps"}: ${mapsLink}`,
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : meetingLink
+      ? `🔗 ${lang === "ar" ? "رابط الحصة" : "Meeting Link"}: ${meetingLink}`
+      : "";
+
   return {
     studentSalutation,
     studentSalutation_ar,
@@ -162,11 +210,19 @@ function buildVariables(student, session, dbVars = {}) {
     sessionName: extractSessionShortName(session?.title) || "",
     date: sessionDate,
     time: `${session?.startTime || ""} - ${session?.endTime || ""}`,
-    meetingLink: session?.meetingLink || "",
-    groupCode: session?.groupId?.code || "",
-    groupName: session?.groupId?.name || "",
+    meetingLink,
+    groupCode: session?.group?.code || session?.groupId?.code || "",
+    groupName: session?.group?.name || session?.groupId?.name || "",
     enrollmentNumber: student.enrollmentNumber || "",
+
+    // ✅ Offline — فاضية لو Online
+    placeName: isOffline ? placeName : "",
+    address: isOffline ? address : "",
+    mapsLink: isOffline ? mapsLink : "",
+    sessionLocationBlock,
+
     isAdult,
+    isOffline,
   };
 }
 
@@ -265,9 +321,42 @@ export default function ReminderModal({
   const guardianTextareaRef = useRef(null);
   const hintsRef = useRef({ student: null, guardian: null });
 
-  // ✅ NEW: هل الطالب المختار بالغ؟
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ NEW: Detect offline mode
+  //    نعتمد على session.deliveryMode (Source of Truth بعد ما الجروب بيحطه)
+  //    وبعدين session.group.deliveryMode كـ fallback
+  // ═══════════════════════════════════════════════════════════════════════
+  const isOffline =
+    session?.deliveryMode === "offline" ||
+    session?.group?.deliveryMode === "offline";
+
+  // ✅ هل الطالب المختار بالغ؟
   const isAdultStudent = selectedStudentForPreview?.studentType === "adults";
 
+  // ✅ الـ eventType اللي بنبعت بيه للـ templates API
+  //    Online 24h → reminder_24h
+  //    Online 1h  → reminder_1h  (الباك إند بيحولها لـ reminder_15min)
+  //    Offline 24h → reminder_24h_offline
+  //    Offline 1h  → reminder_30min_offline
+  const templateEventType = useMemo(() => {
+    if (isOffline) {
+      return reminderType === "24hours"
+        ? "reminder_24h_offline"
+        : "reminder_30min_offline";
+    }
+    return reminderType === "24hours" ? "reminder_24h" : "reminder_1h";
+  }, [isOffline, reminderType]);
+
+  // ✅ نمط التذكير للعرض (24 ساعة / 30 دقيقة / 15 دقيقة)
+  const reminderLabel = isOffline
+    ? reminderType === "24hours"
+      ? isRTL ? "تذكير 24 ساعة (Offline)" : "24h Location Reminder"
+      : isRTL ? "تنبيه 30 دقيقة (Offline)" : "30min Drop-off Alert"
+    : reminderType === "24hours"
+      ? isRTL ? "تذكير قبل 24 ساعة" : "24-Hour Reminder"
+      : isRTL ? "تذكير قبل 15 دقيقة" : "15-Minute Reminder";
+
+  // ── Load DB vars ──────────────────────────────────────────────────────────
   useEffect(() => {
     fetch("/api/whatsapp/template-variables")
       .then((r) => r.json())
@@ -281,6 +370,7 @@ export default function ReminderModal({
       .catch((err) => console.error("❌ Failed to load template variables:", err));
   }, []);
 
+  // ── Click-outside for hints ───────────────────────────────────────────────
   useEffect(() => {
     const handler = (e) => {
       if (hintsRef.current.student && !hintsRef.current.student.contains(e.target))
@@ -292,6 +382,7 @@ export default function ReminderModal({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // ── Select first student ──────────────────────────────────────────────────
   useEffect(() => {
     if (groupStudents.length > 0 && !selectedStudentForPreview) {
       setSelectedStudentForPreview(groupStudents[0]);
@@ -299,7 +390,10 @@ export default function ReminderModal({
   }, [groupStudents]);
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ✅ Fetch all templates — بتتخطى guardian للطالب البالغ
+  // ✅ Fetch all templates
+  //    - بيستخدم eventType الصح حسب Offline/Online
+  //    - بيتخطى guardian للطالب البالغ
+  //    - بيتخطى guardian للأوفلاين لو الطالب بالغ
   // ═══════════════════════════════════════════════════════════════════════
   useEffect(() => {
     const fetchAllTemplates = async () => {
@@ -307,28 +401,30 @@ export default function ReminderModal({
 
       setLoadingTemplates(true);
       try {
-        const eventType = reminderType === "24hours" ? "reminder_24h" : "reminder_1h";
-
         const results = await Promise.all(
           groupStudents.map(async (student) => {
             const res = await fetch(`/api/sessions/${session.id}/templates`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                eventType,
+                eventType: templateEventType,
                 studentId: student._id,
-                extraData: { meetingLink: session.meetingLink },
+                extraData: {
+                  meetingLink: session.meetingLink,
+                  isOffline, // ✅ نمرر الحالة كـ hint للـ backend
+                },
               }),
             });
             const json = await res.json();
 
             if (json.success) {
-              const isAdult = student.studentType === "adults";
+              const studentIsAdult = student.studentType === "adults";
               return {
                 studentId: student._id,
-                studentTemplate: json.data.student?.rawContent || json.data.student?.content || "",
-                // ✅ للطالب البالغ: منستخدمش قالب ولي الأمر
-                guardianTemplate: isAdult
+                studentTemplate:
+                  json.data.student?.rawContent || json.data.student?.content || "",
+                // ✅ للطالب البالغ: منستخدمش قالب ولي الأمر خالص
+                guardianTemplate: studentIsAdult
                   ? ""
                   : (json.data.guardian?.rawContent || json.data.guardian?.content || ""),
               };
@@ -367,14 +463,29 @@ export default function ReminderModal({
     };
 
     fetchAllTemplates();
-  }, [groupStudents, reminderType, session.id, session.meetingLink, isRTL]);
+  }, [
+    groupStudents,
+    reminderType,
+    session.id,
+    session.meetingLink,
+    isRTL,
+    templateEventType,
+    isOffline,
+  ]);
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ✅ Preview — بتخلي guardian preview فاضي للطالب البالغ
+  // ✅ Preview effect
+  //    - للطالب البالغ: preview guardian يبقى فاضي
+  //    - للأوفلاين: المتغيرات بتشمل placeName/address/mapsLink
   // ═══════════════════════════════════════════════════════════════════════
   useEffect(() => {
     if (!selectedStudentForPreview) return;
-    const vars = buildVariables(selectedStudentForPreview, session, dbVars);
+
+    const vars = buildVariables(selectedStudentForPreview, session, dbVars, {
+      isOffline,
+      group: session?.group || null,
+    });
+
     setPreviewStudentMessage(renderTemplate(currentStudentMessage, vars));
 
     if (isAdultStudent) {
@@ -382,21 +493,32 @@ export default function ReminderModal({
     } else {
       setPreviewGuardianMessage(renderTemplate(currentGuardianMessage, vars));
     }
-  }, [currentStudentMessage, currentGuardianMessage, selectedStudentForPreview, session, dbVars, isAdultStudent]);
+  }, [
+    currentStudentMessage,
+    currentGuardianMessage,
+    selectedStudentForPreview,
+    session,
+    dbVars,
+    isAdultStudent,
+    isOffline,
+  ]);
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ Switch student
+  // ═══════════════════════════════════════════════════════════════════════
   const handleSelectStudentForPreview = useCallback(
     (student) => {
       setSelectedStudentForPreview(student);
       setManuallyEdited({ student: false, guardian: false });
 
       const sid = student._id;
-      const isAdult = student.studentType === "adults";
+      const studentIsAdult = student.studentType === "adults";
 
       setCurrentStudentMessage(
         editedStudentTemplates[sid] ?? studentTemplates[sid] ?? ""
       );
       setCurrentGuardianMessage(
-        isAdult
+        studentIsAdult
           ? ""
           : (editedGuardianTemplates[sid] ?? guardianTemplates[sid] ?? "")
       );
@@ -405,31 +527,79 @@ export default function ReminderModal({
   );
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ✅ saveTemplateToDatabase — حماية: مايحفظش قوالب ولي أمر للطالب البالغ
+  // ✅ saveTemplateToDatabase
+  //    - يختار الـ templateType الصح حسب:
+  //      · Online vs Offline
+  //      · kids vs adults (student)
+  //      · 24h vs 30min/15min
+  //    - بيمنع حفظ قالب guardian لو الطالب بالغ
   // ═══════════════════════════════════════════════════════════════════════
   const saveTemplateToDatabase = useCallback(
     async (type, content) => {
       if (!selectedStudentForPreview || !content?.trim()) return;
 
-      // ✅ حماية
+      // ✅ حماية: مفيش guardian save للطالب البالغ
       if (isAdultStudent && type === "guardian") return;
 
       setSavingTemplate((prev) => ({ ...prev, [type]: true }));
 
       try {
-        const templateType =
-          reminderType === "24hours"
-            ? type === "student" ? "reminder_24h_student" : "reminder_24h_guardian"
-            : type === "student" ? "reminder_15min_student" : "reminder_15min_guardian";
+        // ✅ اختيار templateType + recipientType بالظبط زي ما الـ getTemplatesForEvent بيختار
+        let templateType;
+        let recipientType;
 
-        const recipientType = type === "student" ? "student" : "guardian";
+        if (type === "guardian") {
+          recipientType = "guardian";
+          if (isOffline) {
+            templateType =
+              reminderType === "24hours"
+                ? "reminder_24h_offline_guardian"
+                : "reminder_30min_offline_guardian";
+          } else {
+            templateType =
+              reminderType === "24hours"
+                ? "reminder_24h_guardian"
+                : "reminder_15min_guardian";
+          }
+        } else {
+          // Student
+          recipientType = "student";
+          if (isAdultStudent) {
+            if (isOffline) {
+              templateType =
+                reminderType === "24hours"
+                  ? "reminder_24h_offline_adult"
+                  : "reminder_30min_offline_adult";
+            } else {
+              templateType =
+                reminderType === "24hours"
+                  ? "reminder_24h_adult"
+                  : "reminder_15min_adult";
+            }
+          } else {
+            if (isOffline) {
+              templateType =
+                reminderType === "24hours"
+                  ? "reminder_24h_offline_student"
+                  : "reminder_30min_offline_student";
+            } else {
+              templateType =
+                reminderType === "24hours"
+                  ? "reminder_24h_student"
+                  : "reminder_15min_student";
+            }
+          }
+        }
+
         const studentLang =
           selectedStudentForPreview.communicationPreferences?.preferredLanguage || "ar";
 
-        const templateName =
-          reminderType === "24hours"
-            ? type === "student" ? "24h Reminder - Student" : "24h Reminder - Guardian"
-            : type === "student" ? "15min Reminder - Student" : "15min Reminder - Guardian";
+        const templateName = (() => {
+          const modeAr = isOffline ? "Offline " : "";
+          const typeAr = type === "student" ? "Student" : "Guardian";
+          const reminderAr = reminderType === "24hours" ? "24h" : (isOffline ? "30min" : "15min");
+          return `${reminderAr} ${modeAr}Reminder - ${typeAr}`;
+        })();
 
         const searchRes = await fetch(
           `/api/message-templates?type=${templateType}&recipient=${recipientType}&default=true`
@@ -456,34 +626,49 @@ export default function ReminderModal({
           const json = await res.json();
           if (!json.success) throw new Error(json.error || "Update failed");
         } else {
+          // ✅ Variables بتشمل offline لو محتاجين
+          const variablesList = [
+            { key: "studentSalutation", label: "Student Salutation" },
+            { key: "studentSalutation_ar", label: "Student Salutation AR" },
+            { key: "studentSalutation_en", label: "Student Salutation EN" },
+            { key: "studentName", label: "Student Name" },
+            { key: "sessionName", label: "Session Name" },
+            { key: "date", label: "Date" },
+            { key: "time", label: "Time" },
+            { key: "enrollmentNumber", label: "Enrollment Number" },
+          ];
+
+          if (!isAdultStudent) {
+            variablesList.push(
+              { key: "guardianSalutation", label: "Guardian Salutation" },
+              { key: "guardianSalutation_ar", label: "Guardian Salutation AR" },
+              { key: "guardianSalutation_en", label: "Guardian Salutation EN" },
+              { key: "guardianName", label: "Guardian Name" },
+              { key: "childTitle", label: "Son/Daughter" },
+            );
+          }
+
+          if (isOffline) {
+            variablesList.push(
+              { key: "placeName", label: "Location Name" },
+              { key: "address", label: "Address" },
+              { key: "mapsLink", label: "Maps Link" },
+              { key: "sessionLocationBlock", label: "Location Block (auto)" },
+            );
+          } else {
+            variablesList.push({ key: "meetingLink", label: "Meeting Link" });
+          }
+
           const newTemplate = {
             templateType,
             recipientType,
             name: templateName,
-            description: `${reminderType === "24hours" ? "24 hours" : "15 minutes"} reminder for ${recipientType}`,
+            description: `${reminderType === "24hours" ? "24 hours" : (isOffline ? "30 minutes" : "15 minutes")} ${isOffline ? "offline " : ""}reminder for ${recipientType}`,
             isDefault: true,
             isActive: true,
             contentAr: studentLang === "ar" ? content : " ",
             contentEn: studentLang === "en" ? content : " ",
-            variables: [
-              { key: "guardianSalutation", label: "Guardian Salutation" },
-              { key: "guardianSalutation_ar", label: "Guardian Salutation AR" },
-              { key: "guardianSalutation_en", label: "Guardian Salutation EN" },
-              { key: "studentSalutation", label: "Student Salutation" },
-              { key: "studentSalutation_ar", label: "Student Salutation AR" },
-              { key: "studentSalutation_en", label: "Student Salutation EN" },
-              { key: "salutation_ar", label: "Salutation AR" },
-              { key: "salutation_en", label: "Salutation EN" },
-              { key: "salutation", label: "Salutation" },
-              { key: "studentName", label: "Student Name" },
-              { key: "guardianName", label: "Guardian Name" },
-              { key: "childTitle", label: "Son/Daughter" },
-              { key: "sessionName", label: "Session Name" },
-              { key: "date", label: "Date" },
-              { key: "time", label: "Time" },
-              { key: "meetingLink", label: "Meeting Link" },
-              { key: "enrollmentNumber", label: "Enrollment Number" },
-            ],
+            variables: variablesList,
           };
 
           const res = await fetch("/api/message-templates", {
@@ -518,11 +703,14 @@ export default function ReminderModal({
         setSavingTemplate((prev) => ({ ...prev, [type]: false }));
       }
     },
-    [reminderType, selectedStudentForPreview, isRTL, isAdultStudent]
+    [reminderType, selectedStudentForPreview, isRTL, isAdultStudent, isOffline]
   );
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ✅ handleSend — بتتخطى guardianMessages للطالب البالغ
+  // ✅ handleSend
+  //    - بيبني studentMessages / guardianMessages بمتغيرات offline صح
+  //    - بيتخطى guardian للطالب البالغ
+  //    - بيمرر isOffline في الـ metadata
   // ═══════════════════════════════════════════════════════════════════════
   const handleSend = useCallback(async () => {
     setSending(true);
@@ -532,7 +720,10 @@ export default function ReminderModal({
 
       groupStudents.forEach((student) => {
         const sid = student._id.toString();
-        const vars = buildVariables(student, session, dbVars);
+        const vars = buildVariables(student, session, dbVars, {
+          isOffline,
+          group: session?.group || null,
+        });
         const studentIsAdult = student.studentType === "adults";
 
         const rawStudent = editedStudentTemplates[sid] ?? studentTemplates[sid] ?? "";
@@ -541,7 +732,7 @@ export default function ReminderModal({
           : (editedGuardianTemplates[sid] ?? guardianTemplates[sid] ?? "");
 
         studentMessages[sid] = renderTemplate(rawStudent, vars);
-        // ✅ للطالب البالغ: مش بنضيف رسالة ولي الأمر
+
         if (!studentIsAdult) {
           guardianMessages[sid] = renderTemplate(rawGuardian, vars);
         }
@@ -555,6 +746,7 @@ export default function ReminderModal({
           metadata: {
             studentMessages,
             guardianMessages,
+            isOffline, // ✅ New flag للباك إند
           },
         }),
       });
@@ -562,7 +754,15 @@ export default function ReminderModal({
       const json = await res.json();
 
       if (json.success) {
-        toast.success(isRTL ? "تم إرسال التذكيرات ✅" : "Reminders sent ✅");
+        toast.success(
+          isRTL
+            ? isOffline
+              ? "تم إرسال التذكيرات (Offline) ✅"
+              : "تم إرسال التذكيرات ✅"
+            : isOffline
+              ? "Offline reminders sent ✅"
+              : "Reminders sent ✅"
+        );
         onClose();
         if (onRefresh) onRefresh();
       } else {
@@ -586,10 +786,11 @@ export default function ReminderModal({
     isRTL,
     onClose,
     onRefresh,
+    isOffline,
   ]);
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ✅ getAvailableVariables — dynamic per student
+  // ✅ getAvailableVariables — dynamic حسب isAdult + isOffline
   // ═══════════════════════════════════════════════════════════════════════
   const getAvailableVariables = useCallback(
     (isAdult) => {
@@ -603,12 +804,23 @@ export default function ReminderModal({
         { key: "{sessionName}", label: isRTL ? "اسم الجلسة" : "Session Name", icon: "📘" },
         { key: "{date}", label: isRTL ? "التاريخ" : "Date", icon: "📅" },
         { key: "{time}", label: isRTL ? "الوقت" : "Time", icon: "⏰" },
-        { key: "{meetingLink}", label: isRTL ? "رابط الاجتماع" : "Meeting Link", icon: "🔗" },
         { key: "{enrollmentNumber}", label: isRTL ? "الرقم التعريفي" : "Enrollment No.", icon: "🔢" },
       ];
 
-      if (isAdult) return studentVars;
+      // ✅ Offline variables
+      const offlineVars = [
+        { key: "{placeName}", label: isRTL ? "اسم المكان" : "Location Name", icon: "📍" },
+        { key: "{address}", label: isRTL ? "العنوان" : "Address", icon: "📌" },
+        { key: "{mapsLink}", label: isRTL ? "رابط الخريطة" : "Maps Link", icon: "🗺️" },
+        { key: "{sessionLocationBlock}", label: isRTL ? "بلوك الموقع (تلقائي)" : "Location Block (auto)", icon: "🧩" },
+      ];
 
+      // ✅ Online variables
+      const onlineVars = [
+        { key: "{meetingLink}", label: isRTL ? "رابط الاجتماع" : "Meeting Link", icon: "🔗" },
+      ];
+
+      // ✅ Guardian vars (for kids only)
       const guardianVars = [
         { key: "{guardianSalutation}", label: isRTL ? "تحية ولي الأمر (حسب اللغة)" : "Guardian Salutation", icon: "👤" },
         { key: "{guardianSalutation_ar}", label: isRTL ? "تحية ولي الأمر - عربي" : "Guardian Salutation (AR)", icon: "👤" },
@@ -618,9 +830,15 @@ export default function ReminderModal({
         { key: "{childTitle}", label: isRTL ? "ابنك/ابنتك" : "Son/Daughter", icon: "👪" },
       ];
 
-      return [...studentVars, ...guardianVars];
+      const locationVars = isOffline ? offlineVars : onlineVars;
+
+      if (isAdult) {
+        return [...studentVars, ...locationVars];
+      }
+
+      return [...studentVars, ...guardianVars, ...locationVars];
     },
-    [isRTL]
+    [isRTL, isOffline]
   );
 
   const insertVariable = useCallback(
@@ -745,10 +963,14 @@ export default function ReminderModal({
     [showHints, selectedHintIndex, getAvailableVariables, insertVariable, isAdultStudent]
   );
 
+  // ✅ Salutation preview — بيستخدم buildVariables مع isOffline
   const salutationPreview = useMemo(() => {
     if (!selectedStudentForPreview) return null;
-    return buildVariables(selectedStudentForPreview, session, dbVars);
-  }, [selectedStudentForPreview, session, dbVars]);
+    return buildVariables(selectedStudentForPreview, session, dbVars, {
+      isOffline,
+      group: session?.group || null,
+    });
+  }, [selectedStudentForPreview, session, dbVars, isOffline]);
 
   // ── Hints dropdown ────────────────────────────────────────────────────────
   const renderHints = (type) => {
@@ -906,24 +1128,43 @@ export default function ReminderModal({
       size="2xl"
       accent="amber"
       isRTL={isRTL}
-      title={
-        reminderType === "24hours"
-          ? isRTL ? "تذكير قبل 24 ساعة" : "24-Hour Reminder"
-          : isRTL ? "تذكير قبل 15 دقيقة" : "15-Minute Reminder"
-      }
+      title={reminderLabel}
       subtitle={`${session?.title || ""} · ${new Date(session?.scheduledDate).toLocaleDateString(
         isRTL ? "ar-EG" : "en-US",
         { weekday: "short", year: "numeric", month: "short", day: "numeric" }
       )} · ${session?.startTime}`}
       headerBadge={
         <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
-          <Clock className="h-3 w-3" />
-          {reminderType === "24hours" ? "24h" : "15m"}
+          {isOffline ? <MapPin className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+          {isOffline
+            ? reminderType === "24hours" ? "24h 📍" : "30m 🚗"
+            : reminderType === "24hours" ? "24h" : "15m"}
         </span>
       }
       footer={footer}
     >
       <div className="space-y-5">
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* ✅ Offline Banner */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {isOffline && (
+          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-500/20 dark:bg-amber-500/10">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-500/20">
+              <MapPin className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-amber-900 dark:text-amber-300">
+                📍 {isRTL ? "حصة Offline (حضورية)" : "Offline (On-site) Session"}
+              </p>
+              <p className="mt-0.5 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
+                {isRTL
+                  ? "التذكير ده هيتبعت للطالب (وأولياء الأمور للأطفال) وفيه اسم المكان والعنوان ولينك الخريطة بدل رابط الميتنج."
+                  : "The reminder will include the location name, address, and maps link instead of a meeting link."}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Student selector */}
         <div className="space-y-2">
           <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -954,7 +1195,6 @@ export default function ReminderModal({
                   <span>{isAdult ? "🧑" : gender === "female" ? "👧" : "👦"}</span>
                   <span>{student.personalInfo?.fullName?.split(" ")[0]}</span>
                   <span className="opacity-70">{lang === "ar" ? "🇸🇦" : "🇬🇧"}</span>
-                  {/* ✅ للأطفال بس نعرض علاقة ولي الأمر */}
                   {!isAdult && (
                     <span className="opacity-70">{rel === "mother" ? "👩" : "👨"}</span>
                   )}
@@ -975,7 +1215,7 @@ export default function ReminderModal({
               <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.studentSalutation}</span>
             </div>
 
-            {/* ✅ صفوف ولي الأمر — للـ kids بس */}
+            {/* Guardian rows — للـ kids بس */}
             {!isAdultStudent && (
               <>
                 <div className="flex items-center gap-2">
@@ -1010,10 +1250,23 @@ export default function ReminderModal({
               </span>
               <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.sessionName}</span>
             </div>
+
+            {/* ✅ Offline location row */}
+            {isOffline && (salutationPreview.placeName || salutationPreview.address) && (
+              <div className="flex items-start gap-2 pt-1 border-t border-slate-100 dark:border-white/5">
+                <span className="w-28 shrink-0 font-medium text-orange-600 dark:text-orange-400">
+                  📍 {isRTL ? "المكان:" : "Location:"}
+                </span>
+                <div className="text-slate-700 dark:text-slate-200 space-y-0.5">
+                  {salutationPreview.placeName && <p className="font-semibold">{salutationPreview.placeName}</p>}
+                  {salutationPreview.address && <p className="text-[11px] opacity-80">{salutationPreview.address}</p>}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* ✅ بانر الطالب البالغ */}
+        {/* Adult banner */}
         {isAdultStudent && (
           <div className="flex items-start gap-2.5 rounded-xl border border-indigo-200 bg-indigo-100/60 p-3.5 dark:border-indigo-500/20 dark:bg-indigo-500/10">
             <span className="text-lg shrink-0">🧑</span>
@@ -1041,7 +1294,6 @@ export default function ReminderModal({
         ) : (
           <div className="space-y-4">
             {renderMessageEditor("student")}
-            {/* ✅ رسالة ولي الأمر — للـ kids بس */}
             {!isAdultStudent && renderMessageEditor("guardian")}
           </div>
         )}

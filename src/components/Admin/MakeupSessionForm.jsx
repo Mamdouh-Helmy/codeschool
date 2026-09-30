@@ -282,21 +282,35 @@ function StudentSearch({ onSelect, isAr }) {
 
       {filtered.length > 0 && (
         <div className="max-h-80 overflow-y-auto space-y-2 custom-scrollbar pe-0.5">
-          {filtered.map((s) => (
-            <button key={s._id} type="button" onClick={() => onSelect(s)}
-              className="group w-full flex items-center gap-3 p-3 rounded-xl border border-PowderBlueBorder dark:border-dark_border hover:border-primary/30 hover:bg-primary/5 dark:hover:bg-primary/10 transition-all text-start">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center flex-shrink-0 group-hover:from-primary group-hover:to-orange-deep transition-all duration-200">
-                <User className="w-4 h-4 text-primary group-hover:text-white transition-colors" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-MidnightNavyText dark:text-white truncate">{s.name}</p>
-                <p className="text-xs text-SlateBlueText dark:text-darktext truncate">
-                  {s.enrollmentNumber || "—"}{s.phone ? ` · ${s.phone}` : ""}
-                </p>
-              </div>
-              <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-primary group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5 rtl:rotate-180 transition-all flex-shrink-0" />
-            </button>
-          ))}
+          {filtered.map((s) => {
+            // ✅ NEW: عرض بادج نوع الطالب
+            const isAdult = s.studentType === "adults";
+            return (
+              <button key={s._id} type="button" onClick={() => onSelect(s)}
+                className="group w-full flex items-center gap-3 p-3 rounded-xl border border-PowderBlueBorder dark:border-dark_border hover:border-primary/30 hover:bg-primary/5 dark:hover:bg-primary/10 transition-all text-start">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center flex-shrink-0 group-hover:from-primary group-hover:to-orange-deep transition-all duration-200">
+                  {isAdult
+                    ? <span className="text-lg">🧑</span>
+                    : <User className="w-4 h-4 text-primary group-hover:text-white transition-colors" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-sm font-semibold text-MidnightNavyText dark:text-white truncate">{s.name}</p>
+                    {/* ✅ NEW: بادج نوع الطالب */}
+                    {isAdult && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 ring-1 ring-inset ring-indigo-200 dark:ring-indigo-800">
+                        {t("بالغ", "Adult")}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-SlateBlueText dark:text-darktext truncate">
+                    {s.enrollmentNumber || "—"}{s.phone ? ` · ${s.phone}` : ""}
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-primary group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5 rtl:rotate-180 transition-all flex-shrink-0" />
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -685,7 +699,14 @@ export default function MakeupSessionForm({ onClose, onSaved }) {
   const [releaseReserved, setReleaseReserved] = useState(false);
 
   // ✅ هل الطالب بالغ؟
-  const isAdultStudent = student?.studentType === "adults";
+  //    بنعتمد على 3 مصادر (defense in depth):
+  //    1. student.studentType === "adults"
+  //    2. student.isAdult === true (لو الـ API رجّعه)
+  //    3. student.type === "adults" (لو رجع بشكل مختلف)
+  const isAdultStudent =
+    student?.studentType === "adults" ||
+    student?.isAdult === true ||
+    student?.type === "adults";
 
   // ═════════════════════════════════════════════════════════════════════════
   // ✅ schedule object memoized — لمنع الـ infinite loop
@@ -797,7 +818,6 @@ export default function MakeupSessionForm({ onClose, onSaved }) {
 
   // ═════════════════════════════════════════════════════════════════════════
   // ✅ SUBMIT — إنشاء + تفعيل + إرسال الرسائل في request واحد
-  //    على /api/admin/makeup-session (من غير ما نناديه /api/groups/[id]/activate)
   // ═════════════════════════════════════════════════════════════════════════
   const handleSubmit = async () => {
     if (!student || !group || !session || !instructor) {
@@ -856,15 +876,43 @@ export default function MakeupSessionForm({ onClose, onSaved }) {
         return;
       }
 
-      // ✅ اتعمل — نشوف مين من الرسائل ما اتبعتش
-      //    ✅ للطالب البالغ: بنستبعد "guardian" من قائمة الفحص
+      // ═══════════════════════════════════════════════════════════════════
+      // ✅ اتعمل — نشوف مين من الرسائل ما اتبعتش (فحص ذكي للطالب البالغ)
+      // ═══════════════════════════════════════════════════════════════════
       const notif = json.notifications || {};
-      const rolesToCheck = isAdultStudent ? ADULT_NOTIFY_ROLES : ALL_NOTIFY_ROLES;
-      const failed = rolesToCheck.filter(({ key }) => !notif.results?.[key]?.sent);
+      const results = notif.results || {};
+
+      // ✅ Defense in depth — نعتبر الطالب بالغ لو أي من المصادر دي أكدت:
+      //    1. isAdultStudent (من بيانات الطالب في الفرونت)
+      //    2. الـ backend رجّع `isAdult: true` في notifications
+      //    3. رسالة الوالد اتخطت بـ error = "skipped_adult_student"
+      const guardianSkippedForAdult =
+        results?.guardian?.error === "skipped_adult_student";
+      const backendIsAdult =
+        notif.isAdult === true ||
+        json?.data?.isAdult === true ||
+        json?.isAdult === true;
+
+      const effectiveIsAdult =
+        isAdultStudent || guardianSkippedForAdult || backendIsAdult;
+
+      // ✅ قايمة الرسائل المتوقعة حسب النوع
+      const rolesToCheck = effectiveIsAdult ? ADULT_NOTIFY_ROLES : ALL_NOTIFY_ROLES;
+
+      // ✅ فحص ذكي: أي `skipped_*` error يعتبر "متوقع" ومش فشل حقيقي
+      const failed = rolesToCheck.filter(({ key }) => {
+        const r = results[key];
+        if (!r) return true;              // مفيش نتيجة أصلاً → فشل حقيقي
+        if (r.sent) return false;         // اتبعتت → OK
+        if (typeof r.error === "string" && r.error.startsWith("skipped_")) {
+          return false;                    // ✅ skip إيجابي → مش فشل
+        }
+        return true;                       // فشل حقيقي
+      });
 
       if (failed.length === 0) {
         toast.success(
-          isAdultStudent
+          effectiveIsAdult
             ? t("🎉 تم إنشاء الحصة التعويضية وإرسال الرسائل للطالب والمدرس",
                 "🎉 Make-up session created and 2 messages sent (student + instructor)")
             : t("🎉 تم إنشاء الحصة التعويضية وإرسال الرسائل للطالب وولي الأمر والمدرس",
@@ -873,7 +921,7 @@ export default function MakeupSessionForm({ onClose, onSaved }) {
         );
       } else {
         const failedText = failed
-          .map(({ key, ar, en }) => `${isAr ? ar : en}: ${notif.results?.[key]?.error || notif.reason || "not_sent"}`)
+          .map(({ key, ar, en }) => `${isAr ? ar : en}: ${results?.[key]?.error || notif.reason || "not_sent"}`)
           .join(" • ");
         toast(
           t(`تم إنشاء الحصة، لكن فيه رسايل ماتبعتتش — ${failedText}`,

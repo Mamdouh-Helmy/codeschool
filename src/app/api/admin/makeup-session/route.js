@@ -14,12 +14,16 @@
 // الجروب التعويضي بيتعمل ويتفعّل في نفس الـ request (مفيش خطوة Activate تانية):
 //   1. إنشاء الجروب
 //   2. توليد السيشن + حجز اللينك        (onMakeupGroupActivated)
-//   3. إرسال 3 رسائل (طالب / ولي أمر / مدرس) من قوالب الداتا بيس بس
+//   3. إرسال رسائل (طالب / ولي أمر للـkids / مدرس) من قوالب الداتا بيس بس
 //
 // ✅ دعم Online / Offline:
 //   - Online: الأدمن يختار لينكات اجتماع للجدول الجديد
 //     (بيتم فحصها ضد reservations الموجودة مسبقًا)
 //   - Offline: مفيش لينكات — بنعتمد على locationDetails
+//
+// ✅ Kids/Adults:
+//   - للطالب البالغ (studentType === "adults") → مفيش رسالة لولي الأمر
+//   - للطفل → رسالة ولي الأمر بتتبعت زي ما هي
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
@@ -190,7 +194,11 @@ export async function GET(req) {
       });
     }
 
-    // ─── 1. قايمة الطلاب (بحث + قايمة افتراضية) ───
+    // ═══════════════════════════════════════════════════════════════════
+    // 1. قايمة الطلاب (بحث + قايمة افتراضية)
+    // ✅ NEW: بنرجّع studentType + isAdult عشان الفرونت يعرف يخفي رسالة
+    //         ولي الأمر للطالب البالغ
+    // ═══════════════════════════════════════════════════════════════════
     if (!studentId && !groupId) {
       const q = (searchQuery || "").trim();
 
@@ -214,7 +222,8 @@ export async function GET(req) {
 
       const students = await Student.find(filter)
         .select(
-          "_id enrollmentNumber personalInfo.fullName personalInfo.phone personalInfo.whatsappNumber personalInfo.gender personalInfo.nickname createdAt",
+          // ✅ ضفنا studentType للـ select
+          "_id enrollmentNumber personalInfo.fullName personalInfo.phone personalInfo.whatsappNumber personalInfo.gender personalInfo.nickname createdAt studentType",
         )
         .sort(sortBy)
         .limit(limit)
@@ -222,15 +231,21 @@ export async function GET(req) {
 
       return NextResponse.json({
         success: true,
-        data: students.map((s) => ({
-          _id: s._id,
-          name: s.personalInfo?.fullName || "",
-          enrollmentNumber: s.enrollmentNumber || "",
-          phone: s.personalInfo?.phone || "",
-          whatsappNumber: s.personalInfo?.whatsappNumber || "",
-          gender: s.personalInfo?.gender || "male",
-          nickname: s.personalInfo?.nickname || null,
-        })),
+        data: students.map((s) => {
+          const studentType = s.studentType || "kids";
+          return {
+            _id: s._id,
+            name: s.personalInfo?.fullName || "",
+            enrollmentNumber: s.enrollmentNumber || "",
+            phone: s.personalInfo?.phone || "",
+            whatsappNumber: s.personalInfo?.whatsappNumber || "",
+            gender: s.personalInfo?.gender || "male",
+            nickname: s.personalInfo?.nickname || null,
+            // ✅ NEW: نرجّع نوع الطالب + isAdult
+            studentType,
+            isAdult: studentType === "adults",
+          };
+        }),
         meta: {
           count: students.length,
           mode: q.length >= 2 ? "search" : "list",
@@ -239,7 +254,9 @@ export async function GET(req) {
       });
     }
 
-    // ─── 2. جيب جروبات الطالب + المدرسين ───
+    // ═══════════════════════════════════════════════════════════════════
+    // 2. جيب جروبات الطالب + المدرسين
+    // ═══════════════════════════════════════════════════════════════════
     if (studentId) {
       if (!mongoose.Types.ObjectId.isValid(studentId)) {
         return NextResponse.json(
@@ -295,7 +312,9 @@ export async function GET(req) {
       });
     }
 
-    // ─── 3. جيب سيشنز الجروب + حالة الطالب في كل سيشن ───
+    // ═══════════════════════════════════════════════════════════════════
+    // 3. جيب سيشنز الجروب + حالة الطالب في كل سيشن
+    // ═══════════════════════════════════════════════════════════════════
     if (groupId) {
       if (!mongoose.Types.ObjectId.isValid(groupId)) {
         return NextResponse.json(
@@ -442,6 +461,7 @@ export async function POST(req) {
     }
 
     // ─── 1. تحقق من وجود الطالب ─────────────────────────────────────────
+    // ✅ ضفنا studentType عشان نرجّعه في الـ response النهائي
     const student = await Student.findById(studentId).lean();
     if (!student) {
       return NextResponse.json(
@@ -449,6 +469,8 @@ export async function POST(req) {
         { status: 404 },
       );
     }
+
+    const isAdultStudent = student.studentType === "adults";
 
     // ─── 2. تحقق من وجود الجروب الأصلي ──────────────────────────────────
     const originalGroup = await Group.findById(groupId)
@@ -800,8 +822,7 @@ export async function POST(req) {
       $addToSet: { "academicInfo.groupIds": newGroup._id },
     });
 
-    // ─── 16. فعّل الجروب: توليد السيشن + حجز اللينك + إرسال الـ 3 رسائل ───
-    // ✅ اتغير النداء — بقى onMakeupGroupActivated من makeupAutomation
+    // ─── 16. فعّل الجروب: توليد السيشن + حجز اللينك + إرسال الرسائل ───
     await Group.findByIdAndUpdate(newGroup._id, {
       $set: {
         status: "active",
@@ -857,20 +878,25 @@ export async function POST(req) {
     };
 
     console.log(
-      `✅ [Make-up] Group created & activated: ${newGroup.code} for student ${student.personalInfo?.fullName} (${deliveryMode})`,
+      `✅ [Make-up] Group created & activated: ${newGroup.code} for student ${student.personalInfo?.fullName} (${deliveryMode})${isAdultStudent ? " [ADULT — no guardian]" : ""}`,
     );
 
     return NextResponse.json(
       {
         success: true,
         message: "تم إنشاء الحصة التعويضية وتفعيلها بنجاح",
+        // ✅ نرجّع isAdult عشان الفرونت يتأكد
+        isAdult: isAdultStudent,
         // نتيجة كل رسالة: { student | guardian | instructor: { sent, error } }
+        // ✅ للطالب البالغ: guardian = { sent: false, error: "skipped_adult_student" }
         notifications: {
           success: notifications.success,
           reason: notifications.reason || null,
+          isAdult: isAdultStudent,
           results: notifications.results || {},
         },
         data: {
+          isAdult: isAdultStudent,
           group: {
             _id: populatedGroup._id,
             name: populatedGroup.name,
@@ -893,6 +919,9 @@ export async function POST(req) {
             _id: student._id,
             name: student.personalInfo?.fullName || "",
             enrollmentNumber: student.enrollmentNumber || "",
+            // ✅ نرجّع نوع الطالب
+            studentType: student.studentType || "kids",
+            isAdult: isAdultStudent,
           },
           originalSession: {
             _id: originalSession._id,

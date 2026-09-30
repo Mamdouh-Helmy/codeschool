@@ -2264,6 +2264,7 @@ export function replaceVariables(message, variables) {
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ getTemplatesForEvent
 // ✅ NEW: بيرجع القوالب الصح حسب نوع الطالب (kids/adults)
+// ✅ NEW: بيدعم الـ Offline templates كمان (24h + 30min)
 // ═══════════════════════════════════════════════════════════════════════════
 export async function getTemplatesForEvent(eventType, student, extraData = {}) {
   try {
@@ -2285,6 +2286,8 @@ export async function getTemplatesForEvent(eventType, student, extraData = {}) {
         studentTemplateType = "session_postponed_student";
         guardianTemplateType = isAdult ? null : "session_postponed_guardian";
         break;
+
+      // ─── Online Reminders ──────────────────────────────────────
       case "reminder_24h":
         studentTemplateType = isAdult
           ? "reminder_24h_adult"
@@ -2298,6 +2301,26 @@ export async function getTemplatesForEvent(eventType, student, extraData = {}) {
           : "reminder_15min_student";
         guardianTemplateType = isAdult ? null : "reminder_15min_guardian";
         break;
+
+      // ─── ✅ NEW: Offline Reminders ─────────────────────────────
+      case "reminder_24h_offline":
+        studentTemplateType = isAdult
+          ? "reminder_24h_offline_adult"
+          : "reminder_24h_offline_student";
+        guardianTemplateType = isAdult
+          ? null
+          : "reminder_24h_offline_guardian";
+        break;
+      case "reminder_30min_offline":
+        studentTemplateType = isAdult
+          ? "reminder_30min_offline_adult"
+          : "reminder_30min_offline_student";
+        guardianTemplateType = isAdult
+          ? null
+          : "reminder_30min_offline_guardian";
+        break;
+      // ──────────────────────────────────────────────────────────
+
       case "student_welcome":
         studentTemplateType = "student_welcome";
         guardianTemplateType = isAdult ? null : "guardian_notification";
@@ -3375,10 +3398,10 @@ export async function onSessionStatusChanged(
 // ✅ NEW (Kids/Adults):
 //   - kids → reminder_24h_student/guardian (زي ما كان)
 //   - adults → reminder_24h_adult (للطالب فقط)
-// ✅ NEW (Guard):
-//   - لو الجلسة Offline → نرفض ونرجع reason: "not_online_session"
-//     عشان نمنع إرسال قوالب Online لسيشن Offline بالغلط.
-//   - المصدر الأساسي لـ mode هو group.deliveryMode (Source of Truth).
+// ✅ NEW (Online/Offline):
+//   - بيقبل metadata.isOffline: true → يستخدم قوالب الـ Offline
+//   - الـ Online guard بيتخطى لما isOffline = true
+//   - لو الجروب Offline + المودال مطلبش offline → نرفض
 // ═══════════════════════════════════════════════════════════════════════════
 export async function sendManualSessionReminder(
   sessionId,
@@ -3396,18 +3419,18 @@ export async function sendManualSessionReminder(
     const group = session.groupId;
 
     // ═══════════════════════════════════════════════════════════════
-    // ✅ NEW: Guard — نتأكد إن الجلسة Online قبل ما نكمل
-    //    (المفروض الـ cron مايناديش الدالة دي لسيشن offline،
-    //     لكن ده خط دفاع إضافي ضد التصنيف الغلط).
-    //    نعتمد على group.deliveryMode أولًا كـ Source of Truth،
-    //    وبعدين session.deliveryMode كـ fallback.
+    // ✅ تحديد الـ delivery mode
+    //    Source of Truth: group.deliveryMode → ثم session.deliveryMode
+    //    + دعم force offline من المودال (metadata.isOffline)
     // ═══════════════════════════════════════════════════════════════
     const deliveryMode =
       group?.deliveryMode || session.deliveryMode || "online";
+    const forceOffline = metadata?.isOffline === true;
 
-    if (deliveryMode === "offline") {
+    // ✅ لو الجروب Offline والمودال مطلبش offline → نرفض (حماية)
+    if (deliveryMode === "offline" && !forceOffline) {
       console.warn(
-        `⏭️ [GUARD] sendManualSessionReminder skipped — session is OFFLINE (${sessionId}). Use sendOfflineLocationReminder / sendOfflineDropoffAlert / sendOfflinePreAttendancePing instead.`,
+        `⏭️ [GUARD] sendManualSessionReminder skipped — session is OFFLINE (${sessionId}). Use offline reminder instead.`,
       );
       return {
         success: false,
@@ -3421,7 +3444,10 @@ export async function sendManualSessionReminder(
       };
     }
 
-    // ── Hold Guard (زي ما هو) ──
+    // ✅ الفعلي: offline لو الجروب أوفلاين أو المودال طلب
+    const isOfflineMode = deliveryMode === "offline" || forceOffline;
+
+    // ── Hold Guard ──
     const holdCheck = await canSessionSendMessages(sessionId);
     if (!holdCheck.ok) {
       console.log(
@@ -3443,7 +3469,8 @@ export async function sendManualSessionReminder(
       isDeleted: false,
     }).lean();
 
-    if (students.length === 0) return { success: false, reason: "No students found" };
+    if (students.length === 0)
+      return { success: false, reason: "No students found" };
 
     let successCount = 0;
     let failCount = 0;
@@ -3460,20 +3487,61 @@ export async function sendManualSessionReminder(
           student,
           group,
           session,
+          {
+            isOffline: isOfflineMode,
+            // لو offline: مرر معلومات المكان
+            ...(isOfflineMode
+              ? {
+                  placeName:
+                    group?.locationDetails?.placeName ||
+                    group?.location ||
+                    "",
+                  address:
+                    group?.locationDetails?.address ||
+                    group?.locationDetails?.extraDetails ||
+                    "",
+                }
+              : {}),
+          },
         );
 
         const studentIdStr = student._id.toString();
 
-        // ✅ تحديد templates حسب النوع
-        const studentTemplateType = isAdult
-          ? (is24h ? "reminder_24h_adult" : "reminder_15min_adult")
-          : (is24h ? "reminder_24h_student" : "reminder_15min_student");
+        // ═════════════════════════════════════════════════════════
+        // ✅ تحديد templates حسب Offline/Online + Kids/Adults
+        // ═════════════════════════════════════════════════════════
+        let studentTemplateType;
+        if (isOfflineMode) {
+          if (isAdult) {
+            studentTemplateType = is24h
+              ? "reminder_24h_offline_adult"
+              : "reminder_30min_offline_adult";
+          } else {
+            studentTemplateType = is24h
+              ? "reminder_24h_offline_student"
+              : "reminder_30min_offline_student";
+          }
+        } else {
+          if (isAdult) {
+            studentTemplateType = is24h
+              ? "reminder_24h_adult"
+              : "reminder_15min_adult";
+          } else {
+            studentTemplateType = is24h
+              ? "reminder_24h_student"
+              : "reminder_15min_student";
+          }
+        }
 
-        const guardianTemplateType = is24h
-          ? "reminder_24h_guardian"
-          : "reminder_15min_guardian";
+        const guardianTemplateType = isOfflineMode
+          ? is24h
+            ? "reminder_24h_offline_guardian"
+            : "reminder_30min_offline_guardian"
+          : is24h
+            ? "reminder_24h_guardian"
+            : "reminder_15min_guardian";
 
-        // ── Student message ──
+        // ── Student message ──────────────────────────────────────
         let finalStudentMessage = "";
         const perStudentTemplate = metadata?.studentMessages?.[studentIdStr];
         const sharedStudentTemplate = metadata?.studentMessage;
@@ -3482,7 +3550,10 @@ export async function sendManualSessionReminder(
           finalStudentMessage = replaceVariables(perStudentTemplate, variables);
         } else if (sharedStudentTemplate) {
           if (language === "ar") {
-            finalStudentMessage = replaceVariables(sharedStudentTemplate, variables);
+            finalStudentMessage = replaceVariables(
+              sharedStudentTemplate,
+              variables,
+            );
           } else {
             const template = await getMessageTemplate(
               studentTemplateType,
@@ -3500,25 +3571,35 @@ export async function sendManualSessionReminder(
           finalStudentMessage = replaceVariables(template.content, variables);
         }
 
-        // ── Guardian message ──
+        // ── Guardian message ────────────────────────────────────
         // ✅ للـ adults → مش هنبعت رسالة لولي أمر خالص
         let finalGuardianMessage = "";
         if (!isAdult) {
-          const perGuardianTemplate = metadata?.guardianMessages?.[studentIdStr];
+          const perGuardianTemplate =
+            metadata?.guardianMessages?.[studentIdStr];
           const sharedGuardianTemplate = metadata?.guardianMessage;
 
           if (perGuardianTemplate) {
-            finalGuardianMessage = replaceVariables(perGuardianTemplate, variables);
+            finalGuardianMessage = replaceVariables(
+              perGuardianTemplate,
+              variables,
+            );
           } else if (sharedGuardianTemplate) {
             if (language === "ar") {
-              finalGuardianMessage = replaceVariables(sharedGuardianTemplate, variables);
+              finalGuardianMessage = replaceVariables(
+                sharedGuardianTemplate,
+                variables,
+              );
             } else {
               const template = await getMessageTemplate(
                 guardianTemplateType,
                 "en",
                 "guardian",
               );
-              finalGuardianMessage = replaceVariables(template.content, variables);
+              finalGuardianMessage = replaceVariables(
+                template.content,
+                variables,
+              );
             }
           } else {
             const template = await getMessageTemplate(
@@ -3543,12 +3624,18 @@ export async function sendManualSessionReminder(
             groupId: group._id,
             reminderType,
             isAdult,
+            isOffline: isOfflineMode,
           },
         });
 
         if (result.success) {
           successCount++;
-          notificationResults.push({ ...result, language, isAdult });
+          notificationResults.push({
+            ...result,
+            language,
+            isAdult,
+            isOffline: isOfflineMode,
+          });
         } else {
           failCount++;
         }
@@ -3558,33 +3645,64 @@ export async function sendManualSessionReminder(
       }
     }
 
+    // ── Update automation events (للـ cron بس) ──
     if (metadata?.automatedCron && successCount > 0) {
       try {
         let updateField = {};
-        if (reminderType === "24hours") {
-          updateField = {
-            "automationEvents.reminder24hSent": true,
-            "automationEvents.reminder24hSentAt": new Date(),
-            "automationEvents.reminder24hStudentsNotified": successCount,
-            "automationEvents.reminderSent": true,
-            "automationEvents.reminderSentAt": new Date(),
-            "automationEvents.reminderStats.total24hSent": successCount,
-            "automationEvents.reminderStats.total24hFailed": failCount,
-          };
+
+        if (isOfflineMode) {
+          // ✅ Offline flags
+          if (is24h) {
+            updateField = {
+              "automationEvents.reminder24hOfflineSent": true,
+              "automationEvents.reminder24hOfflineSentAt": new Date(),
+              "automationEvents.reminder24hOfflineStudentsNotified":
+                successCount,
+              "automationEvents.reminderStatsOffline.total24hSent":
+                successCount,
+              "automationEvents.reminderStatsOffline.total24hFailed":
+                failCount,
+            };
+          } else {
+            updateField = {
+              "automationEvents.reminder30minOfflineSent": true,
+              "automationEvents.reminder30minOfflineSentAt": new Date(),
+              "automationEvents.reminder30minOfflineStudentsNotified":
+                successCount,
+              "automationEvents.reminderStatsOffline.total30minSent":
+                successCount,
+              "automationEvents.reminderStatsOffline.total30minFailed":
+                failCount,
+            };
+          }
         } else {
-          updateField = {
-            "automationEvents.reminder15minSent": true,
-            "automationEvents.reminder15minSentAt": new Date(),
-            "automationEvents.reminder15minStudentsNotified": successCount,
-            "automationEvents.reminder1hSent": true,
-            "automationEvents.reminder1hSentAt": new Date(),
-            "automationEvents.reminder1hStudentsNotified": successCount,
-            "automationEvents.reminderSent": true,
-            "automationEvents.reminderSentAt": new Date(),
-            "automationEvents.reminderStats.total1hSent": successCount,
-            "automationEvents.reminderStats.total1hFailed": failCount,
-          };
+          // ✅ Online flags (زي ما كان)
+          if (is24h) {
+            updateField = {
+              "automationEvents.reminder24hSent": true,
+              "automationEvents.reminder24hSentAt": new Date(),
+              "automationEvents.reminder24hStudentsNotified": successCount,
+              "automationEvents.reminderSent": true,
+              "automationEvents.reminderSentAt": new Date(),
+              "automationEvents.reminderStats.total24hSent": successCount,
+              "automationEvents.reminderStats.total24hFailed": failCount,
+            };
+          } else {
+            updateField = {
+              "automationEvents.reminder15minSent": true,
+              "automationEvents.reminder15minSentAt": new Date(),
+              "automationEvents.reminder15minStudentsNotified": successCount,
+              "automationEvents.reminder1hSent": true,
+              "automationEvents.reminder1hSentAt": new Date(),
+              "automationEvents.reminder1hStudentsNotified": successCount,
+              "automationEvents.reminderSent": true,
+              "automationEvents.reminderSentAt": new Date(),
+              "automationEvents.reminderStats.total1hSent": successCount,
+              "automationEvents.reminderStats.total1hFailed": failCount,
+            };
+          }
         }
+
         await Session.findByIdAndUpdate(sessionId, { $set: updateField });
       } catch (markError) {
         console.error(
@@ -3600,6 +3718,7 @@ export async function sendManualSessionReminder(
       successCount,
       failCount,
       reminderType,
+      isOffline: isOfflineMode,
       notificationResults,
     };
   } catch (error) {
