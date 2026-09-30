@@ -159,13 +159,12 @@ const groupSchema = new mongoose.Schema(
       createdAt: { type: Date, default: null },
     },
 
-    // ✅ نوع الجروب (Kids / Adults / Mixed)
-    groupType: {
-      type: String,
-      enum: ["kids", "adults", "mixed"],
-      default: "mixed",
-      index: true,
-    },
+   groupType: {
+  type: String,
+  enum: ["kids", "adults"],
+  default: "kids", // غيّرها لـ "adults" لو ده الأنسب عندك
+  index: true,
+},
 
     // ✅ نوع الجروب: أونلاين ولا أوفلاين
     deliveryMode: {

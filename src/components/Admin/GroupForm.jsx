@@ -6,7 +6,7 @@ import {
   User, Bell, CheckCircle, Hash, AlertCircle, ChevronDown,
   ChevronRight, ChevronLeft, Layers, Copy, Tag,
   MessageCircle, Sparkles, Clock, GraduationCap, Mail, Globe, MapPin, Building2,
-  Loader2,
+  Loader2, Info,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -15,10 +15,10 @@ import MapLocationPicker from "./MapLocationPicker";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STEPS = [
-  { id: "basic",       icon: Hash,     color: "primary"   },
-  { id: "instructors", icon: User,     color: "secondary" },
-  { id: "schedule",    icon: Calendar, color: "coral"     },
-  { id: "automation",  icon: Bell,     color: "amber"     },
+  { id: "basic", icon: Hash, color: "primary" },
+  { id: "instructors", icon: User, color: "secondary" },
+  { id: "schedule", icon: Calendar, color: "coral" },
+  { id: "automation", icon: Bell, color: "amber" },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -26,25 +26,17 @@ const STEPS = [
 // ═══════════════════════════════════════════════════════════════
 const GROUP_TYPES = [
   {
-    value: "mixed",
-    label_ar: "مختلط",
-    label_en: "Mixed",
-    desc_ar: "يجوز إضافة أطفال وبالغين",
-    desc_en: "Kids and adults allowed",
-    emoji: "👥",
-  },
-  {
     value: "kids",
-    label_ar: "أطفال فقط",
-    label_en: "Kids Only",
+    label_ar: "أطفال",
+    label_en: "Kids",
     desc_ar: "جروب مخصص للأطفال",
     desc_en: "Kids only",
     emoji: "🧒",
   },
   {
     value: "adults",
-    label_ar: "بالغين فقط",
-    label_en: "Adults Only",
+    label_ar: "بالغين",
+    label_en: "Adults",
     desc_ar: "جروب مخصص للبالغين",
     desc_en: "Adults only",
     emoji: "🧑",
@@ -91,12 +83,12 @@ const COLOR = {
 };
 
 const AUTOMATION_META = {
-  whatsappEnabled:          { icon: MessageCircle },
-  welcomeMessage:           { icon: Sparkles      },
-  reminderEnabled:          { icon: Bell          },
-  notifyGuardianOnAbsence:  { icon: AlertCircle   },
-  notifyOnSessionUpdate:    { icon: Calendar      },
-  completionMessage:        { icon: CheckCircle   },
+  whatsappEnabled: { icon: MessageCircle },
+  welcomeMessage: { icon: Sparkles },
+  reminderEnabled: { icon: Bell },
+  notifyGuardianOnAbsence: { icon: AlertCircle },
+  notifyOnSessionUpdate: { icon: Calendar },
+  completionMessage: { icon: CheckCircle },
 };
 
 const ENGLISH_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -129,8 +121,8 @@ function getUniqueLessonGroups(lessons) {
 function buildInitialForm(initial) {
   return {
     name: initial?.name || "",
-    // ✅ NEW: نوع الجروب
-    groupType: initial?.groupType || "mixed",
+    // نوع الجروب: kids أو adults بس. الجروبات القديمة "mixed" بترجع فاضية عشان الأدمن يحدد
+    groupType: ["kids", "adults"].includes(initial?.groupType) ? initial.groupType : "",
     courseId: initial?.courseId?._id || initial?.courseId || initial?.course?.id || initial?.course?._id || "",
     instructors: initial?.instructors?.map(i => (i._id || i.id || i)?.toString()) || [],
     maxStudents: initial?.maxStudents || 25,
@@ -151,13 +143,13 @@ function buildInitialForm(initial) {
       extraDetails: initial?.locationDetails?.extraDetails || initial?.location || "",
     },
     automation: {
-      whatsappEnabled:         initial?.automation?.whatsappEnabled ?? true,
-      welcomeMessage:          initial?.automation?.welcomeMessage ?? true,
-      reminderEnabled:         initial?.automation?.reminderEnabled ?? true,
-      reminderBeforeHours:     initial?.automation?.reminderBeforeHours || 24,
+      whatsappEnabled: initial?.automation?.whatsappEnabled ?? true,
+      welcomeMessage: initial?.automation?.welcomeMessage ?? true,
+      reminderEnabled: initial?.automation?.reminderEnabled ?? true,
+      reminderBeforeHours: initial?.automation?.reminderBeforeHours || 24,
       notifyGuardianOnAbsence: initial?.automation?.notifyGuardianOnAbsence ?? true,
-      notifyOnSessionUpdate:   initial?.automation?.notifyOnSessionUpdate ?? true,
-      completionMessage:       initial?.automation?.completionMessage ?? true,
+      notifyOnSessionUpdate: initial?.automation?.notifyOnSessionUpdate ?? true,
+      completionMessage: initial?.automation?.completionMessage ?? true,
     },
     moduleSelection: initial?.moduleSelection || { mode: "all", selectedModules: [] },
     tags: initial?.tags?.map(t => t._id || t) || [],
@@ -181,18 +173,15 @@ function SectionHeading({ icon: Icon, title, badge, badgeTone = "primary" }) {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════
-// ✅ NEW: Group Type Selector (Kids / Adults / Mixed)
-// ═══════════════════════════════════════════════════════════════
 function GroupTypeSelector({ value, onChange, t, language }) {
   return (
     <div className={`${cardCls} p-4`}>
       <SectionHeading
         icon={Users}
-        title={t("groups.form.groupType") || "نوع الجروب"}
+        title={`${t("groups.form.groupType") || "نوع الجروب"} *`}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         {GROUP_TYPES.map((gt) => {
           const active = value === gt.value;
           return (
@@ -200,18 +189,16 @@ function GroupTypeSelector({ value, onChange, t, language }) {
               key={gt.value}
               type="button"
               onClick={() => onChange(gt.value)}
-              className={`text-start flex items-start gap-3 p-3.5 rounded-2xl border transition-all ${
-                active
+              className={`text-start flex items-start gap-3 p-3.5 rounded-2xl border transition-all ${active
                   ? "border-primary/50 bg-primary/5 dark:bg-primary/15 shadow-sm"
                   : "border-PowderBlueBorder dark:border-dark_border hover:bg-IcyBreeze dark:hover:bg-dark_input"
-              }`}
+                }`}
             >
               <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl ${
-                  active
+                className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl ${active
                     ? "bg-gradient-to-br from-primary to-orange-deep"
                     : "bg-primary/10 dark:bg-primary/20"
-                }`}
+                  }`}
               >
                 <span>{gt.emoji}</span>
               </div>
@@ -231,7 +218,7 @@ function GroupTypeSelector({ value, onChange, t, language }) {
         })}
       </div>
 
-      {value !== "mixed" && (
+      {value && (
         <p className="text-[11px] text-primary mt-3 flex items-center gap-1">
           <Info className="w-3.5 h-3.5 flex-shrink-0" />
           {value === "kids"
@@ -276,7 +263,7 @@ function DeliveryModeSelector({ mode, locationDetails, onChangeMode, onChangeLoc
               className={`text-start flex items-start gap-3 p-3.5 rounded-2xl border transition-all ${active
                 ? "border-primary/50 bg-primary/5 dark:bg-primary/15 shadow-sm"
                 : "border-PowderBlueBorder dark:border-dark_border hover:bg-IcyBreeze dark:hover:bg-dark_input"
-              }`}
+                }`}
             >
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${active ? "bg-gradient-to-br from-primary to-orange-deep" : "bg-primary/10 dark:bg-primary/20"}`}>
                 <Icon className={`w-4.5 h-4.5 ${active ? "text-white" : "text-primary"}`} />
@@ -367,7 +354,7 @@ function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t, g
               className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${active
                 ? "bg-gradient-to-r from-secondary to-teal-dark text-white shadow-sm"
                 : "text-SlateBlueText dark:text-darktext hover:bg-white dark:hover:bg-black/20"
-              }`}
+                }`}
             >
               {t(`groups.form.${mode === "all" ? "allModules" : "specificModules"}`)}
             </button>
@@ -537,9 +524,9 @@ function CurriculumView({ curriculum, moduleSelection, expandedModules, onToggle
 
       <div className="mt-3 pt-3 border-t border-PowderBlueBorder dark:border-dark_border grid grid-cols-3 gap-2">
         {[
-          { label: t("groups.form.totalModules"),  val: curriculum.length,  color: "text-primary" },
-          { label: t("groups.form.totalLessons"),  val: totalLessons,        color: "text-secondary dark:text-white" },
-          { label: t("groups.form.totalSessions"), val: totalSessions,       color: "text-orange-coral" },
+          { label: t("groups.form.totalModules"), val: curriculum.length, color: "text-primary" },
+          { label: t("groups.form.totalLessons"), val: totalLessons, color: "text-secondary dark:text-white" },
+          { label: t("groups.form.totalSessions"), val: totalSessions, color: "text-orange-coral" },
         ].map(({ label, val, color }) => (
           <div key={label} className="bg-white dark:bg-darkmode rounded-xl p-2.5 text-center border border-PowderBlueBorder dark:border-dark_border">
             <p className="text-[10px] text-SlateBlueText dark:text-darktext">{label}</p>
@@ -858,6 +845,12 @@ export default function GroupForm({ initial, onClose, onSaved }) {
       return;
     }
 
+    if (!form.groupType) {
+      toast.error(t("groups.form.errors.groupTypeRequired") || "لازم تحدد نوع الجروب (أطفال أو بالغين)");
+      setStep(0);
+      return;
+    }
+
     setLoading(true);
     setScheduleConflicts([]);
     setLinkConflicts([]);
@@ -981,13 +974,12 @@ export default function GroupForm({ initial, onClose, onSaved }) {
             return (
               <button key={s.id} type="button" onClick={() => goTo(i)}
                 className="relative z-10 flex flex-col items-center gap-1.5 transition-all group">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 border-4 border-white dark:border-darkmode ${
-                  done
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 border-4 border-white dark:border-darkmode ${done
                     ? `bg-gradient-to-br ${dc.btn} text-white shadow-md`
                     : active
-                    ? `bg-gradient-to-br ${dc.btn} text-white shadow-lg scale-110`
-                    : "bg-gray-100 dark:bg-dark_input text-gray-400 dark:text-darkmuted group-hover:bg-gray-200 dark:group-hover:bg-dark_border"
-                }`}>
+                      ? `bg-gradient-to-br ${dc.btn} text-white shadow-lg scale-110`
+                      : "bg-gray-100 dark:bg-dark_input text-gray-400 dark:text-darkmuted group-hover:bg-gray-200 dark:group-hover:bg-dark_border"
+                  }`}>
                   {done ? (
                     <CheckCircle className="w-4.5 h-4.5" />
                   ) : (
@@ -1014,9 +1006,8 @@ export default function GroupForm({ initial, onClose, onSaved }) {
       {/* Step content */}
       <div className="flex-1 overflow-y-auto">
         <div
-          className={`p-5 transition-all duration-200 ${
-            visible ? "opacity-100 translate-x-0" : "opacity-0"
-          }`}
+          className={`p-5 transition-all duration-200 ${visible ? "opacity-100 translate-x-0" : "opacity-0"
+            }`}
           style={{ transform: visible ? "translateX(0)" : `translateX(${animDir > 0 ? "20px" : "-20px"})` }}
         >
 
@@ -1128,11 +1119,10 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                           key={tag._id}
                           type="button"
                           onClick={() => toggleTag(tag._id)}
-                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ring-1 ring-inset ${
-                            isSel
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ring-1 ring-inset ${isSel
                               ? "text-white ring-transparent shadow-sm"
                               : "bg-gray-50 dark:bg-dark_input text-gray-600 dark:text-darktext ring-gray-200 dark:ring-dark_border"
-                          }`}
+                            }`}
                           style={isSel ? { backgroundColor: tag.color } : {}}
                         >
                           <span
@@ -1177,15 +1167,13 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                         key={inst._id || inst.id}
                         type="button"
                         onClick={() => toggleInstructor(inst._id || inst.id)}
-                        className={`text-start flex items-center gap-3 p-3 rounded-2xl border transition-all ${
-                          isSel
+                        className={`text-start flex items-center gap-3 p-3 rounded-2xl border transition-all ${isSel
                             ? "border-secondary/50 bg-secondary/5 dark:bg-secondary/15 shadow-sm"
                             : "border-PowderBlueBorder dark:border-dark_border hover:bg-IcyBreeze dark:hover:bg-dark_input"
-                        }`}
+                          }`}
                       >
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                          isSel ? "bg-gradient-to-br from-secondary to-teal-dark" : "bg-secondary/10 dark:bg-secondary/20"
-                        }`}>
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isSel ? "bg-gradient-to-br from-secondary to-teal-dark" : "bg-secondary/10 dark:bg-secondary/20"
+                          }`}>
                           <User className={`w-4 h-4 ${isSel ? "text-white" : "text-secondary"}`} />
                         </div>
                         <div className="flex-1 min-w-0">
@@ -1267,11 +1255,10 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                           type="button"
                           disabled={scheduleLocked}
                           onClick={() => toggleDay(day)}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                            isSel
+                          className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${isSel
                               ? "bg-gradient-to-r from-orange-coral to-primary text-white shadow-sm"
                               : "bg-gray-100 dark:bg-dark_input text-gray-600 dark:text-darktext hover:bg-gray-200 dark:hover:bg-dark_border"
-                          }`}
+                            }`}
                         >
                           {day}
                           {isFirst && isSel && <span className="ml-1 text-[10px]">✓</span>}

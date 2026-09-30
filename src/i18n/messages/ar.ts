@@ -4963,6 +4963,23 @@ const ar = {
   "groups.form.scheduleLocked": "الجدول مقفل",
   "groups.form.scheduleLockedDesc": "لا يمكن تعديل الجدول بعد بدء المجموعة.",
   "groups.form.effectiveFrom": "ساري من",
+  "groups.form.automation.reminderBeforeHours": "التذكير قبل الموعد بعدد ساعات",
+  "groups.form.automation.reminderEnabledDesc": "تفعيل التذكيرات التلقائية",
+  "groups.form.automation.welcomeMessageDesc":
+    "إرسال رسالة ترحيبية تلقائية للمشاركين",
+  "groups.form.automation.whatsappEnabledDesc": "تفعيل إشعارات واتساب",
+  "groups.form.automation.notifyGuardianOnAbsenceDesc":
+    "إخطار ولي الأمر عند الغياب",
+  "groups.form.automation.notifyOnSessionUpdateDesc":
+    "إخطار المشاركين عند تحديث الجلسة",
+  "groups.form.automation.completionMessageDesc":
+    "إرسال رسالة تلقائية عند إكمال المجموعة",
+  "groups.form.timezone": "المنطقة الزمنية",
+  "groups.form.daysHint": "اختر أيام انعقاد المجموعة",
+  "groups.filters.allGroupTypes": "جميع أنواع المجموعات",
+  "groups.groupType.kids": "أطفال",
+  "groups.groupType.adults": "بالغون",
+  "groups.groupType.mixed": "مختلطة",
 };
 
 export default ar;

@@ -4850,6 +4850,23 @@ const en = {
   "groups.form.scheduleLockedDesc":
     "The schedule cannot be modified after the group starts.",
   "groups.form.effectiveFrom": "Effective From",
+  "groups.form.automation.reminderBeforeHours": "Reminder Before (Hours)",
+  "groups.form.automation.reminderEnabledDesc": "Enable automatic reminders",
+  "groups.form.automation.welcomeMessageDesc":
+    "Send an automatic welcome message to participants",
+  "groups.form.automation.whatsappEnabledDesc": "Enable WhatsApp notifications",
+  "groups.form.automation.notifyGuardianOnAbsenceDesc":
+    "Notify the guardian when absent",
+  "groups.form.automation.notifyOnSessionUpdateDesc":
+    "Notify participants when the session is updated",
+  "groups.form.automation.completionMessageDesc":
+    "Send an automatic message when the group is completed",
+  "groups.form.timezone": "Timezone",
+  "groups.form.daysHint": "Select the days for the group sessions",
+  "groups.filters.allGroupTypes": "All Group Types",
+  "groups.groupType.kids": "Kids",
+  "groups.groupType.adults": "Adults",
+  "groups.groupType.mixed": "Mixed",
 };
 
 export default en;
