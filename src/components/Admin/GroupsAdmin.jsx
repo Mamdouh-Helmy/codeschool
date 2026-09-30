@@ -58,10 +58,8 @@ const INITIAL_STATS = {
     cancelled: 0,
     onHold: 0,
     makeup: 0,
-    // ✅ NEW
     kids: 0,
     adults: 0,
-    mixed: 0,
 };
 
 const DEFAULT_PENDING_ACTIVATION = {
@@ -199,7 +197,6 @@ export default function GroupsAdmin() {
     const groupTypeLabels = useMemo(() => ({
         kids: t("groups.groupType.kids") || "Kids",
         adults: t("groups.groupType.adults") || "Adults",
-        mixed: t("groups.groupType.mixed") || "Mixed",
     }), [t]);
 
     const statsConfig = useMemo(() => [
@@ -816,7 +813,6 @@ export default function GroupsAdmin() {
                             <option value="">{t("groups.filters.allGroupTypes") || "All Types"}</option>
                             <option value="kids">🧒 {groupTypeLabels.kids}</option>
                             <option value="adults">🧑 {groupTypeLabels.adults}</option>
-                            <option value="mixed">👥 {groupTypeLabels.mixed}</option>
                         </select>
                         <ChevronDown className={`absolute ${isRTL ? "left-3" : "right-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none`} />
                     </div>
@@ -824,8 +820,8 @@ export default function GroupsAdmin() {
                     <button
                         onClick={() => setShowAdvancedFilters((v) => !v)}
                         className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${showAdvancedFilters
-                                ? "bg-primary text-white shadow-md shadow-primary/20"
-                                : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
+                            ? "bg-primary text-white shadow-md shadow-primary/20"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
                             }`}
                     >
                         <SlidersHorizontal className="w-4 h-4" />
@@ -855,8 +851,8 @@ export default function GroupsAdmin() {
                                             key={status}
                                             onClick={() => toggleStatus(status)}
                                             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ${filters.status.includes(status)
-                                                    ? STATUS_COLORS[status]
-                                                    : "bg-gray-50 text-gray-500 ring-1 ring-inset ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700"
+                                                ? STATUS_COLORS[status]
+                                                : "bg-gray-50 text-gray-500 ring-1 ring-inset ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700"
                                                 }`}
                                         >
                                             <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[status]}`} />
@@ -880,8 +876,8 @@ export default function GroupsAdmin() {
                                             key={opt.value}
                                             onClick={() => handleFilterChange("capacity", opt.value)}
                                             className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${filters.capacity === opt.value
-                                                    ? "bg-primary text-white shadow-sm"
-                                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
+                                                ? "bg-primary text-white shadow-sm"
+                                                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
                                                 }`}
                                         >
                                             {opt.label}
@@ -904,8 +900,8 @@ export default function GroupsAdmin() {
                                             key={opt.value}
                                             onClick={() => handleFilterChange("sessionsGenerated", opt.value)}
                                             className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${filters.sessionsGenerated === opt.value
-                                                    ? "bg-primary text-white shadow-sm"
-                                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
+                                                ? "bg-primary text-white shadow-sm"
+                                                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
                                                 }`}
                                         >
                                             {opt.label}
@@ -926,8 +922,8 @@ export default function GroupsAdmin() {
                                         key={day}
                                         onClick={() => toggleDay(day)}
                                         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filters.daysOfWeek.includes(day)
-                                                ? "bg-primary text-white shadow-sm shadow-primary/20"
-                                                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
+                                            ? "bg-primary text-white shadow-sm shadow-primary/20"
+                                            : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
                                             }`}
                                     >
                                         {dayLabels[day]}
@@ -949,8 +945,8 @@ export default function GroupsAdmin() {
                                             key={tag._id}
                                             onClick={() => toggleTagFilter(tag._id)}
                                             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ring-1 ring-inset ${selected
-                                                    ? "text-white ring-transparent shadow-sm"
-                                                    : "bg-gray-100 text-gray-600 ring-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:ring-gray-600"
+                                                ? "text-white ring-transparent shadow-sm"
+                                                : "bg-gray-100 text-gray-600 ring-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:ring-gray-600"
                                                 }`}
                                             style={selected ? { backgroundColor: tag.color } : {}}
                                         >
@@ -1335,7 +1331,7 @@ function GroupRow({
     const hasLinkIssue = !isOffline && !!group.linkHealth?.hasIssue;
     const isOnHold = !!group.isOnHold;
     const isMakeup = !!group.isMakeupGroup;
-    const groupType = group.groupType || "mixed";
+    const groupType = group.groupType;
     const linkIssueLabel = !isOffline && group.linkHealth?.orphanedCount > 0
         ? (t("groups.links.orphaned") || "لينك محذوف من الداتابيز")
         : (t("groups.links.missing") || "جلسات بدون لينك");
@@ -1365,17 +1361,16 @@ function GroupRow({
                     <p className="font-semibold text-sm text-MidnightNavyText dark:text-white">{group.name}</p>
 
                     {/* ✅ NEW: بادج نوع الجروب (Kids/Adults فقط، مش Mixed) */}
-                    {groupType && groupType !== "mixed" && (
+                    {(groupType === "kids" || groupType === "adults") && (
                         <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                groupType === "kids"
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${groupType === "kids"
                                     ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20"
                                     : "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/20"
-                            }`}
-                            title={groupTypeLabels[groupType] || groupType}
+                                }`}
+                            title={groupTypeLabels[groupType]}
                         >
                             {groupType === "kids" ? "🧒" : "🧑"}
-                            {groupTypeLabels[groupType] || groupType}
+                            {groupTypeLabels[groupType]}
                         </span>
                     )}
 
@@ -1648,8 +1643,8 @@ function Pagination({ pagination, t, isRTL, onPageChange }) {
                                     onClick={() => onPageChange(p)}
                                     aria-current={p === page ? "page" : undefined}
                                     className={`w-8 h-8 rounded-lg text-xs font-semibold transition-all tabular-nums ${p === page
-                                            ? "bg-primary text-white shadow-sm shadow-primary/30"
-                                            : "text-MidnightNavyText dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
+                                        ? "bg-primary text-white shadow-sm shadow-primary/30"
+                                        : "text-MidnightNavyText dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
                                         }`}
                                 >
                                     {p}

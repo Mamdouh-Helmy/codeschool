@@ -13,6 +13,10 @@ import {
 } from "@/utils/sessionGenerator";
 import { getSessionsLinkHealthForGroups } from "@/utils/checkMeetingLinks";
 
+// ─── Group types ──────────────────────────────────────────────────────────
+// ✅ الجروب إما أطفال أو بالغين (مفيش mixed)
+const VALID_GROUP_TYPES = ["kids", "adults"];
+
 // ─── Helper: Check instructor schedule conflicts ──────────────────────────
 async function checkInstructorConflicts(
   instructors,
@@ -70,13 +74,6 @@ async function checkInstructorConflicts(
   return conflicts;
 }
 
-// ─── Helper: normalize groupType ──────────────────────────────────────────
-// ✅ NEW: نضمن إن القيمة من الـ enum بس، أي حاجة تانية → mixed
-function normalizeGroupType(value) {
-  const allowed = ["kids", "adults", "mixed"];
-  return allowed.includes(value) ? value : "mixed";
-}
-
 // ─── GET ──────────────────────────────────────────────────────────────────────
 export async function GET(req) {
   try {
@@ -106,7 +103,7 @@ export async function GET(req) {
     const tagsParam = searchParams.get("tags");
     // ✅ فلتر الجروبات التعويضية
     const makeupFilter = searchParams.get("isMakeupGroup"); // "true" | "false" | null
-    // ✅ NEW: فلتر نوع الجروب (kids / adults / mixed)
+    // ✅ فلتر نوع الجروب (kids / adults)
     const groupTypeFilter = searchParams.get("groupType");
 
     const query = { isDeleted: false };
@@ -167,8 +164,8 @@ export async function GET(req) {
       // نشمل الجروبات العادية + أي وثيقة قديمة مفيهاش الحقل
       query.isMakeupGroup = { $ne: true };
     }
-    // ✅ NEW: فلتر نوع الجروب (Kids / Adults / Mixed)
-    if (groupTypeFilter && ["kids", "adults", "mixed"].includes(groupTypeFilter)) {
+    // ✅ فلتر نوع الجروب (Kids / Adults)
+    if (groupTypeFilter && VALID_GROUP_TYPES.includes(groupTypeFilter)) {
       query.groupType = groupTypeFilter;
     }
 
@@ -239,8 +236,10 @@ export async function GET(req) {
         isFull: group.currentStudentsCount >= group.maxStudents,
         schedule: group.schedule,
         deliveryMode: group.deliveryMode || "online",
-        // ✅ NEW: نوع الجروب (kids / adults / mixed) — قيمة آمنة لو مش موجودة
-        groupType: group.groupType || "mixed",
+        // ✅ نوع الجروب (kids / adults) — null للجروبات القديمة اللي لسه ملهاش نوع
+        groupType: VALID_GROUP_TYPES.includes(group.groupType)
+          ? group.groupType
+          : null,
         location: group.location || "",
         locationDetails: group.locationDetails || null,
         automation: group.automation,
@@ -290,17 +289,9 @@ export async function GET(req) {
         ...query,
         isMakeupGroup: true,
       }),
-      // ✅ NEW: إحصائيات نوع الجروب
+      // ✅ إحصائيات نوع الجروب (أطفال / بالغين)
       kids: await Group.countDocuments({ ...query, groupType: "kids" }),
       adults: await Group.countDocuments({ ...query, groupType: "adults" }),
-      mixed: await Group.countDocuments({
-        ...query,
-        $or: [
-          { groupType: "mixed" },
-          { groupType: { $exists: false } },
-          { groupType: null },
-        ],
-      }),
     };
 
     return NextResponse.json({
@@ -355,7 +346,7 @@ export async function POST(req) {
       deliveryMode,
       location,
       locationDetails,
-      groupType, // ✅ NEW
+      groupType,
     } = body;
 
     if (!name || !courseId || !maxStudents || !schedule) {
@@ -364,6 +355,17 @@ export async function POST(req) {
           success: false,
           error:
             "Missing required fields: name, courseId, maxStudents, schedule",
+        },
+        { status: 400 },
+      );
+    }
+
+    // ✅ نوع الجروب إجباري: kids أو adults
+    if (!VALID_GROUP_TYPES.includes(groupType)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "لازم تحدد نوع الجروب (أطفال أو بالغين)",
         },
         { status: 400 },
       );
@@ -438,9 +440,6 @@ export async function POST(req) {
     const normalizedDeliveryMode = ["online", "offline"].includes(deliveryMode)
       ? deliveryMode
       : "online";
-
-    // ✅ NEW: normalize groupType (kids / adults / mixed)
-    const normalizedGroupType = normalizeGroupType(groupType);
 
     const hasLocationInfo =
       location?.trim() ||
@@ -548,8 +547,8 @@ export async function POST(req) {
         timezone: schedule.timezone || "Africa/Cairo",
       },
       deliveryMode: normalizedDeliveryMode,
-      // ✅ NEW: نوع الجروب
-      groupType: normalizedGroupType,
+      // ✅ نوع الجروب (kids / adults)
+      groupType,
       location:
         normalizedDeliveryMode === "offline" ? (location || "").trim() : "",
       locationDetails:
@@ -607,8 +606,7 @@ export async function POST(req) {
     const responseData = {
       ...populatedGroup,
       isMakeupGroup: false,
-      // ✅ NEW: نرجّع groupType بقيمة آمنة
-      groupType: populatedGroup.groupType || "mixed",
+      groupType: populatedGroup.groupType || null,
       instructors: (populatedGroup.instructors || []).map((i) => ({
         _id: i.userId?._id || i.userId,
         name: i.userId?.name || "",
@@ -670,6 +668,9 @@ export async function POST(req) {
 }
 
 // ─── PUT ──────────────────────────────────────────────────────────────────────
+// ⚠️ ملاحظة: الـ route ده (من غير [id]) مالوش params.id فعليًا، والـ PUT الحقيقي
+//    موجود في app/api/groups/[id]/route.js. سيبته هنا زي ما هو مع تعديل groupType،
+//    ولو مش بتستخدمه ممكن تمسحه.
 export async function PUT(req, { params }) {
   try {
     const { id } = await params;
@@ -691,8 +692,19 @@ export async function PUT(req, { params }) {
       deliveryMode,
       location,
       locationDetails,
-      groupType, // ✅ NEW
+      groupType,
     } = body;
+
+    // ✅ لو النوع اتبعت لازم يكون kids أو adults
+    if (groupType !== undefined && !VALID_GROUP_TYPES.includes(groupType)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "نوع الجروب لازم يكون أطفال أو بالغين",
+        },
+        { status: 400 },
+      );
+    }
 
     const normalizedInstructors = (instructors || []).map((i) => ({
       userId: i?.userId || i,
@@ -799,11 +811,9 @@ export async function PUT(req, { params }) {
       ? deliveryMode
       : group.deliveryMode || "online";
 
-    // ✅ NEW: normalize groupType
+    // ✅ لو النوع مش متبعت، سيب القيمة الحالية زي ما هي (متتلمسش)
     const normalizedGroupType =
-      groupType !== undefined
-        ? normalizeGroupType(groupType)
-        : group.groupType || "mixed";
+      groupType !== undefined ? groupType : null;
 
     const hasLocationInfo =
       location?.trim() ||
@@ -833,8 +843,8 @@ export async function PUT(req, { params }) {
           timezone: schedule.timezone || "Africa/Cairo",
         },
         deliveryMode: normalizedDeliveryMode,
-        // ✅ NEW: نوع الجروب
-        groupType: normalizedGroupType,
+        // ✅ نحدّث نوع الجروب بس لو اتبعت
+        ...(normalizedGroupType ? { groupType: normalizedGroupType } : {}),
         location:
           normalizedDeliveryMode === "offline" ? (location || "").trim() : "",
         locationDetails:
@@ -903,8 +913,7 @@ export async function PUT(req, { params }) {
       ...updatedGroup,
       isMakeupGroup: !!updatedGroup.isMakeupGroup,
       makeupInfo: updatedGroup.makeupInfo || null,
-      // ✅ NEW: نرجّع groupType بقيمة آمنة
-      groupType: updatedGroup.groupType || "mixed",
+      groupType: updatedGroup.groupType || null,
       instructors: (updatedGroup.instructors || []).map((i) => ({
         _id: i.userId?._id || i.userId,
         name: i.userId?.name || "",

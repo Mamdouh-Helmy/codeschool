@@ -9,6 +9,9 @@ import Tag from "../../../models/Tag";
 import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
 
+// ✅ الجروب إما أطفال أو بالغين (مفيش mixed)
+const VALID_GROUP_TYPES = ["kids", "adults"];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function getInstructorsData(instructorsArray) {
@@ -97,8 +100,10 @@ export async function GET(req, { params }) {
 
     const groupObj = {
       ...group,
-      // ✅ NEW: نرجّع groupType بقيمة افتراضية آمنة لو مش موجود
-      groupType: group.groupType || "mixed",
+      // ✅ null للجروبات القديمة اللي لسه ملهاش نوع (الأدمن يحدده من الفورم)
+      groupType: VALID_GROUP_TYPES.includes(group.groupType)
+        ? group.groupType
+        : null,
       instructors: instructorsData,
       firstMeetingLink: firstMeetingLink || null,
     };
@@ -150,12 +155,15 @@ export async function PUT(req, { params }) {
       }));
     }
 
-    // ✅ NEW: normalize groupType (kids / adults / mixed)
-    if (updateData.groupType !== undefined) {
-      const allowed = ["kids", "adults", "mixed"];
-      if (!allowed.includes(updateData.groupType)) {
-        updateData.groupType = "mixed";
-      }
+    // ✅ نوع الجروب: لو اتبعت لازم يكون kids أو adults، وإلا 400
+    if (
+      updateData.groupType !== undefined &&
+      !VALID_GROUP_TYPES.includes(updateData.groupType)
+    ) {
+      return NextResponse.json(
+        { success: false, error: "نوع الجروب لازم يكون أطفال أو بالغين" },
+        { status: 400 },
+      );
     }
 
     const metadata = existingGroup.metadata || {};
@@ -224,8 +232,9 @@ export async function PUT(req, { params }) {
 
     const responseData = {
       ...updatedGroup,
-      // ✅ NEW
-      groupType: updatedGroup.groupType || "mixed",
+      groupType: VALID_GROUP_TYPES.includes(updatedGroup.groupType)
+        ? updatedGroup.groupType
+        : null,
       instructors: (updatedGroup.instructors || []).map((i) => ({
         _id: i.userId?._id || i.userId,
         name: i.userId?.name || "",

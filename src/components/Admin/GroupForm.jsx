@@ -6,13 +6,18 @@ import {
   User, Bell, CheckCircle, Hash, AlertCircle, ChevronDown,
   ChevronRight, ChevronLeft, Layers, Copy, Tag,
   MessageCircle, Sparkles, Clock, GraduationCap, Mail, Globe, MapPin, Building2,
-  Loader2, Info,
+  Info
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
 import MapLocationPicker from "./MapLocationPicker";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+// Every color below is one of the 4 brand hues defined in tailwind.config.js:
+//   primary (#ff6700 orange) · secondary (#004d59 teal) · orange-coral (#ff6437) · amber-brand (#feaf00)
+// plus the project's own neutral/dark tokens (PowderBlueBorder, IcyBreeze, darkmode,
+// darklight, dark_input, dark_border, darktext, darkmuted, darksubtle). No outside
+// palette (blue/purple/violet/indigo/fuchsia/green/red/yellow) is used anywhere.
 
 const STEPS = [
   { id: "basic", icon: Hash, color: "primary" },
@@ -21,9 +26,7 @@ const STEPS = [
   { id: "automation", icon: Bell, color: "amber" },
 ];
 
-// ═══════════════════════════════════════════════════════════════
-// ✅ NEW: نوع الجروب (Kids / Adults / Mixed)
-// ═══════════════════════════════════════════════════════════════
+// ✅ نوع الجروب: أطفال أو بالغين
 const GROUP_TYPES = [
   {
     value: "kids",
@@ -121,7 +124,7 @@ function getUniqueLessonGroups(lessons) {
 function buildInitialForm(initial) {
   return {
     name: initial?.name || "",
-    // نوع الجروب: kids أو adults بس. الجروبات القديمة "mixed" بترجع فاضية عشان الأدمن يحدد
+    // ✅ نوع الجروب: kids أو adults بس. لو الجروب قديم ومالوش نوع بيرجع فاضي عشان الأدمن يحدده
     groupType: ["kids", "adults"].includes(initial?.groupType) ? initial.groupType : "",
     courseId: initial?.courseId?._id || initial?.courseId || initial?.course?.id || initial?.course?._id || "",
     instructors: initial?.instructors?.map(i => (i._id || i.id || i)?.toString()) || [],
@@ -173,6 +176,7 @@ function SectionHeading({ icon: Icon, title, badge, badgeTone = "primary" }) {
   );
 }
 
+// ─── Group Type Selector (Kids / Adults) ──────────────────────────────────────
 function GroupTypeSelector({ value, onChange, t, language }) {
   return (
     <div className={`${cardCls} p-4`}>
@@ -231,6 +235,8 @@ function GroupTypeSelector({ value, onChange, t, language }) {
 }
 
 // ─── Delivery Mode Selector (Online / Offline) ────────────────────────────────
+// ✅ الاختيار ده بيتحكم في بدل مواصلات المدرس: الـ offline بس بياخد بدل،
+// ولأول سيشن في اليوم بس. الـ online مفيهوش بدل خالص.
 function DeliveryModeSelector({ mode, locationDetails, onChangeMode, onChangeLocationDetails, t }) {
   const MODES = [
     {
@@ -261,8 +267,8 @@ function DeliveryModeSelector({ mode, locationDetails, onChangeMode, onChangeLoc
               type="button"
               onClick={() => onChangeMode(m.value)}
               className={`text-start flex items-start gap-3 p-3.5 rounded-2xl border transition-all ${active
-                ? "border-primary/50 bg-primary/5 dark:bg-primary/15 shadow-sm"
-                : "border-PowderBlueBorder dark:border-dark_border hover:bg-IcyBreeze dark:hover:bg-dark_input"
+                  ? "border-primary/50 bg-primary/5 dark:bg-primary/15 shadow-sm"
+                  : "border-PowderBlueBorder dark:border-dark_border hover:bg-IcyBreeze dark:hover:bg-dark_input"
                 }`}
             >
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${active ? "bg-gradient-to-br from-primary to-orange-deep" : "bg-primary/10 dark:bg-primary/20"}`}>
@@ -570,6 +576,7 @@ function ConflictAlert({ conflicts, t }) {
   );
 }
 
+// ✅ جديد: تنبيه تعارض اللينكات (شكل بيانات مختلف عن ConflictAlert بتاع الجروبات)
 function LinkConflictAlert({ conflicts, t }) {
   if (!conflicts?.length) return null;
   return (
@@ -606,7 +613,6 @@ function ToggleRow({ label, description, checked, onChange, Icon, colorCls }) {
         </div>
         <div className="min-w-0">
           <p className="text-sm font-medium text-MidnightNavyText dark:text-white truncate">{label}</p>
-          {description && <p className="text-[11px] text-SlateBlueText dark:text-darktext mt-0.5">{description}</p>}
         </div>
       </div>
       <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
@@ -685,7 +691,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
   const [reschedulePreview, setReschedulePreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [scheduleConflicts, setScheduleConflicts] = useState([]);
-  const [linkConflicts, setLinkConflicts] = useState([]);
+  const [linkConflicts, setLinkConflicts] = useState([]); // ✅ جديد: تعارض اللينكات
   const [loading, setLoading] = useState(false);
 
   const isRescheduleMode = useMemo(
@@ -693,6 +699,11 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     [isActiveWithSessions, effectiveFrom]
   );
 
+  // ✅ الجروب active وسيشناته متولدة، ولسه محددش "من تاريخ" (effectiveFrom) —
+  // يبقى أي تعديل على الوقت (أو الأيام) لازم يتقفل لحد ما يدخل وضع الـ
+  // reschedule الصريح، عشان أي تعديل معاد يعدي حتمًا من نفس المسار اللي
+  // بيحدّث الـ Group.schedule والـ Sessions مع بعض في نفس العملية
+  // (rescheduleGroupSessions) — مش يتحفظ في الفورم بس من غير ما يوصل لحد.
   const scheduleLocked = isActiveWithSessions && !effectiveFrom;
 
   // ── Load courses + instructors + tags ──────────────────────────────────────
@@ -816,6 +827,14 @@ export default function GroupForm({ initial, onClose, onSaved }) {
     if (!form.name || !form.courseId || !form.maxStudents) {
       toast.error(t("groups.form.errors.requiredFields")); return;
     }
+
+    // ✅ نوع الجروب إجباري (أطفال أو بالغين)
+    if (!form.groupType) {
+      toast.error(t("groups.form.errors.groupTypeRequired") || "لازم تحدد نوع الجروب (أطفال أو بالغين)");
+      setStep(0);
+      return;
+    }
+
     if (form.moduleSelection.mode === "specific" && !form.moduleSelection.selectedModules?.length) {
       toast.error(t("groups.form.errors.noModulesSelected")); return;
     }
@@ -845,21 +864,14 @@ export default function GroupForm({ initial, onClose, onSaved }) {
       return;
     }
 
-    if (!form.groupType) {
-      toast.error(t("groups.form.errors.groupTypeRequired") || "لازم تحدد نوع الجروب (أطفال أو بالغين)");
-      setStep(0);
-      return;
-    }
-
     setLoading(true);
-    setScheduleConflicts([]);
-    setLinkConflicts([]);
+    setScheduleConflicts([]); // ✅ تصفير التعارضات القديمة قبل كل محاولة جديدة
+    setLinkConflicts([]);     // ✅
     const toastId = toast.loading(initial ? t("groups.form.messages.updating") : t("groups.form.messages.creating"));
 
     try {
       const composeLocationString = (ld) =>
-        ld ? [ld.extraDetails, ld.placeName, ld.country].filter(Boolean).join(" — ") : "";
-
+  ld ? [ld.extraDetails, ld.placeName, ld.country].filter(Boolean).join(" — ") : "";
       const basePayload = {
         name: form.name,
         courseId: form.courseId,
@@ -868,9 +880,8 @@ export default function GroupForm({ initial, onClose, onSaved }) {
         moduleSelection: form.moduleSelection,
         automation: form.automation,
         tags: form.tags,
-        deliveryMode: form.deliveryMode,
-        // ✅ NEW: نوع الجروب
         groupType: form.groupType,
+        deliveryMode: form.deliveryMode,
         location: form.deliveryMode === "offline" ? composeLocationString(form.locationDetails) : "",
         locationDetails: form.deliveryMode === "offline" ? form.locationDetails : null,
       };
@@ -904,6 +915,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
         });
         const rresult = await rres.json();
 
+        // ✅ تعارض جروبات تانية (الجدول العام)
         if (rres.status === 409 && rresult.conflicts?.length) {
           toast.error(t("groups.form.errors.scheduleConflict"), { id: toastId });
           setScheduleConflicts(rresult.conflicts);
@@ -911,6 +923,7 @@ export default function GroupForm({ initial, onClose, onSaved }) {
           return;
         }
 
+        // ✅ تعارض لينكات مستخدمة فعليًا في سيشنات الجروب
         if (rres.status === 409 && rresult.linkConflicts?.length) {
           toast.error(
             t("groups.form.errors.linkConflict") || "فيه لينكات هتتعارض مع جروب تاني في الميعاد الجديد",
@@ -947,20 +960,14 @@ export default function GroupForm({ initial, onClose, onSaved }) {
   const StepIcon = cs.icon;
   const isLastStep = step === STEPS.length - 1;
 
-  const currentStepId = STEPS[step]?.id;
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ⚠️ WARNING: من هنا لتحت (الـ RENDER) — الملف الأصلي كان مقطوع عند نقطة
-  //    {done ? <CheckCircle className="w-4.5 h-4.5" /> : <Icon className="w-4.5
-  //    فأنا أكملت الـ render بحسب المنطق المتوقع. راجعه وعدّل لو فيه تفاصيل
-  //    مختلفة عندك.
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full bg-gray-50/60 dark:bg-darkmode" dir={isRTL ? "rtl" : "ltr"}>
 
       {/* Progress header */}
       <div className="px-5 pt-5 pb-4 border-b border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-darkmode">
         <div className="relative flex items-center justify-between mb-1">
+          {/* connecting rail */}
           <div className="absolute top-5 left-5 right-5 h-0.5 bg-gray-100 dark:bg-dark_border -z-0" />
           <div
             className="absolute top-5 left-5 h-0.5 bg-gradient-to-r from-primary to-orange-deep -z-0 transition-all duration-500"
@@ -974,98 +981,76 @@ export default function GroupForm({ initial, onClose, onSaved }) {
             return (
               <button key={s.id} type="button" onClick={() => goTo(i)}
                 className="relative z-10 flex flex-col items-center gap-1.5 transition-all group">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 border-4 border-white dark:border-darkmode ${done
-                    ? `bg-gradient-to-br ${dc.btn} text-white shadow-md`
-                    : active
-                      ? `bg-gradient-to-br ${dc.btn} text-white shadow-lg scale-110`
-                      : "bg-gray-100 dark:bg-dark_input text-gray-400 dark:text-darkmuted group-hover:bg-gray-200 dark:group-hover:bg-dark_border"
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 border-4 border-white dark:border-darkmode ${done ? `bg-gradient-to-br ${dc.btn} text-white shadow-md` :
+                  active ? `bg-gradient-to-br ${dc.btn} text-white shadow-lg scale-110` :
+                    "bg-gray-100 dark:bg-dark_input text-gray-400 dark:text-darkmuted group-hover:bg-gray-200 dark:group-hover:bg-dark_border"
                   }`}>
-                  {done ? (
-                    <CheckCircle className="w-4.5 h-4.5" />
-                  ) : (
-                    <Icon className="w-4.5 h-4.5" />
-                  )}
+                  {done ? <CheckCircle className="w-4.5 h-4.5" /> : <Icon className="w-4.5 h-4.5" />}
                 </div>
-                <span className={`text-[11px] font-medium ${active ? "text-primary" : done ? "text-gray-700 dark:text-white" : "text-gray-400 dark:text-darkmuted"}`}>
-                  {t(`groups.form.steps.${s.id}`) || s.id}
+                <span className={`text-[10px] font-semibold hidden sm:block transition-colors ${active ? dc.text : "text-gray-400 dark:text-darksubtle"}`}>
+                  {t(`groups.form.step.${s.id}`)}
                 </span>
               </button>
             );
           })}
         </div>
-
-        {/* Progress bar */}
-        <div className="mt-3 h-1.5 rounded-full bg-gray-100 dark:bg-dark_border overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-primary to-orange-deep transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
+        <p className="text-[11px] text-SlateBlueText dark:text-darktext mt-2 text-center font-medium">
+          {t("groups.form.step")} {step + 1} {isRTL ? "من" : "of"} {STEPS.length}
+        </p>
       </div>
 
-      {/* Step content */}
+      {/* Slide area */}
       <div className="flex-1 overflow-y-auto">
-        <div
-          className={`p-5 transition-all duration-200 ${visible ? "opacity-100 translate-x-0" : "opacity-0"
-            }`}
-          style={{ transform: visible ? "translateX(0)" : `translateX(${animDir > 0 ? "20px" : "-20px"})` }}
-        >
+        <div className="p-5 max-w-2x mx-auto" style={{ animation: visible ? `slideIn${animDir > 0 ? "Right" : "Left"} 0.22s cubic-bezier(.22,.68,0,1.2) both` : "none" }}>
 
-          {/* ══════════════════════════════════════════════════════════
-              STEP 1: BASIC — الاسم + نوع الجروب + الكورس + الموديولات + Delivery
-          ══════════════════════════════════════════════════════════ */}
-          {currentStepId === "basic" && (
+          {/* Step header */}
+          <div className={`flex items-center gap-3 mb-5 p-4 rounded-2xl bg-gradient-to-br ${c.panel} border ${c.border}`}>
+            <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${c.btn} flex items-center justify-center shadow-md flex-shrink-0`}>
+              <StepIcon className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-15 font-bold text-MidnightNavyText dark:text-white">{t(`groups.form.step.${cs.id}.title`)}</h3>
+              <p className="text-12 text-SlateBlueText dark:text-darktext">{t(`groups.form.step.${cs.id}.desc`)}</p>
+            </div>
+          </div>
+
+          {/* ── Step 0: Basic Info ── */}
+          {step === 0 && (
             <div className="space-y-4">
               <div className={`${cardCls} p-4 space-y-4`}>
-                <SectionHeading icon={Hash} title={t("groups.form.basicInfo") || "البيانات الأساسية"} />
-
-                {/* Group Name */}
                 <div>
-                  <label className={labelCls}>{t("groups.form.name") || "اسم الجروب"} *</label>
-                  <input
-                    type="text"
-                    value={form.name}
-                    onChange={(e) => onChange("name", e.target.value)}
-                    placeholder={t("groups.form.namePlaceholder") || "مثال: English A1 — Group 1"}
-                    className={inputCls}
-                  />
+                  <label className={labelCls}>{t("groups.form.name")} *</label>
+                  <input type="text" value={form.name} onChange={e => onChange("name", e.target.value)}
+                    placeholder={t("groups.form.namePlaceholder")} className={inputCls} />
                 </div>
 
-                {/* Course */}
-                <div>
-                  <label className={labelCls}>{t("groups.form.course") || "الكورس"} *</label>
-                  <div className="relative">
-                    <select
-                      value={form.courseId}
-                      onChange={(e) => onChange("courseId", e.target.value)}
-                      disabled={coursesLoading || !!initial?.id}
-                      className={`${selectCls} ${initial?.id ? "opacity-60 cursor-not-allowed" : ""}`}
-                    >
-                      <option value="">{t("groups.form.selectCourse") || "اختر الكورس"}</option>
-                      {courses.map((course) => (
-                        <option key={course._id || course.id} value={course._id || course.id}>
-                          {course.title} — {course.level}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className={`absolute ${isRTL ? "left-3" : "right-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none`} />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>{t("groups.form.maxStudents")} *</label>
+                    <div className="relative">
+                      <Users className="w-4 h-4 text-gray-400 absolute top-1/2 -translate-y-1/2 start-3 pointer-events-none" />
+                      <input type="number" value={form.maxStudents} onChange={e => onChange("maxStudents", e.target.value)}
+                        min="1" className={`${inputCls} ps-9`} />
+                    </div>
                   </div>
-                </div>
-
-                {/* Max students */}
-                <div>
-                  <label className={labelCls}>{t("groups.form.maxStudents") || "الحد الأقصى للطلاب"} *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={form.maxStudents}
-                    onChange={(e) => onChange("maxStudents", e.target.value)}
-                    className={inputCls}
-                  />
+                  <div>
+                    <label className={labelCls}>{t("groups.form.course")} *</label>
+                    {coursesLoading ? (
+                      <div className={`${inputCls} text-gray-400`}>{t("groups.form.loading.courses")}</div>
+                    ) : (
+                      <div className="relative">
+                        <GraduationCap className="w-4 h-4 text-gray-400 absolute top-1/2 -translate-y-1/2 start-3 pointer-events-none" />
+                        <select value={form.courseId} onChange={e => onChange("courseId", e.target.value)} className={`${selectCls} ps-9`}>
+                          <option value="">{t("groups.form.selectCourse")}...</option>
+                          {courses.map(course => <option key={course._id} value={course._id}>{course.title} ({course.level})</option>)}
+                        </select>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* ✅ NEW: نوع الجروب (Kids / Adults / Mixed) */}
+              {/* ✅ نوع الجروب (أطفال / بالغين) */}
               <GroupTypeSelector
                 value={form.groupType}
                 onChange={(v) => onChange("groupType", v)}
@@ -1073,378 +1058,332 @@ export default function GroupForm({ initial, onClose, onSaved }) {
                 language={language}
               />
 
-              {/* Delivery Mode */}
+              {curriculum && (
+                <>
+                  <ModuleSelection
+                    curriculum={curriculum}
+                    selectedModules={form.moduleSelection}
+                    setSelectedModules={v => onChange("moduleSelection", v)}
+                    t={t}
+                    groupId={initial?.id}
+                    sessionsGenerated={initial?.sessionsGenerated}
+                  />
+                  <CurriculumView curriculum={curriculum} moduleSelection={form.moduleSelection}
+                    expandedModules={expandedModules} onToggleExpand={toggleModuleExpand}
+                    initial={initial} onClose={onClose} t={t} />
+                </>
+              )}
               <DeliveryModeSelector
                 mode={form.deliveryMode}
                 locationDetails={form.locationDetails}
-                onChangeMode={(m) => onChange("deliveryMode", m)}
-                onChangeLocationDetails={(ld) => onChange("locationDetails", ld)}
+                onChangeMode={(v) => onChange("deliveryMode", v)}
+                onChangeLocationDetails={(v) => onChange("locationDetails", v)}
                 t={t}
               />
 
-              {/* Module Selection */}
-              {curriculum?.length > 0 && (
-                <ModuleSelection
-                  curriculum={curriculum}
-                  selectedModules={form.moduleSelection}
-                  setSelectedModules={(v) => onChange("moduleSelection", v)}
-                  t={t}
-                  groupId={initial?.id}
-                  sessionsGenerated={initial?.sessionsGenerated}
-                />
-              )}
-
-              {/* Curriculum view */}
-              {curriculum?.length > 0 && (
-                <CurriculumView
-                  curriculum={curriculum}
-                  moduleSelection={form.moduleSelection}
-                  expandedModules={expandedModules}
-                  onToggleExpand={toggleModuleExpand}
-                  initial={initial}
-                  onClose={onClose}
-                  t={t}
-                />
-              )}
-
-              {/* Tags */}
-              {allTags?.length > 0 && (
-                <div className={`${cardCls} p-4`}>
-                  <SectionHeading icon={Tag} title={t("groups.form.tags") || "الوسوم"} />
+              {/* Tags Selection */}
+              <div className={`${cardCls} p-4`}>
+                <SectionHeading icon={Tag} title={t("groups.form.tags") || "Tags"}
+                  badge={form.tags.length > 0 ? form.tags.length : null} />
+                {tagsLoading ? (
+                  <div className={`${inputCls} text-gray-400`}>{t("groups.form.loading.tags") || "Loading tags..."}</div>
+                ) : allTags.length === 0 ? (
+                  <p className="text-sm text-gray-400 dark:text-darksubtle py-2">
+                    {t("groups.form.noTags") || "No tags available"}
+                  </p>
+                ) : (
                   <div className="flex flex-wrap gap-2">
-                    {allTags.map((tag) => {
-                      const isSel = form.tags.includes(tag._id);
+                    {allTags.map((tagItem) => {
+                      const selected = form.tags.includes(tagItem._id);
                       return (
                         <button
-                          key={tag._id}
+                          key={tagItem._id}
                           type="button"
-                          onClick={() => toggleTag(tag._id)}
-                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ring-1 ring-inset ${isSel
-                              ? "text-white ring-transparent shadow-sm"
-                              : "bg-gray-50 dark:bg-dark_input text-gray-600 dark:text-darktext ring-gray-200 dark:ring-dark_border"
+                          onClick={() => toggleTag(tagItem._id)}
+                          style={selected ? { backgroundColor: tagItem.color, borderColor: tagItem.color } : { borderColor: tagItem.color }}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border flex items-center gap-1.5 ${selected
+                            ? "text-white shadow-sm"
+                            : "bg-white dark:bg-darklight text-gray-600 dark:text-gray-300 hover:bg-IcyBreeze dark:hover:bg-dark_input"
                             }`}
-                          style={isSel ? { backgroundColor: tag.color } : {}}
                         >
                           <span
-                            className="w-1.5 h-1.5 rounded-full"
-                            style={{ backgroundColor: isSel ? "rgba(255,255,255,0.85)" : tag.color }}
+                            className="inline-block w-2 h-2 rounded-full"
+                            style={{ backgroundColor: selected ? "rgba(255,255,255,0.85)" : tagItem.color }}
                           />
-                          {tag.name}
+                          {tagItem.name}
                         </button>
                       );
                     })}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
 
-          {/* ══════════════════════════════════════════════════════════
-              STEP 2: INSTRUCTORS
-          ══════════════════════════════════════════════════════════ */}
-          {currentStepId === "instructors" && (
+          {/* ── Step 1: Instructors ── */}
+          {step === 1 && (
             <div className={`${cardCls} p-4`}>
-              <SectionHeading
-                icon={User}
-                title={t("groups.form.instructors") || "المدربون"}
-                badge={`${form.instructors.length}`}
-              />
-
               {instructorsLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                </div>
+                <div className="text-center py-8 text-sm text-gray-500">{t("groups.form.loading.instructors")}</div>
               ) : instructors.length === 0 ? (
-                <p className="text-sm text-SlateBlueText dark:text-darktext text-center py-6">
-                  {t("groups.form.noInstructors") || "لا يوجد مدربون متاحون"}
-                </p>
+                <div className="text-center py-8 text-sm text-gray-500">{t("groups.form.noInstructors")}</div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {instructors.map((inst) => {
-                    const isSel = form.instructors.includes((inst._id || inst.id)?.toString());
+                <div className="grid sm:grid-cols-2 gap-2.5 max-h-96 overflow-y-auto custom-scrollbar">
+                  {instructors.map(instructor => {
+                    const id = instructor._id?.toString();
+                    const isSel = form.instructors.includes(id);
                     return (
-                      <button
-                        key={inst._id || inst.id}
-                        type="button"
-                        onClick={() => toggleInstructor(inst._id || inst.id)}
-                        className={`text-start flex items-center gap-3 p-3 rounded-2xl border transition-all ${isSel
-                            ? "border-secondary/50 bg-secondary/5 dark:bg-secondary/15 shadow-sm"
-                            : "border-PowderBlueBorder dark:border-dark_border hover:bg-IcyBreeze dark:hover:bg-dark_input"
-                          }`}
-                      >
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isSel ? "bg-gradient-to-br from-secondary to-teal-dark" : "bg-secondary/10 dark:bg-secondary/20"
-                          }`}>
-                          <User className={`w-4 h-4 ${isSel ? "text-white" : "text-secondary"}`} />
+                      <div key={instructor._id} onClick={() => toggleInstructor(id)}
+                        className={`relative flex items-center gap-3 p-3 border rounded-2xl cursor-pointer transition-all ${isSel ? "border-secondary/50 bg-secondary/5 dark:bg-secondary/15 shadow-sm" : "border-PowderBlueBorder dark:border-dark_border hover:bg-IcyBreeze dark:hover:bg-dark_input"}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${isSel ? "bg-gradient-to-br from-secondary to-teal-dark" : "bg-secondary/10 dark:bg-secondary/20"}`}>
+                          <User className={`w-4.5 h-4.5 ${isSel ? "text-white" : "text-secondary dark:text-white"}`} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-MidnightNavyText dark:text-white truncate">{inst.name}</p>
-                          {inst.email && (
-                            <p className="text-[11px] text-SlateBlueText dark:text-darktext truncate">{inst.email}</p>
-                          )}
+                          <p className="text-sm font-medium text-MidnightNavyText dark:text-white truncate">{instructor.name}</p>
+                          <p className="text-xs text-SlateBlueText dark:text-darktext flex items-center gap-1 truncate">
+                            <Mail className="w-3 h-3 flex-shrink-0" />{instructor.email}
+                          </p>
                         </div>
-                        {isSel && <CheckCircle className="w-4 h-4 text-secondary flex-shrink-0" />}
-                      </button>
+                        {isSel && <CheckCircle className="w-4.5 h-4.5 text-secondary dark:text-white flex-shrink-0" />}
+                      </div>
                     );
                   })}
                 </div>
               )}
 
-              <ConflictAlert conflicts={scheduleConflicts} t={t} />
-              <LinkConflictAlert conflicts={linkConflicts} t={t} />
+              {form.instructors.length > 0 && (
+                <div className={`mt-4 p-3 rounded-xl ${c.badge} border ${c.border} flex items-center gap-2`}>
+                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                  <p className="text-xs font-medium">{t("groups.form.selectedInstructors")}: {form.instructors.length}</p>
+                </div>
+              )}
             </div>
           )}
 
-          {/* ══════════════════════════════════════════════════════════
-              STEP 3: SCHEDULE
-          ══════════════════════════════════════════════════════════ */}
-          {currentStepId === "schedule" && (
+          {/* ── Step 2: Schedule ── */}
+          {step === 2 && (
             <div className="space-y-4">
-              {scheduleLocked && (
-                <div className="p-3 rounded-2xl border border-amber-brand/40 dark:border-amber-brand/30 bg-amber-brand/10 dark:bg-amber-brand/10 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-orange-deep dark:text-amber-brand flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-orange-deep dark:text-amber-brand">
-                      {t("groups.form.scheduleLocked") || "الجدول مقفول"}
-                    </p>
-                    <p className="text-[11px] text-orange-deep/80 dark:text-amber-brand/80 mt-0.5">
-                      {t("groups.form.scheduleLockedDesc") || "الجروب فيه سيشنات مولدة. لتعديل الجدول، لازم تدخل وضع إعادة الجدولة (Reschedule) من تبويب الحفظ."}
-                    </p>
+
+              {isActiveWithSessions && (
+                <div className="p-4 rounded-2xl border border-amber-brand/40 dark:border-amber-brand/30 bg-amber-brand/10 dark:bg-amber-brand/10 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-orange-deep dark:text-amber-brand flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-orange-deep dark:text-amber-brand">
+                      <p className="font-semibold">{t("groups.form.reschedule.warningTitle")}</p>
+                      <p className="mt-1 text-xs">{t("groups.form.reschedule.warningDesc")}</p>
+                    </div>
                   </div>
+
+                  <div>
+                    <label className={labelCls}>{t("groups.form.reschedule.effectiveFrom")}</label>
+                    <input type="date" value={effectiveFrom}
+                      onChange={e => {
+                        setEffectiveFrom(e.target.value);
+                        setScheduleConflicts([]);
+                        setLinkConflicts([]); // ✅ تصفير تعارض اللينكات كمان لما يغيّر الميعاد
+                      }}
+                      min={new Date().toISOString().split("T")[0]} className={inputCls} />
+                    <p className="text-[11px] text-SlateBlueText dark:text-darktext mt-1">
+                      حدد "من تاريخ" عشان تقدر تعدّل الأيام أو الوقت — التعديل هيتطبق على الجروب والسيشنات (الغير مكتملة) مع بعض في نفس اللحظة.
+                      سيبه فاضي لو مش عاوز تغيّر الميعاد خالص.
+                    </p>
+                    {effectiveFrom && (
+                      <p className="text-xs text-orange-deep dark:text-amber-brand mt-1">
+                        {t("groups.form.reschedule.firstDayWillBe", { day: getLocalDay(effectiveFrom) })}
+                      </p>
+                    )}
+                  </div>
+
+                  {effectiveFrom && (
+                    <div className="text-xs rounded-xl bg-white dark:bg-darkmode border border-amber-brand/30 dark:border-amber-brand/30 p-3 space-y-1">
+                      {previewLoading ? (
+                        <p className="text-gray-500">{t("groups.form.reschedule.loadingPreview")}</p>
+                      ) : reschedulePreview ? (
+                        <>
+                          <p className="text-primary">
+                            ✓ {t("groups.form.reschedule.frozenCount", { count: reschedulePreview.completedCount })}
+                          </p>
+                          <p className="text-orange-deep dark:text-amber-brand">
+                            🔄 {t("groups.form.reschedule.affectedCount", { count: reschedulePreview.affectedCount })}
+                          </p>
+                          {reschedulePreview.affectedCount === 0 && (
+                            <p className="text-gray-500">{t("groups.form.reschedule.nothingToChange")}</p>
+                          )}
+                        </>
+                      ) : (
+                        <button type="button" onClick={loadPreview}
+                          className="text-primary underline text-xs">
+                          {t("groups.form.reschedule.loadPreview")}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <ConflictAlert conflicts={scheduleConflicts} t={t} />
+                  <LinkConflictAlert conflicts={linkConflicts} t={t} /> {/* ✅ جديد */}
                 </div>
               )}
 
-              <div className={`${cardCls} p-4 space-y-4`}>
-                <SectionHeading icon={Calendar} title={t("groups.form.schedule") || "الجدول"} />
-
-                {/* Effective from (reschedule mode) */}
-                {isActiveWithSessions && (
-                  <div>
-                    <label className={labelCls}>{t("groups.form.effectiveFrom") || "بداية التعديل من تاريخ"}</label>
-                    <input
-                      type="date"
-                      value={effectiveFrom}
-                      onChange={(e) => setEffectiveFrom(e.target.value)}
-                      className={inputCls}
-                    />
-                  </div>
-                )}
-
-                {/* Start date */}
-                {!isActiveWithSessions && (
-                  <div>
-                    <label className={labelCls}>{t("groups.form.startDate") || "تاريخ البداية"} *</label>
-                    <input
-                      type="date"
-                      value={form.schedule.startDate}
-                      onChange={(e) => handleStartDateChange(e.target.value)}
-                      className={inputCls}
-                    />
-                  </div>
-                )}
-
-                {/* Days of week */}
-                <div>
-                  <label className={labelCls}>{t("groups.form.daysOfWeek") || "أيام الأسبوع"} *</label>
-                  <div className="flex flex-wrap gap-2">
-                    {localDays.map((day) => {
-                      const isSel = isDaySelected(day);
-                      const isFirst = day === firstLocalDay;
-                      return (
-                        <button
-                          key={day}
-                          type="button"
-                          disabled={scheduleLocked}
-                          onClick={() => toggleDay(day)}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${isSel
-                              ? "bg-gradient-to-r from-orange-coral to-primary text-white shadow-sm"
-                              : "bg-gray-100 dark:bg-dark_input text-gray-600 dark:text-darktext hover:bg-gray-200 dark:hover:bg-dark_border"
-                            }`}
-                        >
-                          {day}
-                          {isFirst && isSel && <span className="ml-1 text-[10px]">✓</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="text-[11px] text-SlateBlueText dark:text-darktext mt-2">
-                    {t("groups.form.daysHint") || "اختر من 1 إلى 3 أيام. اليوم الأول لازم يكون نفس يوم تاريخ البداية."}
+              <div className={`${cardCls} p-4`}>
+                <label className={labelCls}>
+                  {t("groups.form.startDate")} {!isActiveWithSessions && "*"}
+                </label>
+                <input type="date" value={form.schedule.startDate}
+                  onChange={e => !isActiveWithSessions && handleStartDateChange(e.target.value)}
+                  min={new Date().toISOString().split("T")[0]}
+                  disabled={isActiveWithSessions}
+                  className={`${inputCls} ${isActiveWithSessions ? "opacity-60 cursor-not-allowed" : ""}`} />
+                {!isActiveWithSessions && firstLocalDay && (
+                  <p className="text-xs text-primary mt-1.5 flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5" />{t("groups.form.messages.firstDayWillBe", { day: firstLocalDay })}
                   </p>
-                </div>
+                )}
+              </div>
 
-                {/* Time from / to */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>{t("groups.form.timeFrom") || "من"} *</label>
-                    <input
-                      type="time"
-                      value={form.schedule.timeFrom}
-                      onChange={(e) => onChange("schedule.timeFrom", e.target.value)}
-                      disabled={scheduleLocked}
-                      className={`${inputCls} disabled:opacity-50`}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelCls}>{t("groups.form.timeTo") || "إلى"} *</label>
-                    <input
-                      type="time"
-                      value={form.schedule.timeTo}
-                      onChange={(e) => onChange("schedule.timeTo", e.target.value)}
-                      disabled={scheduleLocked}
-                      className={`${inputCls} disabled:opacity-50`}
-                    />
+              <div className={`${cardCls} p-4`}>
+                <label className={labelCls}>{t("groups.form.daysOfWeek")}</label>
+                <div className={`mb-3 p-3 rounded-xl border ${c.border} bg-gradient-to-br ${c.panel} flex items-start gap-2`}>
+                  <AlertCircle className="w-4 h-4 text-orange-coral mt-0.5 flex-shrink-0" />
+                  <div className="text-xs text-orange-coral space-y-1">
+                    <p className="font-medium">{t("groups.form.help.scheduleInfo")}:</p>
+                    <p>• {language === "ar" ? "اختر من 1 إلى 3 أيام" : "Select 1 to 3 days"}</p>
+                    <p>• {language === "ar" ? "اليوم الأول يجب أن يكون" : "First day must be"} <strong>{firstLocalDay || "---"}</strong></p>
+                    <p>• {language === "ar" ? `✓ محدد: ${form.schedule.daysOfWeek.length} يوم` : `✓ Selected: ${form.schedule.daysOfWeek.length} day(s)`}</p>
                   </div>
                 </div>
 
-                {/* Timezone */}
-                <div>
-                  <label className={labelCls}>{t("groups.form.timezone") || "المنطقة الزمنية"}</label>
-                  <input
-                    type="text"
-                    value={form.schedule.timezone}
-                    onChange={(e) => onChange("schedule.timezone", e.target.value)}
-                    disabled={scheduleLocked}
-                    className={`${inputCls} disabled:opacity-50`}
-                  />
+                <div className="grid grid-cols-7 gap-1.5">
+                  {localDays.map(day => {
+                    const isFirst = day === firstLocalDay;
+                    const isSel = isDaySelected(day);
+                    const isDisabled = !anchorDate || (isFirst && isSel);
+                    return (
+                      <button key={day} type="button" onClick={() => toggleDay(day)} disabled={isDisabled}
+                        className={`relative px-1 py-3 text-xs rounded-2xl font-medium transition-all
+                          ${isSel ? `bg-gradient-to-br ${c.btn} text-white shadow-md ${isFirst ? `ring-2 ring-offset-1 ${c.ring}` : ""}` : "bg-gray-100 dark:bg-dark_input text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark_border"}
+                          ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:-translate-y-0.5"}`}>
+                        {day.slice(0, 3)}
+                        {isFirst && isSel && (
+                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-secondary rounded-full border-2 border-white dark:border-darkmode" />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {isRescheduleMode && previewLoading && (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              <div className={`${cardCls} p-4`}>
+                <label className={labelCls}>
+                  <span className="inline-flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />{t("groups.form.timeFrom")} — {t("groups.form.timeTo")} *</span>
+                </label>
+                {scheduleLocked && (
+                  <p className="text-[11px] text-orange-coral mb-2 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                    عشان تعدّل الوقت لازم تحدد "من تاريخ" فوق الأول — التعديل هيتطبق على الجروب والسيشنات مع بعض.
+                  </p>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <input type="time" value={form.schedule.timeFrom}
+                    onChange={e => onChange("schedule.timeFrom", e.target.value)}
+                    disabled={scheduleLocked}
+                    className={`${inputCls} ${scheduleLocked ? "opacity-60 cursor-not-allowed" : ""}`} />
+                  <input type="time" value={form.schedule.timeTo}
+                    onChange={e => onChange("schedule.timeTo", e.target.value)}
+                    disabled={scheduleLocked}
+                    className={`${inputCls} ${scheduleLocked ? "opacity-60 cursor-not-allowed" : ""}`} />
                 </div>
-              )}
-
-              <ConflictAlert conflicts={scheduleConflicts} t={t} />
-              <LinkConflictAlert conflicts={linkConflicts} t={t} />
+              </div>
             </div>
           )}
 
-          {/* ══════════════════════════════════════════════════════════
-              STEP 4: AUTOMATION
-          ══════════════════════════════════════════════════════════ */}
-          {currentStepId === "automation" && (
-            <div className={`${cardCls} p-4 space-y-3`}>
-              <SectionHeading icon={Bell} title={t("groups.form.automation") || "الأتمتة"} />
-
-              <ToggleRow
-                label={t("groups.form.automation.whatsappEnabled") || "تفعيل رسائل الواتساب"}
-                description={t("groups.form.automation.whatsappEnabledDesc") || "السماح بإرسال أي رسائل لهذا الجروب"}
-                checked={form.automation.whatsappEnabled}
-                onChange={(e) => onChange("automation.whatsappEnabled", e.target.checked)}
-                Icon={AUTOMATION_META.whatsappEnabled.icon}
-              />
-
-              <ToggleRow
-                label={t("groups.form.automation.welcomeMessage") || "رسالة الترحيب"}
-                description={t("groups.form.automation.welcomeMessageDesc") || "إرسال رسالة ترحيب عند إضافة طالب للجروب"}
-                checked={form.automation.welcomeMessage}
-                onChange={(e) => onChange("automation.welcomeMessage", e.target.checked)}
-                Icon={AUTOMATION_META.welcomeMessage.icon}
-              />
-
-              <ToggleRow
-                label={t("groups.form.automation.reminderEnabled") || "تفعيل التذكيرات"}
-                description={t("groups.form.automation.reminderEnabledDesc") || "إرسال تذكيرات قبل كل جلسة"}
-                checked={form.automation.reminderEnabled}
-                onChange={(e) => onChange("automation.reminderEnabled", e.target.checked)}
-                Icon={AUTOMATION_META.reminderEnabled.icon}
-              />
+          {/* ── Step 3: Automation ── */}
+          {step === 3 && (
+            <div className="space-y-3">
+              {Object.entries({
+                whatsappEnabled: t("groups.form.automation.whatsappEnabled"),
+                welcomeMessage: t("groups.form.automation.welcomeMessage"),
+                reminderEnabled: t("groups.form.automation.reminderEnabled"),
+                notifyGuardianOnAbsence: t("groups.form.automation.notifyGuardianOnAbsence"),
+                notifyOnSessionUpdate: t("groups.form.automation.notifyOnSessionUpdate"),
+                completionMessage: t("groups.form.automation.completionMessage"),
+              }).map(([key, lbl]) => (
+                <ToggleRow
+                  key={key}
+                  label={lbl}
+                  checked={form.automation[key]}
+                  onChange={e => onChange(`automation.${key}`, e.target.checked)}
+                  Icon={AUTOMATION_META[key]?.icon || Bell}
+                />
+              ))}
 
               {form.automation.reminderEnabled && (
-                <div className="pl-12">
-                  <label className={labelCls}>{t("groups.form.automation.reminderBeforeHours") || "التذكير قبل (ساعات)"}</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="168"
-                    value={form.automation.reminderBeforeHours}
-                    onChange={(e) => onChange("automation.reminderBeforeHours", parseInt(e.target.value) || 24)}
-                    className={inputCls}
-                  />
+                <div className="mt-1 p-4 bg-amber-brand/10 dark:bg-amber-brand/10 rounded-2xl border border-amber-brand/30 dark:border-amber-brand/30">
+                  <label className={labelCls}>{t("groups.form.automation.reminderBefore")}</label>
+                  <input type="number" value={form.automation.reminderBeforeHours}
+                    onChange={e => onChange("automation.reminderBeforeHours", parseInt(e.target.value))}
+                    min="1" max="168" className={inputCls} />
                 </div>
               )}
-
-              <ToggleRow
-                label={t("groups.form.automation.notifyGuardianOnAbsence") || "إشعار ولي الأمر عند الغياب"}
-                description={t("groups.form.automation.notifyGuardianOnAbsenceDesc") || "إرسال إشعار لولي الأمر عند غياب الطالب"}
-                checked={form.automation.notifyGuardianOnAbsence}
-                onChange={(e) => onChange("automation.notifyGuardianOnAbsence", e.target.checked)}
-                Icon={AUTOMATION_META.notifyGuardianOnAbsence.icon}
-              />
-
-              <ToggleRow
-                label={t("groups.form.automation.notifyOnSessionUpdate") || "إشعار عند تحديث الجلسة"}
-                description={t("groups.form.automation.notifyOnSessionUpdateDesc") || "إشعار الطالب وولي الأمر بأي تغيير في الجلسة"}
-                checked={form.automation.notifyOnSessionUpdate}
-                onChange={(e) => onChange("automation.notifyOnSessionUpdate", e.target.checked)}
-                Icon={AUTOMATION_META.notifyOnSessionUpdate.icon}
-              />
-
-              <ToggleRow
-                label={t("groups.form.automation.completionMessage") || "رسالة إكمال الجروب"}
-                description={t("groups.form.automation.completionMessageDesc") || "إرسال رسالة عند إتمام الجروب"}
-                checked={form.automation.completionMessage}
-                onChange={(e) => onChange("automation.completionMessage", e.target.checked)}
-                Icon={AUTOMATION_META.completionMessage.icon}
-              />
             </div>
           )}
-
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="border-t border-PowderBlueBorder dark:border-dark_border bg-white dark:bg-darkmode px-5 py-4">
-        <div className="flex items-center justify-between gap-3">
-
-          {/* Prev / Cancel */}
-          <button
-            type="button"
-            onClick={step === 0 ? onClose : prev}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-PowderBlueBorder dark:border-dark_border text-SlateBlueText dark:text-darktext font-medium text-sm hover:bg-IcyBreeze dark:hover:bg-dark_input transition-colors disabled:opacity-50"
-          >
-            {isRTL ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-            {step === 0 ? (t("common.cancel") || "إلغاء") : (t("common.previous") || "السابق")}
-          </button>
-
-          {/* Indicator */}
-          <span className="text-xs text-SlateBlueText dark:text-darktext tabular-nums">
-            {step + 1} / {STEPS.length}
-          </span>
-
-          {/* Next / Save */}
-          {!isLastStep ? (
-            <button
-              type="button"
-              onClick={next}
-              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-orange-deep text-white font-semibold text-sm hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-[0.98]"
-            >
-              {t("common.next") || "التالي"}
-              {isRTL ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+     {/* Footer */}
+      <div className="sticky bottom-0 bg-white dark:bg-darkmode border-t border-PowderBlueBorder dark:border-dark_border px-5 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
+        <div className="flex gap-3 max-w-5xl mx-auto">
+          {step === 0 ? (
+            <button type="button" onClick={onClose} disabled={loading}
+              className="flex-1 border border-PowderBlueBorder dark:border-dark_border py-2.5 px-4 rounded-xl font-semibold text-MidnightNavyText dark:text-white hover:bg-gray-50 dark:hover:bg-dark_input flex items-center justify-center gap-2 disabled:opacity-50 transition-all text-14">
+              <X className="w-4 h-4" />{t("groups.form.cancel")}
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={handleSubmit}
+            <button type="button" onClick={prev} disabled={loading}
+              className="flex-1 border border-PowderBlueBorder dark:border-dark_border py-2.5 px-4 rounded-xl font-semibold text-MidnightNavyText dark:text-white hover:bg-gray-50 dark:hover:bg-dark_input flex items-center justify-center gap-2 disabled:opacity-50 transition-all text-14">
+              {isRTL ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+              {t("common.back")}
+            </button>
+          )}
+
+          {isLastStep ? (
+            <button type="button" onClick={handleSubmit}
               disabled={loading}
-              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-orange-deep text-white font-semibold text-sm hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+              className={`flex-1 bg-gradient-to-r ${c.btn} text-white py-2.5 px-4 rounded-xl font-semibold shadow-md hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2 transition-all text-14`}>
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {t("common.saving") || "جاري الحفظ..."}
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  {isRescheduleMode ? t("groups.form.reschedule.saving") : initial ? t("groups.form.updating") : t("groups.form.creating")}
                 </>
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  {initial ? (t("common.save") || "حفظ") : (t("common.create") || "إنشاء")}
+                  {isRescheduleMode ? t("groups.form.reschedule.confirmButton") : initial ? t("groups.form.update") : t("groups.form.create")}
                 </>
               )}
+            </button>
+          ) : (
+            <button type="button" onClick={next}
+              className={`flex-1 bg-gradient-to-r ${c.btn} text-white py-2.5 px-4 rounded-xl font-semibold shadow-md hover:shadow-lg flex items-center justify-center gap-2 transition-all text-14`}>
+              {t("common.next")}
+              {isRTL ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>
           )}
         </div>
       </div>
+
+      <style>{`
+        @keyframes slideInRight { from { opacity:0; transform:translateX(32px);  } to { opacity:1; transform:translateX(0); } }
+        @keyframes slideInLeft  { from { opacity:0; transform:translateX(-32px); } to { opacity:1; transform:translateX(0); } }
+        .custom-scrollbar::-webkit-scrollbar       { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background:#f1f1f1; border-radius:4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background:#888;    border-radius:4px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-track { background:#21262d; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background:#30363d; }
+        .text-12 { font-size:0.75rem;    }
+        .text-13 { font-size:0.8125rem;  }
+        .text-14 { font-size:0.875rem;   }
+        .text-15 { font-size:0.9375rem;  }
+      `}</style>
     </div>
   );
 }
