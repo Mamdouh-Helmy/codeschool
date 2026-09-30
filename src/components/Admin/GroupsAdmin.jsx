@@ -22,7 +22,7 @@ import MeetingLinksCheckModal from "./MeetingLinksCheckModal";
 import FixGroupLinksModal from "./FixGroupLinksModal";
 import GroupDetailsPage from "./GroupDetailsPage";
 import GroupHoldModal from "./GroupHoldModal";
-import MakeupSessionForm from "./MakeupSessionForm";  // ✅ NEW
+import MakeupSessionForm from "./MakeupSessionForm";
 import { useI18n } from "@/i18n/I18nProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -44,6 +44,7 @@ const INITIAL_FILTERS = {
     studentsCountMax: "",
     sessionsGenerated: "",
     tags: "",
+    groupType: "", // ✅ NEW
     page: 1,
     limit: 10,
 };
@@ -56,7 +57,11 @@ const INITIAL_STATS = {
     completed: 0,
     cancelled: 0,
     onHold: 0,
-    makeup: 0,  // ✅ NEW
+    makeup: 0,
+    // ✅ NEW
+    kids: 0,
+    adults: 0,
+    mixed: 0,
 };
 
 const DEFAULT_PENDING_ACTIVATION = {
@@ -102,6 +107,7 @@ const buildQueryParams = (filters) => {
         studentsCountMin: "studentsMin",
         studentsCountMax: "studentsMax",
         tags: "tags",
+        groupType: "groupType", // ✅ NEW
     };
 
     Object.entries(simpleKeys).forEach(([filterKey, paramKey]) => {
@@ -189,6 +195,13 @@ export default function GroupsAdmin() {
         cancelled: t("groups.status.cancelled") || "Cancelled",
     }), [t]);
 
+    // ✅ NEW: labels نوع الجروب
+    const groupTypeLabels = useMemo(() => ({
+        kids: t("groups.groupType.kids") || "Kids",
+        adults: t("groups.groupType.adults") || "Adults",
+        mixed: t("groups.groupType.mixed") || "Mixed",
+    }), [t]);
+
     const statsConfig = useMemo(() => [
         {
             label: t("groups.stats.total") || "Total", value: stats.total,
@@ -226,7 +239,6 @@ export default function GroupsAdmin() {
             iconWrap: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
             icon: <XCircle className="w-5 h-5 md:w-6 md:h-6" />,
         },
-        // ✅ Make-up stat
         {
             label: t("groups.stats.makeup") || "Make-up", value: stats.makeup || 0,
             accent: "from-orange-deep/15 via-orange-deep/5 to-transparent", ring: "ring-orange-deep/15",
@@ -248,6 +260,7 @@ export default function GroupsAdmin() {
         if (filters.studentsCountMin || filters.studentsCountMax) count++;
         if (filters.sessionsGenerated) count++;
         if (filters.tags) count++;
+        if (filters.groupType) count++; // ✅ NEW
         return count;
     }, [filters]);
 
@@ -412,87 +425,86 @@ export default function GroupsAdmin() {
         setMeetingLinksModal({ open: true, groupId });
     }, [t]);
 
-   const onMeetingLinksCheckConfirmed = useCallback(async (
-    forceActivate,
-    releaseReserved,
-    selectedLinkIds = [],
-    availableLinks = [],
-    linkAssignmentMode = "first_available",
-) => {
-    const groupId = meetingLinksModal.groupId;
-    setMeetingLinksModal({ open: false, groupId: null });
-
-    const firstSelectedLink = availableLinks.find(
-        (l) => selectedLinkIds.includes(l._id?.toString() || l.id?.toString())
-    );
-    const firstMeetingLink = firstSelectedLink?.link || "";
-    setPendingActivation({
+    const onMeetingLinksCheckConfirmed = useCallback(async (
         forceActivate,
         releaseReserved,
-        selectedLinkIds,
-        firstMeetingLink,
-        linkAssignmentMode,
-    });
+        selectedLinkIds = [],
+        availableLinks = [],
+        linkAssignmentMode = "first_available",
+    ) => {
+        const groupId = meetingLinksModal.groupId;
+        setMeetingLinksModal({ open: false, groupId: null });
 
-    try {
-        const res = await fetch(`/api/groups/${groupId}`, {
-            cache: "no-store",
-            headers: { "Cache-Control": "no-cache" },
+        const firstSelectedLink = availableLinks.find(
+            (l) => selectedLinkIds.includes(l._id?.toString() || l.id?.toString())
+        );
+        const firstMeetingLink = firstSelectedLink?.link || "";
+        setPendingActivation({
+            forceActivate,
+            releaseReserved,
+            selectedLinkIds,
+            firstMeetingLink,
+            linkAssignmentMode,
         });
-        if (!res.ok) throw new Error(`Failed to fetch group: ${res.status}`);
-        const json = await res.json();
-        if (json.success && json.data) {
-            setInstructorNotificationModal({
-                open: true,
-                groupData: { ...json.data, firstMeetingLink: firstMeetingLink || json.data.firstMeetingLink || "" },
-                instructors: json.data.instructors || [],
-            });
-        } else {
-            throw new Error(json.error || t("groups.activate.loadError"));
-        }
-    } catch (err) {
-        toast.error(err.message || t("groups.activate.loadError"), { position: "top-center" });
-    }
-}, [meetingLinksModal.groupId, t]);
 
-   const handleActivateAndNotify = useCallback(async (instructorMessages) => {
-    const groupId = instructorNotificationModal?.groupData?._id || instructorNotificationModal?.groupData?.id;
-    if (!groupId) {
-        toast.error(t("groups.activate.invalidId"), { position: "top-center" });
-        return;
-    }
-
-    const loadingToast = toast.loading(t("groups.activate.loading"), { position: "top-center" });
-    try {
-        const res = await fetch(`/api/groups/${groupId}/activate`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                instructorMessages,
-                forceActivate: pendingActivation.forceActivate,
-                releaseReserved: pendingActivation.releaseReserved,
-                selectedLinkIds: pendingActivation.selectedLinkIds,
-                linkAssignmentMode: pendingActivation.linkAssignmentMode,
-            }),
-        });
-        const result = await res.json();
-        if (res.ok && result.success) {
-            await loadGroups();
-            toast.success(t("groups.activate.success"), { id: loadingToast, position: "top-center" });
-            setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
-            setPendingActivation(DEFAULT_PENDING_ACTIVATION);
-        } else {
-            // ✅ رسالة الـ 409 (مفيش لينك فاضي) فيها الأيام وعدد السيشنات
-            toast.error(result.error || t("groups.activate.failed"), {
-                id: loadingToast,
-                position: "top-center",
-                duration: 8000,
+        try {
+            const res = await fetch(`/api/groups/${groupId}`, {
+                cache: "no-store",
+                headers: { "Cache-Control": "no-cache" },
             });
+            if (!res.ok) throw new Error(`Failed to fetch group: ${res.status}`);
+            const json = await res.json();
+            if (json.success && json.data) {
+                setInstructorNotificationModal({
+                    open: true,
+                    groupData: { ...json.data, firstMeetingLink: firstMeetingLink || json.data.firstMeetingLink || "" },
+                    instructors: json.data.instructors || [],
+                });
+            } else {
+                throw new Error(json.error || t("groups.activate.loadError"));
+            }
+        } catch (err) {
+            toast.error(err.message || t("groups.activate.loadError"), { position: "top-center" });
         }
-    } catch {
-        toast.error(t("groups.activate.failed"), { id: loadingToast, position: "top-center" });
-    }
-}, [instructorNotificationModal, pendingActivation, loadGroups, t]);
+    }, [meetingLinksModal.groupId, t]);
+
+    const handleActivateAndNotify = useCallback(async (instructorMessages) => {
+        const groupId = instructorNotificationModal?.groupData?._id || instructorNotificationModal?.groupData?.id;
+        if (!groupId) {
+            toast.error(t("groups.activate.invalidId"), { position: "top-center" });
+            return;
+        }
+
+        const loadingToast = toast.loading(t("groups.activate.loading"), { position: "top-center" });
+        try {
+            const res = await fetch(`/api/groups/${groupId}/activate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    instructorMessages,
+                    forceActivate: pendingActivation.forceActivate,
+                    releaseReserved: pendingActivation.releaseReserved,
+                    selectedLinkIds: pendingActivation.selectedLinkIds,
+                    linkAssignmentMode: pendingActivation.linkAssignmentMode,
+                }),
+            });
+            const result = await res.json();
+            if (res.ok && result.success) {
+                await loadGroups();
+                toast.success(t("groups.activate.success"), { id: loadingToast, position: "top-center" });
+                setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
+                setPendingActivation(DEFAULT_PENDING_ACTIVATION);
+            } else {
+                toast.error(result.error || t("groups.activate.failed"), {
+                    id: loadingToast,
+                    position: "top-center",
+                    duration: 8000,
+                });
+            }
+        } catch {
+            toast.error(t("groups.activate.failed"), { id: loadingToast, position: "top-center" });
+        }
+    }, [instructorNotificationModal, pendingActivation, loadGroups, t]);
 
     const onAddStudents = useCallback((groupId) => {
         setSelectedGroupForStudents(groupId);
@@ -645,10 +657,10 @@ export default function GroupsAdmin() {
         setSelectedGroupForStudents(null);
     }, []);
 
-   const closeInstructorModal = useCallback(() => {
-    setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
-    setPendingActivation(DEFAULT_PENDING_ACTIVATION);
-}, []);
+    const closeInstructorModal = useCallback(() => {
+        setInstructorNotificationModal({ open: false, groupData: null, instructors: [] });
+        setPendingActivation(DEFAULT_PENDING_ACTIVATION);
+    }, []);
 
     const closeFixLinksModal = useCallback(() => {
         setFixLinksModal({ open: false, groupId: null });
@@ -699,7 +711,6 @@ export default function GroupsAdmin() {
                             {t("groups.tags.manage") || "Manage Tags"}
                         </button>
 
-                        {/* 🎁 Make-up Session Button */}
                         <button
                             onClick={onMakeup}
                             className="bg-gradient-to-r from-primary to-orange-deep hover:shadow-lg active:scale-[0.98] text-white px-4 py-2.5 md:px-5 md:py-3 rounded-xl font-semibold text-xs md:text-sm transition-all shadow-md shadow-primary/20 flex items-center gap-2 justify-center"
@@ -746,8 +757,8 @@ export default function GroupsAdmin() {
             {/* ── Filters ── */}
             <div className="bg-white dark:bg-darkmode rounded-2xl p-4 md:p-6 border border-PowderBlueBorder dark:border-dark_border shadow-sm space-y-4">
 
-                {/* Row 1: Search + Course + Instructor + Advanced Toggle */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                {/* Row 1: Search + Course + Instructor + GroupType + Advanced Toggle */}
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
 
                     <div className="relative group">
                         <Search className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors`} />
@@ -790,6 +801,22 @@ export default function GroupsAdmin() {
                                     {inst.name}
                                 </option>
                             ))}
+                        </select>
+                        <ChevronDown className={`absolute ${isRTL ? "left-3" : "right-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none`} />
+                    </div>
+
+                    {/* ✅ NEW: فلتر نوع الجروب */}
+                    <div className="relative">
+                        <Users className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`} />
+                        <select
+                            value={filters.groupType}
+                            onChange={(e) => handleFilterChange("groupType", e.target.value)}
+                            className={`w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"} py-2.5 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all dark:bg-dark_input dark:text-white appearance-none`}
+                        >
+                            <option value="">{t("groups.filters.allGroupTypes") || "All Types"}</option>
+                            <option value="kids">🧒 {groupTypeLabels.kids}</option>
+                            <option value="adults">🧑 {groupTypeLabels.adults}</option>
+                            <option value="mixed">👥 {groupTypeLabels.mixed}</option>
                         </select>
                         <ChevronDown className={`absolute ${isRTL ? "left-3" : "right-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none`} />
                     </div>
@@ -1041,6 +1068,7 @@ export default function GroupsAdmin() {
                                     group={group}
                                     dayLabels={dayLabels}
                                     statusLabels={statusLabels}
+                                    groupTypeLabels={groupTypeLabels}
                                     t={t}
                                     onViewDetails={onViewDetails}
                                     onActivate={onActivateWithNotification}
@@ -1296,23 +1324,22 @@ function DateRangeFilter({ label, icon, fromValue, toValue, onFromChange, onToCh
     );
 }
 
-// ✅ GroupRow مع حالة until_session + بادج الحصة التعويضية
+// ✅ GroupRow مع حالة until_session + بادج الحصة التعويضية + بادج نوع الجروب
 function GroupRow({
-    group, dayLabels, statusLabels, t,
+    group, dayLabels, statusLabels, groupTypeLabels, t,
     onViewDetails, onActivate, onAddStudents, onViewSessions,
     onEdit, onDelete, onFixLinks,
     onHold, onRelease,
 }) {
-        // ✅ نتجاهل فحص اللينكات للجروبات الأوفلاين (مالهاش لينكات أصلاً)
     const isOffline = group.deliveryMode === "offline";
     const hasLinkIssue = !isOffline && !!group.linkHealth?.hasIssue;
     const isOnHold = !!group.isOnHold;
     const isMakeup = !!group.isMakeupGroup;
-        const linkIssueLabel = !isOffline && group.linkHealth?.orphanedCount > 0
+    const groupType = group.groupType || "mixed";
+    const linkIssueLabel = !isOffline && group.linkHealth?.orphanedCount > 0
         ? (t("groups.links.orphaned") || "لينك محذوف من الداتابيز")
         : (t("groups.links.missing") || "جلسات بدون لينك");
 
-    // ✅ نص الـ Hold حسب النوع (بما فيها until_session)
     const holdLabel = (() => {
         if (!isOnHold) return "";
         if (group.hold?.holdType === "indefinite") {
@@ -1336,6 +1363,22 @@ function GroupRow({
             <td className="py-3.5 px-4">
                 <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold text-sm text-MidnightNavyText dark:text-white">{group.name}</p>
+
+                    {/* ✅ NEW: بادج نوع الجروب (Kids/Adults فقط، مش Mixed) */}
+                    {groupType && groupType !== "mixed" && (
+                        <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                groupType === "kids"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20"
+                                    : "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/20"
+                            }`}
+                            title={groupTypeLabels[groupType] || groupType}
+                        >
+                            {groupType === "kids" ? "🧒" : "🧑"}
+                            {groupTypeLabels[groupType] || groupType}
+                        </span>
+                    )}
+
                     {isMakeup && (
                         <span
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-primary/15 to-orange-deep/15 text-primary border border-primary/25 dark:border-primary/30"
@@ -1489,7 +1532,7 @@ function GroupRow({
                         </ActionButton>
                     )}
 
-                                       {hasLinkIssue && !isOffline && (
+                    {hasLinkIssue && !isOffline && (
                         <ActionButton onClick={() => onFixLinks(group.id)} hoverColor="red" title={t("groups.actions.fixLinks") || "إصلاح لينكات الاجتماعات"}>
                             <Link2Off className="w-4 h-4 text-amber-600" />
                         </ActionButton>

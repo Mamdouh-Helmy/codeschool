@@ -31,20 +31,26 @@ const WINDOWS = {
 
 // ============================================================
 // ✅ Helper: تحديد نوع الجلسة (offline / online)
+// ✅ FIX: نعتمد على GROUP deliveryMode كـ Source of Truth، لأن
+//    الـ Session.deliveryMode ممكن يكون اتولّد قديمًا بقيمة مختلفة،
+//    أو يساوي null. لو الجروب عنده deliveryMode واضح، هو اللي يحكم
+//    عشان نضمن إن كل سيشنات الجروب بنفس النوع (مافيش 2 online + 2 offline
+//    في نفس الجروب).
 // ============================================================
 function getSessionDeliveryMode(session) {
-  const sessionMode = session?.deliveryMode;
-
-  if (sessionMode === 'offline' || sessionMode === 'online') {
-    return sessionMode;
-  }
-
+  // ✅ الجروب أولًا (Source of Truth)
   const groupMode = session?.groupId?.deliveryMode;
-
   if (groupMode === 'offline' || groupMode === 'online') {
     return groupMode;
   }
 
+  // ✅ Fallback: لو الجروب مش محدد، نستخدم السيشن
+  const sessionMode = session?.deliveryMode;
+  if (sessionMode === 'offline' || sessionMode === 'online') {
+    return sessionMode;
+  }
+
+  // ✅ Default: online
   return 'online';
 }
 
@@ -230,6 +236,8 @@ export async function GET(req) {
 
     // ============================================================
     // ✅ نقسم المرشحين: Online / Offline
+    //    ✅ FIX: بنستخدم getSessionDeliveryMode الموحّد، عشان التصنيف
+    //    يكون متسق في كل الملف (نفس المصدر بتاع processReminder).
     // ============================================================
     const onlineSessions = [];
     const offlineSessions = [];
@@ -556,10 +564,11 @@ async function processReminder({
         continue;
       }
 
+      // ✅ Logging مفصّل — نوع الجلسة، اسم الجروب، mode الجروب
       console.log(
-        `   🔒 Locked: ${session.title} | diff: ${diff.toFixed(
+        `   🔒 Locked: "${session.title}" | diff: ${diff.toFixed(
           2
-        )} ${window.unit}`
+        )} ${window.unit} | mode: ${getSessionDeliveryMode(session)} | group: "${session.groupId?.name || "?"}" (${session.groupId?._id || "?"}) | group.mode: ${session.groupId?.deliveryMode || "?"}`
       );
 
       // ── إرسال للطلاب ──
@@ -619,6 +628,8 @@ async function processReminder({
           scheduledDate: session.scheduledDate,
           deliveryMode:
             getSessionDeliveryMode(session),
+          groupName: session.groupId?.name || null,
+          groupMode: session.groupId?.deliveryMode || null,
           studentsNotified: studentsSent,
           instructorsNotified: instructorsSent,
         });

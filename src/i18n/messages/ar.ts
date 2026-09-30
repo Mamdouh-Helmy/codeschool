@@ -4950,6 +4950,19 @@ const ar = {
   "dashboard.leads": "العملاء المحتملون",
   "dashboard.integrations": "تكاملات الـ API",
   "sidebar.report": "تقريري",
+  "groups.form.groupType": "نوع المجموعة",
+  "groups.form.groupTypeHintKids": "اختر مجموعة للأطفال",
+  "groups.form.groupTypeHintAdults": "اختر مجموعة للبالغين",
+  "groups.form.steps.basic": "الأساسيات",
+  "groups.form.steps.instructors": "المدربون",
+  "groups.form.steps.schedule": "الجدول",
+  "groups.form.steps.automation": "الأتمتة",
+  "groups.form.basicInfo": "المعلومات الأساسية",
+  "groups.form.instructors": "المدربون",
+  "groups.form.schedule": "الجدول",
+  "groups.form.scheduleLocked": "الجدول مقفل",
+  "groups.form.scheduleLockedDesc": "لا يمكن تعديل الجدول بعد بدء المجموعة.",
+  "groups.form.effectiveFrom": "ساري من",
 };
 
 export default ar;

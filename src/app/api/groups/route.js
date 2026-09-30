@@ -70,6 +70,13 @@ async function checkInstructorConflicts(
   return conflicts;
 }
 
+// ─── Helper: normalize groupType ──────────────────────────────────────────
+// ✅ NEW: نضمن إن القيمة من الـ enum بس، أي حاجة تانية → mixed
+function normalizeGroupType(value) {
+  const allowed = ["kids", "adults", "mixed"];
+  return allowed.includes(value) ? value : "mixed";
+}
+
 // ─── GET ──────────────────────────────────────────────────────────────────────
 export async function GET(req) {
   try {
@@ -97,8 +104,10 @@ export async function GET(req) {
     const studentsMax = searchParams.get("studentsMax");
     const sessionsGenerated = searchParams.get("sessionsGenerated");
     const tagsParam = searchParams.get("tags");
-    // ✅ فلتر جديد: عشان نعرض/نخفي الجروبات التعويضية
+    // ✅ فلتر الجروبات التعويضية
     const makeupFilter = searchParams.get("isMakeupGroup"); // "true" | "false" | null
+    // ✅ NEW: فلتر نوع الجروب (kids / adults / mixed)
+    const groupTypeFilter = searchParams.get("groupType");
 
     const query = { isDeleted: false };
 
@@ -157,6 +166,10 @@ export async function GET(req) {
     } else if (makeupFilter === "false") {
       // نشمل الجروبات العادية + أي وثيقة قديمة مفيهاش الحقل
       query.isMakeupGroup = { $ne: true };
+    }
+    // ✅ NEW: فلتر نوع الجروب (Kids / Adults / Mixed)
+    if (groupTypeFilter && ["kids", "adults", "mixed"].includes(groupTypeFilter)) {
+      query.groupType = groupTypeFilter;
     }
 
     console.log("🔍 Query:", JSON.stringify(query, null, 2));
@@ -226,6 +239,8 @@ export async function GET(req) {
         isFull: group.currentStudentsCount >= group.maxStudents,
         schedule: group.schedule,
         deliveryMode: group.deliveryMode || "online",
+        // ✅ NEW: نوع الجروب (kids / adults / mixed) — قيمة آمنة لو مش موجودة
+        groupType: group.groupType || "mixed",
         location: group.location || "",
         locationDetails: group.locationDetails || null,
         automation: group.automation,
@@ -270,10 +285,21 @@ export async function GET(req) {
         status: "active",
         "hold.isHeld": true,
       }),
-      // ✅ إحصائية جديدة: عدد الجروبات التعويضية ضمن نفس الفلتر
+      // ✅ إحصائية الجروبات التعويضية
       makeup: await Group.countDocuments({
         ...query,
         isMakeupGroup: true,
+      }),
+      // ✅ NEW: إحصائيات نوع الجروب
+      kids: await Group.countDocuments({ ...query, groupType: "kids" }),
+      adults: await Group.countDocuments({ ...query, groupType: "adults" }),
+      mixed: await Group.countDocuments({
+        ...query,
+        $or: [
+          { groupType: "mixed" },
+          { groupType: { $exists: false } },
+          { groupType: null },
+        ],
       }),
     };
 
@@ -329,6 +355,7 @@ export async function POST(req) {
       deliveryMode,
       location,
       locationDetails,
+      groupType, // ✅ NEW
     } = body;
 
     if (!name || !courseId || !maxStudents || !schedule) {
@@ -411,6 +438,9 @@ export async function POST(req) {
     const normalizedDeliveryMode = ["online", "offline"].includes(deliveryMode)
       ? deliveryMode
       : "online";
+
+    // ✅ NEW: normalize groupType (kids / adults / mixed)
+    const normalizedGroupType = normalizeGroupType(groupType);
 
     const hasLocationInfo =
       location?.trim() ||
@@ -518,6 +548,8 @@ export async function POST(req) {
         timezone: schedule.timezone || "Africa/Cairo",
       },
       deliveryMode: normalizedDeliveryMode,
+      // ✅ NEW: نوع الجروب
+      groupType: normalizedGroupType,
       location:
         normalizedDeliveryMode === "offline" ? (location || "").trim() : "",
       locationDetails:
@@ -575,6 +607,8 @@ export async function POST(req) {
     const responseData = {
       ...populatedGroup,
       isMakeupGroup: false,
+      // ✅ NEW: نرجّع groupType بقيمة آمنة
+      groupType: populatedGroup.groupType || "mixed",
       instructors: (populatedGroup.instructors || []).map((i) => ({
         _id: i.userId?._id || i.userId,
         name: i.userId?.name || "",
@@ -657,6 +691,7 @@ export async function PUT(req, { params }) {
       deliveryMode,
       location,
       locationDetails,
+      groupType, // ✅ NEW
     } = body;
 
     const normalizedInstructors = (instructors || []).map((i) => ({
@@ -764,6 +799,12 @@ export async function PUT(req, { params }) {
       ? deliveryMode
       : group.deliveryMode || "online";
 
+    // ✅ NEW: normalize groupType
+    const normalizedGroupType =
+      groupType !== undefined
+        ? normalizeGroupType(groupType)
+        : group.groupType || "mixed";
+
     const hasLocationInfo =
       location?.trim() ||
       locationDetails?.placeName?.trim() ||
@@ -792,6 +833,8 @@ export async function PUT(req, { params }) {
           timezone: schedule.timezone || "Africa/Cairo",
         },
         deliveryMode: normalizedDeliveryMode,
+        // ✅ NEW: نوع الجروب
+        groupType: normalizedGroupType,
         location:
           normalizedDeliveryMode === "offline" ? (location || "").trim() : "",
         locationDetails:
@@ -832,23 +875,36 @@ export async function PUT(req, { params }) {
       .populate("tags")
       .lean();
 
-    await Session.updateMany(
-      {
-        groupId: id,
-        isDeleted: false,
-        status: { $ne: "completed" },
-      },
-      {
-        $set: {
-          deliveryMode: normalizedDeliveryMode,
+    // ✅ FIX: نزامن deliveryMode مع كل السيشنات اللي لسه مش Completed
+    const deliveryModeChanged =
+      normalizedDeliveryMode !== (group.deliveryMode || "online");
+
+    let sessionsSynced = 0;
+    if (deliveryModeChanged) {
+      const syncResult = await Session.updateMany(
+        {
+          groupId: id,
+          isDeleted: false,
+          status: { $ne: "completed" },
         },
-      },
-    );
+        {
+          $set: {
+            deliveryMode: normalizedDeliveryMode,
+          },
+        },
+      );
+      sessionsSynced = syncResult.modifiedCount || 0;
+      console.log(
+        `🔄 [Sync] Synced deliveryMode="${normalizedDeliveryMode}" to ${sessionsSynced} sessions`,
+      );
+    }
 
     const responseData = {
       ...updatedGroup,
       isMakeupGroup: !!updatedGroup.isMakeupGroup,
       makeupInfo: updatedGroup.makeupInfo || null,
+      // ✅ NEW: نرجّع groupType بقيمة آمنة
+      groupType: updatedGroup.groupType || "mixed",
       instructors: (updatedGroup.instructors || []).map((i) => ({
         _id: i.userId?._id || i.userId,
         name: i.userId?.name || "",
@@ -862,6 +918,8 @@ export async function PUT(req, { params }) {
       success: true,
       data: responseData,
       message: "Group updated successfully",
+      deliveryModeSynced: deliveryModeChanged,
+      sessionsSynced,
     });
   } catch (error) {
     console.error("❌ Error updating group:", error);

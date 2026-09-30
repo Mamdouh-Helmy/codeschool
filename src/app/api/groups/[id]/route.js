@@ -5,9 +5,11 @@ import Group from "../../../models/Group";
 import User from "../../../models/User";
 import Student from "../../../models/Student";
 import Session from "../../../models/Session";
-import Tag from "../../../models/Tag"; // ✅ نفس الحكاية هنا كمان
+import Tag from "../../../models/Tag";
 import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function getInstructorsData(instructorsArray) {
   if (!instructorsArray || instructorsArray.length === 0) return [];
@@ -76,7 +78,7 @@ export async function GET(req, { params }) {
       .populate("courseId", "title level curriculum")
       .populate("students", "personalInfo.fullName enrollmentNumber")
       .populate("createdBy", "name email")
-      .populate("tags") // ✅
+      .populate("tags")
       .lean();
 
     if (!group) {
@@ -95,6 +97,8 @@ export async function GET(req, { params }) {
 
     const groupObj = {
       ...group,
+      // ✅ NEW: نرجّع groupType بقيمة افتراضية آمنة لو مش موجود
+      groupType: group.groupType || "mixed",
       instructors: instructorsData,
       firstMeetingLink: firstMeetingLink || null,
     };
@@ -138,11 +142,20 @@ export async function PUT(req, { params }) {
       );
     }
 
+    // ✅ Normalize instructors structure
     if (updateData.instructors) {
       updateData.instructors = updateData.instructors.map((i) => ({
         userId: i?.userId || i,
         countTime: i?.countTime || 0,
       }));
+    }
+
+    // ✅ NEW: normalize groupType (kids / adults / mixed)
+    if (updateData.groupType !== undefined) {
+      const allowed = ["kids", "adults", "mixed"];
+      if (!allowed.includes(updateData.groupType)) {
+        updateData.groupType = "mixed";
+      }
     }
 
     const metadata = existingGroup.metadata || {};
@@ -158,7 +171,6 @@ export async function PUT(req, { params }) {
 
     if (updateData.metadata) delete updatePayload.metadata;
 
-    // ✅ تأكد من وجود tags
     if (!updatePayload.tags) updatePayload.tags = [];
 
     const updatedGroup = await Group.findByIdAndUpdate(
@@ -169,7 +181,7 @@ export async function PUT(req, { params }) {
       .populate("courseId", "title level")
       .populate("instructors.userId", "name email gender language profile")
       .populate("students", "personalInfo.fullName enrollmentNumber")
-      .populate("tags") // ✅
+      .populate("tags")
       .lean();
 
     if (!updatedGroup) {
@@ -179,8 +191,41 @@ export async function PUT(req, { params }) {
       );
     }
 
+    // ═════════════════════════════════════════════════════════════════════
+    // ✅ FIX: مزامنة deliveryMode مع كل السيشنات اللي لسه مش Completed.
+    //    السبب: لما الأدمن يعدّل نوع الجروب من Online → Offline (أو العكس)،
+    //    الجروب بيتحدّث صح لكن السيشنات القديمة بتفضل بالـ mode القديم،
+    //    فالكرون بعد كده يصنّفها غلط ويبعت نوع قوالب مختلف عن الجروب.
+    // ═════════════════════════════════════════════════════════════════════
+    const deliveryModeChanged =
+      updateData.deliveryMode !== undefined &&
+      ["online", "offline"].includes(updateData.deliveryMode) &&
+      updateData.deliveryMode !== (existingGroup.deliveryMode || "online");
+
+    let sessionsSynced = 0;
+    if (deliveryModeChanged) {
+      const syncResult = await Session.updateMany(
+        {
+          groupId: id,
+          isDeleted: false,
+          status: { $ne: "completed" },
+        },
+        {
+          $set: {
+            deliveryMode: updateData.deliveryMode,
+          },
+        },
+      );
+      sessionsSynced = syncResult.modifiedCount || 0;
+      console.log(
+        `🔄 [Sync] Synced deliveryMode="${updateData.deliveryMode}" to ${sessionsSynced} sessions`,
+      );
+    }
+
     const responseData = {
       ...updatedGroup,
+      // ✅ NEW
+      groupType: updatedGroup.groupType || "mixed",
       instructors: (updatedGroup.instructors || []).map((i) => ({
         _id: i.userId?._id || i.userId,
         name: i.userId?.name || "",
@@ -195,6 +240,8 @@ export async function PUT(req, { params }) {
     return NextResponse.json({
       success: true,
       message: "Group updated successfully",
+      deliveryModeSynced: deliveryModeChanged,
+      sessionsSynced,
       data: responseData,
     });
   } catch (error) {
@@ -240,24 +287,27 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    // ✅ FIX: لازم نفك حجز أي لينك مستخدم في سيشنات الجروب ده قبل ما نمسح
-    // الجروب والسيشنات نهائيًا. من غير الخطوة دي، اللينكات بتفضل شايلة
-    // reservation entry بتاعة جروب مبقاش موجود أصلاً (orphaned reservation)،
-    // وده بيمنع جروبات تانية فعليًا محتاجة نفس الميعاد من استخدام اللينك.
     const MeetingLink = (await import("../../../models/MeetingLink")).default;
     const linkedSessions = await Session.find({
       groupId: id,
       isDeleted: false,
       meetingLinkId: { $ne: null },
-    }).select("meetingLinkId").lean();
+    })
+      .select("meetingLinkId")
+      .lean();
 
-    const linkIdsUsed = [...new Set(linkedSessions.map((s) => s.meetingLinkId.toString()))];
+    const linkIdsUsed = [
+      ...new Set(linkedSessions.map((s) => s.meetingLinkId.toString())),
+    ];
     for (const linkId of linkIdsUsed) {
       try {
         const link = await MeetingLink.findById(linkId);
         if (link) await link.releaseReservation(id);
       } catch (e) {
-        console.warn(`⚠️ Could not release link ${linkId} before group delete:`, e.message);
+        console.warn(
+          `⚠️ Could not release link ${linkId} before group delete:`,
+          e.message,
+        );
       }
     }
 
@@ -265,10 +315,12 @@ export async function DELETE(req, { params }) {
     await Session.deleteMany({ groupId: id });
     await Student.updateMany(
       { "academicInfo.groupIds": new mongoose.Types.ObjectId(id) },
-      { $pull: { "academicInfo.groupIds": new mongoose.Types.ObjectId(id) } }
+      { $pull: { "academicInfo.groupIds": new mongoose.Types.ObjectId(id) } },
     );
 
-    console.log(`✅ Group permanently deleted: ${deletedGroup?.code || id} (released ${linkIdsUsed.length} link reservation(s))`);
+    console.log(
+      `✅ Group permanently deleted: ${deletedGroup?.code || id} (released ${linkIdsUsed.length} link reservation(s))`,
+    );
     return NextResponse.json({
       success: true,
       message: "Group permanently deleted from database",

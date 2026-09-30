@@ -4836,6 +4836,20 @@ const en = {
   "dashboard.leads": "Leads",
   "dashboard.integrations": "API Integrations",
   "sidebar.report": "My report",
+  "groups.form.groupType": "Group Type",
+  "groups.form.groupTypeHintKids": "Select a group for kids",
+  "groups.form.groupTypeHintAdults": "Select a group for adults",
+  "groups.form.steps.basic": "Basic",
+  "groups.form.steps.instructors": "Instructors",
+  "groups.form.steps.schedule": "Schedule",
+  "groups.form.steps.automation": "Automation",
+  "groups.form.basicInfo": "Basic Information",
+  "groups.form.instructors": "Instructors",
+  "groups.form.schedule": "Schedule",
+  "groups.form.scheduleLocked": "Schedule Locked",
+  "groups.form.scheduleLockedDesc":
+    "The schedule cannot be modified after the group starts.",
+  "groups.form.effectiveFrom": "Effective From",
 };
 
 export default en;

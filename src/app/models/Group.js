@@ -159,6 +159,14 @@ const groupSchema = new mongoose.Schema(
       createdAt: { type: Date, default: null },
     },
 
+    // ✅ نوع الجروب (Kids / Adults / Mixed)
+    groupType: {
+      type: String,
+      enum: ["kids", "adults", "mixed"],
+      default: "mixed",
+      index: true,
+    },
+
     // ✅ نوع الجروب: أونلاين ولا أوفلاين
     deliveryMode: {
       type: String,
@@ -391,7 +399,7 @@ const groupSchema = new mongoose.Schema(
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
-  }
+  },
 );
 
 // ==================== VIRTUAL PROPERTIES ====================
@@ -456,7 +464,7 @@ groupSchema.virtual("holdRemaining").get(function () {
       sessions: Math.max(
         0,
         (this.hold.holdSessionsCount || 0) -
-          (this.hold.holdSessionsConsumed || 0)
+          (this.hold.holdSessionsConsumed || 0),
       ),
     };
   }
@@ -524,7 +532,7 @@ groupSchema.methods.addInstructorHours = async function (durationMinutes = 0) {
 
 groupSchema.methods.getInstructorHours = function (userId) {
   const instructor = this.instructors.find(
-    (i) => i.userId.toString() === userId.toString()
+    (i) => i.userId.toString() === userId.toString(),
   );
   return instructor?.countTime || 0;
 };
@@ -787,16 +795,12 @@ groupSchema.methods.releaseGroup = async function ({
  */
 groupSchema.methods.consumeHoldSession = async function () {
   if (!this.hold?.isHeld) return { success: false, consumed: 0 };
-  if (this.hold.holdType !== "sessions")
-    return { success: false, consumed: 0 };
+  if (this.hold.holdType !== "sessions") return { success: false, consumed: 0 };
 
-  this.hold.holdSessionsConsumed =
-    (this.hold.holdSessionsConsumed || 0) + 1;
+  this.hold.holdSessionsConsumed = (this.hold.holdSessionsConsumed || 0) + 1;
 
   let autoReleased = false;
-  if (
-    this.hold.holdSessionsConsumed >= this.hold.holdSessionsCount
-  ) {
+  if (this.hold.holdSessionsConsumed >= this.hold.holdSessionsCount) {
     this.hold.isHeld = false;
     this.hold.holdType = null;
     autoReleased = true;

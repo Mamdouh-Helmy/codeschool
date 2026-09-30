@@ -3349,9 +3349,13 @@ export async function onSessionStatusChanged(
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ sendManualSessionReminder
-// ✅ NEW:
+// ✅ NEW (Kids/Adults):
 //   - kids → reminder_24h_student/guardian (زي ما كان)
 //   - adults → reminder_24h_adult (للطالب فقط)
+// ✅ NEW (Guard):
+//   - لو الجلسة Offline → نرفض ونرجع reason: "not_online_session"
+//     عشان نمنع إرسال قوالب Online لسيشن Offline بالغلط.
+//   - المصدر الأساسي لـ mode هو group.deliveryMode (Source of Truth).
 // ═══════════════════════════════════════════════════════════════════════════
 export async function sendManualSessionReminder(
   sessionId,
@@ -3368,6 +3372,33 @@ export async function sendManualSessionReminder(
 
     const group = session.groupId;
 
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ NEW: Guard — نتأكد إن الجلسة Online قبل ما نكمل
+    //    (المفروض الـ cron مايناديش الدالة دي لسيشن offline،
+    //     لكن ده خط دفاع إضافي ضد التصنيف الغلط).
+    //    نعتمد على group.deliveryMode أولًا كـ Source of Truth،
+    //    وبعدين session.deliveryMode كـ fallback.
+    // ═══════════════════════════════════════════════════════════════
+    const deliveryMode =
+      group?.deliveryMode || session.deliveryMode || "online";
+
+    if (deliveryMode === "offline") {
+      console.warn(
+        `⏭️ [GUARD] sendManualSessionReminder skipped — session is OFFLINE (${sessionId}). Use sendOfflineLocationReminder / sendOfflineDropoffAlert / sendOfflinePreAttendancePing instead.`,
+      );
+      return {
+        success: false,
+        reason: "not_online_session",
+        deliveryMode,
+        totalStudents: 0,
+        successCount: 0,
+        failCount: 0,
+        reminderType,
+        notificationResults: [],
+      };
+    }
+
+    // ── Hold Guard (زي ما هو) ──
     const holdCheck = await canSessionSendMessages(sessionId);
     if (!holdCheck.ok) {
       console.log(
