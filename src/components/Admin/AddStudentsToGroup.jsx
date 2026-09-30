@@ -853,6 +853,10 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 
   const handleAdd = async () => {
     if (!selectedStudent) { toast.error("اختر طالباً أولاً"); return; }
+
+    // ✅ هل الطالب بالغ؟
+    const isAdultStudent = selectedStudent?.studentType === "adults";
+
     setAdding(true);
     const loadingToast = toast.loading("جاري الإضافة...");
     try {
@@ -862,8 +866,9 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         body: JSON.stringify({
           studentId: String(selectedStudent._id || selectedStudent.id),
           studentMessage: replaceVars(studentMessage),
-          guardianMessage: replaceVars(guardianMessage),
-          moduleOverviewMessage: replaceVars(moduleOverviewMessage),
+          // ✅ للبالغين: منبعتش رسالة ولي الأمر ولا الموديول
+          guardianMessage: isAdultStudent ? "" : replaceVars(guardianMessage),
+          moduleOverviewMessage: isAdultStudent ? "" : replaceVars(moduleOverviewMessage),
           sendWhatsApp: true,
           isOffline,
         }),
@@ -1035,12 +1040,33 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
   const isFull = currentCount >= maxStudents;
   const available = maxStudents - currentCount;
 
-  const filteredStudents = students.filter(s => {
-    const name = String(s?.personalInfo?.fullName || "").toLowerCase();
-    const email = String(s?.personalInfo?.email || "").toLowerCase();
-    const q = String(search || "").toLowerCase();
-    return name.includes(q) || email.includes(q);
-  });
+  // ✅ نوع الجروب
+  const groupType = group?.groupType || "mixed"; // kids | adults | mixed
+
+  // ✅ هل الطالب المختار بالغ؟
+  const isAdultStudent = selectedStudent?.studentType === "adults";
+
+  // ✅ فلترة الطلاب حسب نوع الجروب + البحث
+  // ⚠️ مش hook — عادي const عشان نتجنب مشكلة ترتيب الـ hooks
+  let filteredStudents = students;
+
+  // 1. فلترة حسب نوع الجروب
+  if (groupType === "kids") {
+    filteredStudents = filteredStudents.filter((s) => (s.studentType || "kids") === "kids");
+  } else if (groupType === "adults") {
+    filteredStudents = filteredStudents.filter((s) => s.studentType === "adults");
+  }
+  // mixed → مفيش فلترة
+
+  // 2. فلترة البحث
+  const searchQuery = String(search || "").toLowerCase().trim();
+  if (searchQuery) {
+    filteredStudents = filteredStudents.filter((s) => {
+      const name = String(s?.personalInfo?.fullName || "").toLowerCase();
+      const email = String(s?.personalInfo?.email || "").toLowerCase();
+      return name.includes(searchQuery) || email.includes(searchQuery);
+    });
+  }
 
   const ctx = getStudentContext();
   const lang = ctx?.lang || "ar";
@@ -1072,6 +1098,20 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
               <span className="font-mono">{group.code}</span>
             </p>
             <div className="flex flex-wrap gap-1.5">
+              {/* ✅ بادج نوع الجروب (Kids / Adults) */}
+              {groupType !== "mixed" && (
+                <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium ${
+                  groupType === "kids"
+                    ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300"
+                    : "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+                }`}>
+                  {groupType === "kids" ? "🧒 " : "🧑 "}
+                  {locale === "ar"
+                    ? groupType === "kids" ? "جروب أطفال" : "جروب بالغين"
+                    : groupType === "kids" ? "Kids Group" : "Adults Group"}
+                </span>
+              )}
+
               {isOffline && (
                 <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-medium">
                   <Icon.MapPin />
@@ -1165,7 +1205,11 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800/60 dark:to-gray-800/20 border-b border-gray-100 dark:border-gray-800">
           <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
             <Icon.Users />
-            {locale === "ar" ? "الطلاب المتاحون" : "Available students"}
+            {groupType === "kids"
+              ? (locale === "ar" ? "الطلاب المتاحون (أطفال)" : "Available students (Kids)")
+              : groupType === "adults"
+                ? (locale === "ar" ? "الطلاب المتاحون (بالغين)" : "Available students (Adults)")
+                : (locale === "ar" ? "الطلاب المتاحون" : "Available students")}
           </span>
           <span className="text-xs font-bold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 rounded-full">{filteredStudents.length}</span>
         </div>
@@ -1175,7 +1219,13 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             {filteredStudents.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-300 dark:text-gray-600">
                 <Icon.Users />
-                <p className="text-sm">{locale === "ar" ? "لا يوجد طلاب متاحين" : "No available students"}</p>
+                <p className="text-sm">
+                  {groupType === "kids"
+                    ? (locale === "ar" ? "لا يوجد طلاب أطفال متاحين" : "No available kids students")
+                    : groupType === "adults"
+                      ? (locale === "ar" ? "لا يوجد طلاب بالغين متاحين" : "No available adults students")
+                      : (locale === "ar" ? "لا يوجد طلاب متاحين" : "No available students")}
+                </p>
               </div>
             ) : (
               filteredStudents.map(student => {
@@ -1186,6 +1236,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                 const sLang = student.communicationPreferences?.preferredLanguage || "ar";
                 const sGender = String(student.personalInfo?.gender || "Male").toLowerCase();
                 const sRelation = String(student.guardianInfo?.relationship || "father").toLowerCase();
+                const sType = student.studentType || "kids";
 
                 return (
                   <div
@@ -1215,6 +1266,13 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                       </div>
                       <p className="text-xs text-gray-400 truncate mb-1.5">{student.personalInfo?.email}</p>
                       <div className="flex gap-1.5 flex-wrap">
+                        {/* ✅ بادج نوع الطالب */}
+                        <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium
+                          ${sType === "adults"
+                            ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300"
+                            : "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300"}`}>
+                          {sType === "adults" ? "🧑 Adults" : "🧒 Kids"}
+                        </span>
                         <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium
                           ${sLang === "ar"
                             ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300"
@@ -1227,9 +1285,11 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                             : "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300"}`}>
                           {sGender === "female" ? (locale === "ar" ? "أنثى" : "Female") : (locale === "ar" ? "ذكر" : "Male")}
                         </span>
-                        <span className="text-xs px-1.5 py-0.5 rounded-md bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300 font-medium">
-                          {sRelation === "mother" ? (locale === "ar" ? "أم" : "Mother") : (locale === "ar" ? "أب" : "Father")}
-                        </span>
+                        {sType !== "adults" && (
+                          <span className="text-xs px-1.5 py-0.5 rounded-md bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300 font-medium">
+                            {sRelation === "mother" ? (locale === "ar" ? "أم" : "Mother") : (locale === "ar" ? "أب" : "Father")}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -1252,7 +1312,9 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
             <span className="text-xs font-semibold text-gray-400 px-1">
-              {lang === "ar" ? "رسائل الترحيب" : "Welcome messages"}
+              {isAdultStudent
+                ? (lang === "ar" ? "رسالة الترحيب" : "Welcome message")
+                : (lang === "ar" ? "رسائل الترحيب" : "Welcome messages")}
             </span>
             <div className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
           </div>
@@ -1261,6 +1323,14 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
                 {selectedStudent.personalInfo?.fullName}
+              </span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+                ${isAdultStudent
+                  ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300"
+                  : "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300"}`}>
+                {isAdultStudent
+                  ? (lang === "ar" ? "🧑 بالغ" : "🧑 Adult")
+                  : (lang === "ar" ? "🧒 طفل" : "🧒 Kid")}
               </span>
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium
                 ${lang === "ar"
@@ -1272,9 +1342,11 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                 ${ctx.isMale ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300" : "bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-300"}`}>
                 {ctx.isMale ? (lang === "ar" ? "ذكر" : "Male") : (lang === "ar" ? "أنثى" : "Female")}
               </span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300 font-medium">
-                {ctx.isFather ? (lang === "ar" ? "أب" : "Father") : (lang === "ar" ? "أم" : "Mother")}
-              </span>
+              {!isAdultStudent && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300 font-medium">
+                  {ctx.isFather ? (lang === "ar" ? "أب" : "Father") : (lang === "ar" ? "أم" : "Mother")}
+                </span>
+              )}
               {isOffline && (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 font-medium">
                   {locale === "ar" ? "أوفلاين" : "Offline"}
@@ -1286,14 +1358,18 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                 <span className="text-gray-300 dark:text-gray-600">{lang === "ar" ? "تحية الطالب:" : "Student greeting:"}</span>
                 <span className="text-violet-600 dark:text-violet-400 font-medium">{ctx.studentSalutation}</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-gray-300 dark:text-gray-600">{lang === "ar" ? "تحية ولي الأمر:" : "Guardian greeting:"}</span>
-                <span className="text-violet-600 dark:text-violet-400 font-medium">{ctx.guardianSalutation}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-gray-300 dark:text-gray-600">{lang === "ar" ? "ابنك/ابنتك:" : "Child title:"}</span>
-                <span className="text-violet-600 dark:text-violet-400 font-medium">{ctx.childTitle}</span>
-              </div>
+              {!isAdultStudent && (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-gray-300 dark:text-gray-600">{lang === "ar" ? "تحية ولي الأمر:" : "Guardian greeting:"}</span>
+                    <span className="text-violet-600 dark:text-violet-400 font-medium">{ctx.guardianSalutation}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-gray-300 dark:text-gray-600">{lang === "ar" ? "ابنك/ابنتك:" : "Child title:"}</span>
+                    <span className="text-violet-600 dark:text-violet-400 font-medium">{ctx.childTitle}</span>
+                  </div>
+                </>
+              )}
               {Array.isArray(group.instructors) && group.instructors.length > 0 && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-gray-300 dark:text-gray-600">{lang === "ar" ? "المدرب:" : "Instructor:"}</span>
@@ -1303,6 +1379,7 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             </div>
           </div>
 
+          {/* ✅ رسالة الطالب — دايمًا ظاهرة */}
           <MessageCard
             step="1"
             title={lang === "ar" ? "رسالة الطالب" : "Student Message"}
@@ -1319,121 +1396,141 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             preview={studentPreview}
           />
 
-          <MessageCard
-            step="2"
-            title={lang === "ar" ? "رسالة ولي الأمر" : "Guardian Message"}
-            badge={ctx.isFather ? (lang === "ar" ? "أب" : "Father") : (lang === "ar" ? "أم" : "Mother")}
-            subtitle={lang === "ar" ? "لولي أمر الطالب" : "To student's guardian"}
-            accentClass="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
-            previewHeaderClass="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
-            textareaRef={guardianTextareaRef}
-            hintsRef={guardianHintsRef}
-            value={guardianMessage}
-            type="guardian"
-            showHints={showGuardianHints}
-            vars={guardianVars}
-            preview={guardianPreview}
-          />
+          {/* ✅ Kids: رسالة ولي الأمر + الموديول */}
+          {!isAdultStudent ? (
+            <>
+              <MessageCard
+                step="2"
+                title={lang === "ar" ? "رسالة ولي الأمر" : "Guardian Message"}
+                badge={ctx.isFather ? (lang === "ar" ? "أب" : "Father") : (lang === "ar" ? "أم" : "Mother")}
+                subtitle={lang === "ar" ? "لولي أمر الطالب" : "To student's guardian"}
+                accentClass="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
+                previewHeaderClass="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
+                textareaRef={guardianTextareaRef}
+                hintsRef={guardianHintsRef}
+                value={guardianMessage}
+                type="guardian"
+                showHints={showGuardianHints}
+                vars={guardianVars}
+                preview={guardianPreview}
+              />
 
-          {/* Message 3: Module Overview */}
-          <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/60 to-transparent dark:from-gray-800/30">
-              <div className="flex items-center gap-2.5">
-                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shadow-sm ring-2 ring-white dark:ring-gray-900 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">3</span>
-                <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-                  {lang === "ar" ? "نظرة عامة على الموديول" : "Module Overview"}
-                </span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 font-medium">
-                  {lang === "ar" ? "لولي الأمر" : "To Guardian"}
-                </span>
-              </div>
-            </div>
-
-            <div className="p-4 space-y-3">
-              {courseModule?.title && (
-                <div className="mb-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-2">
-                  <span className="text-blue-500 mt-0.5 flex-shrink-0"><Icon.BookOpen /></span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
-                      {lang === "ar" ? "الموديول الحالي:" : "Current Module:"}{" "}
-                      <span className="font-bold">{courseModule.title}</span>
-                    </p>
-                    {courseModule.description && (
-                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5 line-clamp-2">
-                        {courseModule.description}
-                      </p>
-                    )}
+              {/* Message 3: Module Overview */}
+              <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/60 to-transparent dark:from-gray-800/30">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shadow-sm ring-2 ring-white dark:ring-gray-900 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">3</span>
+                    <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                      {lang === "ar" ? "نظرة عامة على الموديول" : "Module Overview"}
+                    </span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 font-medium">
+                      {lang === "ar" ? "لولي الأمر" : "To Guardian"}
+                    </span>
                   </div>
                 </div>
-              )}
 
-              <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800">
-                <Icon.School />
-                <span className="text-xs text-gray-500 dark:text-gray-400 flex-1">
-                  {lang === "ar" ? "جنس المشرف" : "Supervisor gender"}
-                  <code className="mx-1 px-1.5 py-0.5 rounded bg-white dark:bg-gray-700 font-mono text-gray-400 text-xs">
-                    {"{supervisorName}"}
-                  </code>
-                </span>
-                <div className="flex gap-1 p-0.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
-                  {["male", "female"].map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      onClick={() => setSupervisorGender(g)}
-                      className={`text-xs px-3 py-1 rounded-md transition-all font-medium
-                        ${supervisorGender === g
-                          ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-sm"
-                          : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"}`}
+                <div className="p-4 space-y-3">
+                  {courseModule?.title && (
+                    <div className="mb-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-2">
+                      <span className="text-blue-500 mt-0.5 flex-shrink-0"><Icon.BookOpen /></span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
+                          {lang === "ar" ? "الموديول الحالي:" : "Current Module:"}{" "}
+                          <span className="font-bold">{courseModule.title}</span>
+                        </p>
+                        {courseModule.description && (
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5 line-clamp-2">
+                            {courseModule.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800">
+                    <Icon.School />
+                    <span className="text-xs text-gray-500 dark:text-gray-400 flex-1">
+                      {lang === "ar" ? "جنس المشرف" : "Supervisor gender"}
+                      <code className="mx-1 px-1.5 py-0.5 rounded bg-white dark:bg-gray-700 font-mono text-gray-400 text-xs">
+                        {"{supervisorName}"}
+                      </code>
+                    </span>
+                    <div className="flex gap-1 p-0.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
+                      {["male", "female"].map((g) => (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => setSupervisorGender(g)}
+                          className={`text-xs px-3 py-1 rounded-md transition-all font-medium
+                            ${supervisorGender === g
+                              ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-sm"
+                              : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"}`}
+                        >
+                          {g === "male" ? (lang === "ar" ? "ذكر" : "Male") : (lang === "ar" ? "أنثى" : "Female")}
+                        </button>
+                      ))}
+                    </div>
+                    {ctx.supervisorNameValue && (
+                      <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                        {ctx.supervisorNameValue}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                    <Icon.Zap />
+                    {lang === "ar"
+                      ? <>اكتب <code className="mx-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 font-mono text-gray-500">@</code> لإدراج متغير</>
+                      : <>Type <code className="mx-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 font-mono text-gray-500">@</code> to insert a variable</>}
+                  </p>
+
+                  <div className="relative">
+                    <textarea
+                      ref={moduleOverviewTextareaRef}
+                      value={moduleOverviewMessage}
+                      onChange={(e) => handleTextareaChange(e, "moduleOverview")}
+                      onKeyDown={(e) => handleKeyDown(e, "moduleOverview")}
+                      dir={lang === "ar" ? "rtl" : "ltr"}
+                      rows={5}
+                      placeholder={lang === "ar"
+                        ? "مثال: {guardianSalutation}، سيتناول {moduleTitle}... المشرف: {supervisorName}"
+                        : "e.g. {guardianSalutation}, this module covers {moduleTitle}... Supervisor: {supervisorName}"}
+                      className="w-full px-3.5 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-100 resize-none leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-300 dark:focus:border-emerald-600 focus:shadow-md transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600"
+                    />
+                    <HintsDropdown vars={moduleOverviewVars} type="moduleOverview" show={showModuleOverviewHints} hintsRef={moduleOverviewHintsRef} />
+                  </div>
+
+                  <div className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-inner">
+                    <div className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                      <Icon.Eye />
+                      <span>{lang === "ar" ? "معاينة" : "Preview"}</span>
+                    </div>
+                    <div
+                      className="px-3 py-2.5 text-xs leading-relaxed text-gray-600 dark:text-gray-400 whitespace-pre-line max-h-28 overflow-y-auto scroll-thin bg-white dark:bg-gray-900"
+                      dir={lang === "ar" ? "rtl" : "ltr"}
                     >
-                      {g === "male" ? (lang === "ar" ? "ذكر" : "Male") : (lang === "ar" ? "أنثى" : "Female")}
-                    </button>
-                  ))}
+                      {moduleOverviewPreview || <span className="text-gray-300 dark:text-gray-600 italic">{lang === "ar" ? "لا توجد معاينة بعد" : "No preview yet"}</span>}
+                    </div>
+                  </div>
                 </div>
-                {ctx.supervisorNameValue && (
-                  <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                    {ctx.supervisorNameValue}
-                  </span>
-                )}
               </div>
-
-              <p className="text-xs text-gray-400 flex items-center gap-1.5">
-                <Icon.Zap />
-                {lang === "ar"
-                  ? <>اكتب <code className="mx-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 font-mono text-gray-500">@</code> لإدراج متغير</>
-                  : <>Type <code className="mx-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 font-mono text-gray-500">@</code> to insert a variable</>}
-              </p>
-
-              <div className="relative">
-                <textarea
-                  ref={moduleOverviewTextareaRef}
-                  value={moduleOverviewMessage}
-                  onChange={(e) => handleTextareaChange(e, "moduleOverview")}
-                  onKeyDown={(e) => handleKeyDown(e, "moduleOverview")}
-                  dir={lang === "ar" ? "rtl" : "ltr"}
-                  rows={5}
-                  placeholder={lang === "ar"
-                    ? "مثال: {guardianSalutation}، سيتناول {moduleTitle}... المشرف: {supervisorName}"
-                    : "e.g. {guardianSalutation}, this module covers {moduleTitle}... Supervisor: {supervisorName}"}
-                  className="w-full px-3.5 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-100 resize-none leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-300 dark:focus:border-emerald-600 focus:shadow-md transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600"
-                />
-                <HintsDropdown vars={moduleOverviewVars} type="moduleOverview" show={showModuleOverviewHints} hintsRef={moduleOverviewHintsRef} />
-              </div>
-
-              <div className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-inner">
-                <div className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                  <Icon.Eye />
-                  <span>{lang === "ar" ? "معاينة" : "Preview"}</span>
-                </div>
-                <div
-                  className="px-3 py-2.5 text-xs leading-relaxed text-gray-600 dark:text-gray-400 whitespace-pre-line max-h-28 overflow-y-auto scroll-thin bg-white dark:bg-gray-900"
-                  dir={lang === "ar" ? "rtl" : "ltr"}
-                >
-                  {moduleOverviewPreview || <span className="text-gray-300 dark:text-gray-600 italic">{lang === "ar" ? "لا توجد معاينة بعد" : "No preview yet"}</span>}
-                </div>
+            </>
+          ) : (
+            /* ✅ Adults: بانر يوضح إن رسالة ولي الأمر مش هتتبعت */
+            <div className="rounded-2xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 p-4 flex items-start gap-3">
+              <span className="text-2xl shrink-0">🧑</span>
+              <div>
+                <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">
+                  {lang === "ar" ? "الطالب بالغ (Adults)" : "Adult Student (Adults)"}
+                </p>
+                <p className="text-xs text-indigo-700 dark:text-indigo-400 mt-0.5 leading-relaxed">
+                  {lang === "ar"
+                    ? "مش هيتبعت رسالة لولي أمر ولا نظرة عامة على الموديول — الطالب هيستقبل رسالة الترحيب بنفسه بس."
+                    : "No guardian message or module overview will be sent — the student receives the welcome message directly."}
+                </p>
               </div>
             </div>
-          </div>
+          )}
         </>
       )}
 
@@ -1450,7 +1547,13 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 
         <button
           onClick={handleAdd}
-          disabled={!selectedStudent || !studentMessage.trim() || !guardianMessage.trim() || isFull || adding}
+          disabled={
+            !selectedStudent ||
+            !studentMessage.trim() ||
+            (!isAdultStudent && !guardianMessage.trim()) ||
+            isFull ||
+            adding
+          }
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-600 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-violet-600/20 hover:shadow-lg active:scale-[0.98]"
         >
           {adding ? (

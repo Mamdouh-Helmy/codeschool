@@ -14,6 +14,7 @@ import {
   Lock,
   Check,
   CalendarClock,
+  User as UserIcon,
 } from "lucide-react";
 import ModalShell from "./ModalShell";
 import AttendanceStatusPicker from "./AttendanceStatusPicker";
@@ -52,6 +53,7 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // buildVariables
+// ✅ NEW: لو الطالب adults → guardian variables تتطلع فاضية ""
 // ─────────────────────────────────────────────────────────────────────────────
 function buildVariables(student, status, session, dbVars = {}) {
   if (!student) return {};
@@ -62,6 +64,9 @@ function buildVariables(student, status, session, dbVars = {}) {
   const isMale = gender !== "female";
   const isFather = relationship !== "mother";
   const genderCtx = { studentGender: gender, guardianType: relationship };
+
+  // ✅ NEW
+  const isAdult = student.studentType === "adults";
 
   const studentFirstName =
     lang === "ar"
@@ -80,6 +85,9 @@ function buildVariables(student, status, session, dbVars = {}) {
   const salutationBase_ar =
     resolveVar(dbVars, "salutation_ar", "ar", genderCtx) ||
     (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
+
+  const salutationBase_en =
+    resolveVar(dbVars, "salutation_en", "en", genderCtx) || "Dear";
 
   const guardianSalBase_ar =
     resolveVar(dbVars, "guardianSalutation_ar", "ar", genderCtx) ||
@@ -122,7 +130,8 @@ function buildVariables(student, status, session, dbVars = {}) {
   const guardianSalutation = lang === "ar" ? guardianSalutation_ar : guardianSalutation_en;
 
   const studentSalutation_ar = `${salutationBase_ar} ${studentFirstName}`;
-  const studentSalutation = lang === "ar" ? studentSalutation_ar : `Dear ${studentFirstName}`;
+  const studentSalutation_en = `${salutationBase_en} ${studentFirstName}`;
+  const studentSalutation = lang === "ar" ? studentSalutation_ar : studentSalutation_en;
 
   const childTitle = lang === "ar" ? childTitleAr : childTitleEn;
 
@@ -146,15 +155,20 @@ function buildVariables(student, status, session, dbVars = {}) {
     : "";
 
   return {
-    guardianSalutation,
-    guardianSalutation_ar,
-    guardianSalutation_en,
-    guardianName: guardianFirstName,
-    guardianFullName: student.guardianInfo?.name || "",
-    relationship_ar,
+    // ✅ Guardian — للـ kids بس، فاضية للبالغ
+    guardianSalutation: isAdult ? "" : guardianSalutation,
+    guardianSalutation_ar: isAdult ? "" : guardianSalutation_ar,
+    guardianSalutation_en: isAdult ? "" : guardianSalutation_en,
+    guardianName: isAdult ? "" : guardianFirstName,
+    guardianFullName: isAdult ? "" : (student.guardianInfo?.name || ""),
+    relationship_ar: isAdult ? "" : relationship_ar,
 
-    salutation: guardianSalutation,
+    salutation: isAdult ? studentSalutation : guardianSalutation,
+
+    // ✅ Student
     studentSalutation,
+    studentSalutation_ar,
+    studentSalutation_en,
     studentName: studentFirstName,
     studentName_ar: studentFirstName,
     studentName_en: studentFirstName,
@@ -163,8 +177,14 @@ function buildVariables(student, status, session, dbVars = {}) {
     name_ar: studentFirstName,
     name_en: studentFirstName,
     fullName: student.personalInfo?.fullName || "",
+    salutation_ar: studentSalutation_ar,
+    salutation_en: studentSalutation_en,
 
-    childTitle,
+    // ✅ Child title — للـ kids بس
+    childTitle: isAdult ? "" : childTitle,
+    childTitle_ar: isAdult ? "" : childTitleAr,
+    childTitle_en: isAdult ? "" : childTitleEn,
+
     you_ar,
     welcome_ar,
     studentGender_ar,
@@ -186,6 +206,9 @@ function buildVariables(student, status, session, dbVars = {}) {
 
     selectedLanguage_ar: lang === "ar" ? "العربية" : "الإنجليزية",
     selectedLanguage_en: lang === "ar" ? "Arabic" : "English",
+
+    // ✅ flag مفيد للقوالب
+    isAdult,
   };
 }
 
@@ -443,6 +466,9 @@ export default function AttendanceModal({
     [session.id, getStudentStatus, isRTL]
   );
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ saveTemplateToDatabase — بتحفظ في القالب الصح حسب نوع الطالب
+  // ═══════════════════════════════════════════════════════════════════════
   const saveTemplateToDatabase = useCallback(
     async (studentId, rawContent) => {
       if (!studentId || !rawContent?.trim()) return;
@@ -450,29 +476,45 @@ export default function AttendanceModal({
       const status = getStudentStatus(studentId);
       if (!["absent", "late", "excused"].includes(status)) return;
 
+      const student = groupStudents.find(
+        (s) => s._id?.toString() === studentId?.toString()
+      );
+      const isAdult = student?.studentType === "adults";
+
       setSavingTemplate((prev) => ({ ...prev, [studentId]: true }));
 
       try {
-        const typeMap = {
-          absent: "absence_notification",
-          late: "late_notification",
-          excused: "excused_notification",
-        };
-        const nameMap = {
-          absent: "Absence Notification",
-          late: "Late Notification",
-          excused: "Excused Absence Notification",
-        };
+        // ✅ للطالب البالغ: نستخدم قوالب _adult + recipientType = student
+        const typeMap = isAdult
+          ? {
+              absent: "absence_notification_adult",
+              late: "late_notification_adult",
+              excused: "excused_notification_adult",
+            }
+          : {
+              absent: "absence_notification",
+              late: "late_notification",
+              excused: "excused_notification",
+            };
+
+        const nameMap = isAdult
+          ? {
+              absent: "Absence Notification — Adult",
+              late: "Late Notification — Adult",
+              excused: "Excused Absence Notification — Adult",
+            }
+          : {
+              absent: "Absence Notification",
+              late: "Late Notification",
+              excused: "Excused Absence Notification",
+            };
 
         const templateType = typeMap[status];
-        const recipientType = "guardian";
-        const student = groupStudents.find(
-          (s) => s._id?.toString() === studentId?.toString()
-        );
+        const recipientType = isAdult ? "student" : "guardian";
         const studentLang = student?.communicationPreferences?.preferredLanguage || "ar";
 
         const searchRes = await fetch(
-          `/api/message-templates?type=${templateType}&default=true`
+          `/api/message-templates?type=${templateType}&recipient=${recipientType}&default=true`
         );
         const searchJson = await searchRes.json();
 
@@ -494,15 +536,18 @@ export default function AttendanceModal({
           });
           saveJson = await saveRes.json();
         } else {
-          saveRes = await fetch("/api/message-templates", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              templateType,
-              recipientType,
-              ...updatePayload,
-              isActive: true,
-              variables: [
+          // ✅ قائمة المتغيرات بتختلف حسب النوع
+          const varsList = isAdult
+            ? [
+                { key: "studentSalutation", label: "Student Salutation" },
+                { key: "studentName", label: "Student Name" },
+                { key: "status", label: "Attendance Status" },
+                { key: "sessionName", label: "Session Name" },
+                { key: "date", label: "Date" },
+                { key: "time", label: "Time" },
+                { key: "enrollmentNumber", label: "Enrollment Number" },
+              ]
+            : [
                 { key: "guardianSalutation", label: "Guardian Salutation" },
                 { key: "studentName", label: "Student Name" },
                 { key: "childTitle", label: "Son / Daughter" },
@@ -511,7 +556,17 @@ export default function AttendanceModal({
                 { key: "date", label: "Date" },
                 { key: "time", label: "Time" },
                 { key: "enrollmentNumber", label: "Enrollment Number" },
-              ],
+              ];
+
+          saveRes = await fetch("/api/message-templates", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              templateType,
+              recipientType,
+              ...updatePayload,
+              isActive: true,
+              variables: varsList,
             }),
           });
           saveJson = await saveRes.json();
@@ -608,21 +663,38 @@ export default function AttendanceModal({
     });
   }, []);
 
-  const availableVariables = useMemo(
-    () => [
-      { key: "{guardianSalutation}", label: isRTL ? "تحية ولي الأمر (كاملة)" : "Guardian Salutation", icon: "👤" },
-      { key: "{guardianName}", label: isRTL ? "اسم ولي الأمر" : "Guardian Name", icon: "👤" },
-      { key: "{studentName}", label: isRTL ? "اسم الطالب" : "Student Name", icon: "👶" },
-      { key: "{childTitle}", label: isRTL ? "ابنك / ابنتك" : "Son / Daughter", icon: "👪" },
-      { key: "{status}", label: isRTL ? "حالة الحضور" : "Attendance Status", icon: "📊" },
-      { key: "{attendanceStatus}", label: isRTL ? "حالة الحضور (بديل)" : "Attendance (alt)", icon: "📊" },
-      { key: "{sessionName}", label: isRTL ? "اسم الجلسة" : "Session Name", icon: "📘" },
-      { key: "{date}", label: isRTL ? "التاريخ" : "Date", icon: "📅" },
-      { key: "{time}", label: isRTL ? "الوقت" : "Time", icon: "⏰" },
-      { key: "{enrollmentNumber}", label: isRTL ? "الرقم التعريفي" : "Enrollment No.", icon: "🔢" },
-      { key: "{groupName}", label: isRTL ? "اسم المجموعة" : "Group Name", icon: "👥" },
-      { key: "{meetingLink}", label: isRTL ? "رابط الجلسة" : "Meeting Link", icon: "🔗" },
-    ],
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ getAvailableVariables — function بتاخد isAdult
+  // ═══════════════════════════════════════════════════════════════════════
+  const getAvailableVariables = useCallback(
+    (isAdult) =>
+      isAdult
+        ? [
+            { key: "{studentSalutation}", label: isRTL ? "تحية الطالب" : "Student Salutation", icon: "👤" },
+            { key: "{studentName}", label: isRTL ? "اسم الطالب" : "Student Name", icon: "👶" },
+            { key: "{status}", label: isRTL ? "حالة الحضور" : "Attendance Status", icon: "📊" },
+            { key: "{attendanceStatus}", label: isRTL ? "حالة الحضور (بديل)" : "Attendance (alt)", icon: "📊" },
+            { key: "{sessionName}", label: isRTL ? "اسم الجلسة" : "Session Name", icon: "📘" },
+            { key: "{date}", label: isRTL ? "التاريخ" : "Date", icon: "📅" },
+            { key: "{time}", label: isRTL ? "الوقت" : "Time", icon: "⏰" },
+            { key: "{enrollmentNumber}", label: isRTL ? "الرقم التعريفي" : "Enrollment No.", icon: "🔢" },
+            { key: "{groupName}", label: isRTL ? "اسم المجموعة" : "Group Name", icon: "👥" },
+            { key: "{meetingLink}", label: isRTL ? "رابط الجلسة" : "Meeting Link", icon: "🔗" },
+          ]
+        : [
+            { key: "{guardianSalutation}", label: isRTL ? "تحية ولي الأمر (كاملة)" : "Guardian Salutation", icon: "👤" },
+            { key: "{guardianName}", label: isRTL ? "اسم ولي الأمر" : "Guardian Name", icon: "👤" },
+            { key: "{studentName}", label: isRTL ? "اسم الطالب" : "Student Name", icon: "👶" },
+            { key: "{childTitle}", label: isRTL ? "ابنك / ابنتك" : "Son / Daughter", icon: "👪" },
+            { key: "{status}", label: isRTL ? "حالة الحضور" : "Attendance Status", icon: "📊" },
+            { key: "{attendanceStatus}", label: isRTL ? "حالة الحضور (بديل)" : "Attendance (alt)", icon: "📊" },
+            { key: "{sessionName}", label: isRTL ? "اسم الجلسة" : "Session Name", icon: "📘" },
+            { key: "{date}", label: isRTL ? "التاريخ" : "Date", icon: "📅" },
+            { key: "{time}", label: isRTL ? "الوقت" : "Time", icon: "⏰" },
+            { key: "{enrollmentNumber}", label: isRTL ? "الرقم التعريفي" : "Enrollment No.", icon: "🔢" },
+            { key: "{groupName}", label: isRTL ? "اسم المجموعة" : "Group Name", icon: "👥" },
+            { key: "{meetingLink}", label: isRTL ? "رابط الجلسة" : "Meeting Link", icon: "🔗" },
+          ],
     [isRTL]
   );
 
@@ -675,30 +747,33 @@ export default function AttendanceModal({
   );
 
   const handleKeyDown = useCallback(
-    (e, studentId) => {
+    (e, studentId, isAdult) => {
       if (!showHints[studentId]) return;
+
+      const varsList = getAvailableVariables(isAdult);
+
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedHintIndex((prev) => ({
           ...prev,
-          [studentId]: ((prev[studentId] || 0) + 1) % availableVariables.length,
+          [studentId]: ((prev[studentId] || 0) + 1) % varsList.length,
         }));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedHintIndex((prev) => ({
           ...prev,
           [studentId]:
-            ((prev[studentId] || 0) - 1 + availableVariables.length) %
-            availableVariables.length,
+            ((prev[studentId] || 0) - 1 + varsList.length) %
+            varsList.length,
         }));
       } else if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
-        insertVariable(studentId, availableVariables[selectedHintIndex[studentId] || 0]);
+        insertVariable(studentId, varsList[selectedHintIndex[studentId] || 0]);
       } else if (e.key === "Escape") {
         setShowHints((prev) => ({ ...prev, [studentId]: false }));
       }
     },
-    [showHints, selectedHintIndex, availableVariables, insertVariable]
+    [showHints, selectedHintIndex, getAvailableVariables, insertVariable]
   );
 
   useEffect(() => {
@@ -918,6 +993,9 @@ export default function AttendanceModal({
           const gender = (student.personalInfo?.gender || "male").toLowerCase().trim();
           const relationship = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
 
+          // ✅ NEW: هل الطالب بالغ؟
+          const isAdultStudent = student.studentType === "adults";
+
           const { remainingHours } = checkStudentBalance(student);
           const isLocked = isStudentLocked(student);
           const effectiveLocked = isLocked || sessionLocked;
@@ -926,15 +1004,14 @@ export default function AttendanceModal({
           const currentVars = buildVariables(student, status, session, dbVars);
           const rawMsg = customMessages[studentId] || "";
           const previewMsg = renderTemplate(rawMsg, currentVars);
+          const varsList = getAvailableVariables(isAdultStudent);
 
           return (
             <div
               key={studentId}
               className={`overflow-hidden rounded-xl border transition-colors ${sessionLocked
                   ? "border-amber-200 dark:border-amber-500/20"
-                  : effectiveLocked
-                    ? "border-slate-200 dark:border-white/10"
-                    : "border-slate-200 dark:border-white/10"
+                  : "border-slate-200 dark:border-white/10"
                 } ${effectiveLocked ? "opacity-70" : ""}`}
             >
               <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 dark:bg-transparent">
@@ -944,6 +1021,18 @@ export default function AttendanceModal({
                     <p className="font-semibold text-slate-800 dark:text-white">
                       {student.personalInfo?.fullName}
                     </p>
+
+                    {/* ✅ بادج نوع الطالب */}
+                    <span
+                      className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        isAdultStudent
+                          ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300"
+                          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
+                      }`}
+                    >
+                      {isAdultStudent ? "🧑 Adults" : "🧒 Kids"}
+                    </span>
+
                     {sessionLocked && (
                       <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
                         <Lock className="h-3 w-3" /> {isRTL ? "مقفولة" : "Locked"}
@@ -962,13 +1051,18 @@ export default function AttendanceModal({
                     </span>
                     <span>{studentLang === "ar" ? "🇸🇦 عربي" : "🇬🇧 English"}</span>
                     <span>{gender === "female" ? (isRTL ? "👧 أنثى" : "👧 Female") : (isRTL ? "👦 ذكر" : "👦 Male")}</span>
-                    <span>
-                      {relationship === "mother"
-                        ? (isRTL ? "👩 أم" : "👩 Mother")
-                        : relationship === "father"
-                          ? (isRTL ? "👨 أب" : "👨 Father")
-                          : (isRTL ? "👤 ولي" : "👤 Guardian")}
-                    </span>
+
+                    {/* ✅ بادج الأب/الأم — للـ kids بس */}
+                    {!isAdultStudent && (
+                      <span>
+                        {relationship === "mother"
+                          ? (isRTL ? "👩 أم" : "👩 Mother")
+                          : relationship === "father"
+                            ? (isRTL ? "👨 أب" : "👨 Father")
+                            : (isRTL ? "👤 ولي" : "👤 Guardian")}
+                      </span>
+                    )}
+
                     {student.creditSystem?.currentPackage && (
                       <span
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${remainingHours <= 0
@@ -1020,38 +1114,86 @@ export default function AttendanceModal({
               )}
 
               {!effectiveLocked && needsMessage && (
-                <div className="space-y-4 border-t border-violet-100 bg-violet-50/50 p-4 dark:border-violet-500/10 dark:bg-violet-500/5">
+                <div className={`space-y-4 border-t p-4 ${
+                  isAdultStudent
+                    ? "border-indigo-100 bg-indigo-50/50 dark:border-indigo-500/10 dark:bg-indigo-500/5"
+                    : "border-violet-100 bg-violet-50/50 dark:border-violet-500/10 dark:bg-violet-500/5"
+                }`}>
                   <div className="flex items-start gap-3">
-                    <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" />
+                    <MessageCircle className={`mt-0.5 h-4 w-4 shrink-0 ${
+                      isAdultStudent ? "text-indigo-500" : "text-violet-500"
+                    }`} />
                     <div className="flex-1 space-y-3">
                       <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-semibold text-violet-900 dark:text-violet-200">
-                          {isRTL ? "رسالة لولي الأمر" : "Message for guardian"}{" "}
-                          <span className="font-normal text-violet-600 dark:text-violet-400">
-                            ({student.guardianInfo?.name || (isRTL ? "ولي الأمر" : "Guardian")})
+                        <h4 className={`text-sm font-semibold ${
+                          isAdultStudent
+                            ? "text-indigo-900 dark:text-indigo-200"
+                            : "text-violet-900 dark:text-violet-200"
+                        }`}>
+                          {/* ✅ العنوان بيتغير حسب نوع الطالب */}
+                          {isAdultStudent
+                            ? (isRTL ? "رسالة للطالب" : "Message for student")
+                            : (isRTL ? "رسالة لولي الأمر" : "Message for guardian")}
+                          <span className={`font-normal ${
+                            isAdultStudent
+                              ? "text-indigo-600 dark:text-indigo-400"
+                              : "text-violet-600 dark:text-violet-400"
+                          }`}>
+                            {" "}
+                            (
+                            {isAdultStudent
+                              ? (student.personalInfo?.fullName || (isRTL ? "الطالب" : "Student"))
+                              : (student.guardianInfo?.name || (isRTL ? "ولي الأمر" : "Guardian"))}
+                            )
                           </span>
                         </h4>
                         <button
                           onClick={() => resetToDefaultTemplate(studentId)}
                           disabled={loadingTemplates[studentId]}
-                          className="flex items-center gap-1 rounded-md border border-violet-200 bg-white px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-50 dark:border-violet-500/20 dark:bg-white/5 dark:text-violet-300"
+                          className={`flex items-center gap-1 rounded-md border bg-white px-2 py-1 text-[11px] font-medium dark:bg-white/5 ${
+                            isAdultStudent
+                              ? "border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-500/20 dark:text-indigo-300"
+                              : "border-violet-200 text-violet-700 hover:bg-violet-50 dark:border-violet-500/20 dark:text-violet-300"
+                          }`}
                         >
                           <RefreshCw className={`h-3 w-3 ${loadingTemplates[studentId] ? "animate-spin" : ""}`} />
                           {isRTL ? "استعادة" : "Reset"}
                         </button>
                       </div>
 
-                      <div className="space-y-1 rounded-lg border border-violet-100 bg-white p-2.5 text-xs dark:border-violet-500/10 dark:bg-white/5">
+                      <div className={`space-y-1 rounded-lg border bg-white p-2.5 text-xs dark:bg-white/5 ${
+                        isAdultStudent
+                          ? "border-indigo-100 dark:border-indigo-500/10"
+                          : "border-violet-100 dark:border-violet-500/10"
+                      }`}>
+                        {/* ✅ الصفوف بتتغير حسب النوع */}
+                        {isAdultStudent ? (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <span className="w-24 shrink-0 text-indigo-500">{isRTL ? "تحية:" : "Greeting:"}</span>
+                              <span className="font-medium text-slate-700 dark:text-slate-200">{currentVars.studentSalutation}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="w-24 shrink-0 text-indigo-500">{isRTL ? "الطالب:" : "Student:"}</span>
+                              <span className="text-slate-700 dark:text-slate-200"><strong>{currentVars.studentName}</strong></span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <span className="w-24 shrink-0 text-violet-500">{isRTL ? "تحية:" : "Greeting:"}</span>
+                              <span className="font-medium text-slate-700 dark:text-slate-200">{currentVars.guardianSalutation}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="w-24 shrink-0 text-violet-500">{isRTL ? "الطالب:" : "Student:"}</span>
+                              <span className="text-slate-700 dark:text-slate-200">{currentVars.childTitle} <strong>{currentVars.studentName}</strong></span>
+                            </div>
+                          </>
+                        )}
                         <div className="flex items-center gap-2">
-                          <span className="w-24 shrink-0 text-violet-500">{isRTL ? "تحية:" : "Greeting:"}</span>
-                          <span className="font-medium text-slate-700 dark:text-slate-200">{currentVars.guardianSalutation}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-24 shrink-0 text-violet-500">{isRTL ? "الطالب:" : "Student:"}</span>
-                          <span className="text-slate-700 dark:text-slate-200">{currentVars.childTitle} <strong>{currentVars.studentName}</strong></span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-24 shrink-0 text-violet-500">{isRTL ? "الحالة:" : "Status:"}</span>
+                          <span className={`w-24 shrink-0 ${
+                            isAdultStudent ? "text-indigo-500" : "text-violet-500"
+                          }`}>{isRTL ? "الحالة:" : "Status:"}</span>
                           <span className="text-slate-700 dark:text-slate-200">{currentVars.status}</span>
                         </div>
                         {manuallyEdited[studentId] && (
@@ -1067,33 +1209,56 @@ export default function AttendanceModal({
                           ref={(el) => (textareaRefs.current[studentId] = el)}
                           value={rawMsg}
                           onChange={(e) => handleTextareaInput(e, studentId)}
-                          onKeyDown={(e) => handleKeyDown(e, studentId)}
+                          onKeyDown={(e) => handleKeyDown(e, studentId, isAdultStudent)}
                           onSelect={(e) => setCursorPosition((prev) => ({ ...prev, [studentId]: e.target.selectionStart }))}
-                          placeholder={isRTL ? "مثال: {guardianSalutation}، {childTitle} {studentName} غاب اليوم." : "e.g. {guardianSalutation}, {childTitle} {studentName} was absent today."}
-                          className="h-28 w-full resize-none rounded-lg border border-violet-200 bg-white px-3 py-2.5 font-mono text-sm text-slate-800 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-violet-500/20 dark:bg-white/5 dark:text-white"
+                          placeholder={isRTL ? "مثال: {studentSalutation}، غبت اليوم." : "e.g. {studentSalutation}, you were absent today."}
+                          className={`h-28 w-full resize-none rounded-lg border bg-white px-3 py-2.5 font-mono text-sm text-slate-800 outline-none focus:ring-2 dark:bg-white/5 dark:text-white ${
+                            isAdultStudent
+                              ? "border-indigo-200 focus:border-indigo-400 focus:ring-indigo-100 dark:border-indigo-500/20"
+                              : "border-violet-200 focus:border-violet-400 focus:ring-violet-100 dark:border-violet-500/20"
+                          }`}
                           dir={studentLang === "ar" ? "rtl" : "ltr"}
                         />
                         {showHints[studentId] && (
                           <div
                             ref={(el) => (hintsRefs.current[studentId] = el)}
-                            className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-violet-200 bg-white shadow-xl dark:border-violet-500/30 dark:bg-[#171a24]"
+                            className={`absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border bg-white shadow-xl dark:bg-[#171a24] ${
+                              isAdultStudent
+                                ? "border-indigo-200 dark:border-indigo-500/30"
+                                : "border-violet-200 dark:border-violet-500/30"
+                            }`}
                           >
-                            <div className="border-b border-violet-100 bg-violet-50 px-3 py-1.5 dark:border-violet-500/10 dark:bg-violet-500/10">
-                              <p className="flex items-center gap-1 text-xs font-semibold text-violet-700 dark:text-violet-300">
+                            <div className={`border-b px-3 py-1.5 ${
+                              isAdultStudent
+                                ? "border-indigo-100 bg-indigo-50 dark:border-indigo-500/10 dark:bg-indigo-500/10"
+                                : "border-violet-100 bg-violet-50 dark:border-violet-500/10 dark:bg-violet-500/10"
+                            }`}>
+                              <p className={`flex items-center gap-1 text-xs font-semibold ${
+                                isAdultStudent
+                                  ? "text-indigo-700 dark:text-indigo-300"
+                                  : "text-violet-700 dark:text-violet-300"
+                              }`}>
                                 <Zap className="h-3 w-3" /> {isRTL ? "المتغيرات المتاحة" : "Available Variables"}
                               </p>
                             </div>
-                            {availableVariables.map((v, i) => (
+                            {varsList.map((v, i) => (
                               <button
                                 key={v.key}
                                 type="button"
                                 onClick={() => insertVariable(studentId, v)}
-                                className={`flex w-full items-center gap-2 px-3 py-2 text-right hover:bg-violet-50 dark:hover:bg-violet-500/10 ${i === (selectedHintIndex[studentId] || 0) ? "bg-violet-100 dark:bg-violet-500/20" : ""
-                                  }`}
+                                className={`flex w-full items-center gap-2 px-3 py-2 text-right hover:bg-slate-50 dark:hover:bg-white/5 ${
+                                  i === (selectedHintIndex[studentId] || 0)
+                                    ? (isAdultStudent ? "bg-indigo-100 dark:bg-indigo-500/20" : "bg-violet-100 dark:bg-violet-500/20")
+                                    : ""
+                                }`}
                               >
                                 <span>{v.icon}</span>
                                 <div className="flex flex-1 items-center justify-between">
-                                  <span className="font-mono text-sm text-violet-600 dark:text-violet-400">{v.key}</span>
+                                  <span className={`font-mono text-sm ${
+                                    isAdultStudent
+                                      ? "text-indigo-600 dark:text-indigo-400"
+                                      : "text-violet-600 dark:text-violet-400"
+                                  }`}>{v.key}</span>
                                   <span className="text-xs text-slate-500">{v.label}</span>
                                 </div>
                               </button>
@@ -1114,18 +1279,37 @@ export default function AttendanceModal({
                           value={notes}
                           onChange={(e) => updateStudentNotes(studentId, e.target.value)}
                           placeholder={isRTL ? "أضف ملاحظة..." : "Add a note..."}
-                          className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-400 dark:border-violet-500/20 dark:bg-white/5 dark:text-white"
+                          className={`w-full rounded-lg border bg-white px-3 py-2 text-sm outline-none dark:bg-white/5 dark:text-white ${
+                            isAdultStudent
+                              ? "border-indigo-200 focus:border-indigo-400 dark:border-indigo-500/20"
+                              : "border-violet-200 focus:border-violet-400 dark:border-violet-500/20"
+                          }`}
                         />
                       </div>
 
                       {previewMsg && (
-                        <div className="overflow-hidden rounded-lg border border-violet-100 bg-white dark:border-violet-500/10 dark:bg-white/5">
-                          <div className="flex items-center justify-between border-b border-violet-100 bg-violet-50 px-3 py-1.5 dark:border-violet-500/10 dark:bg-violet-500/10">
-                            <span className="text-[11px] font-medium text-violet-700 dark:text-violet-300">
+                        <div className={`overflow-hidden rounded-lg border bg-white dark:bg-white/5 ${
+                          isAdultStudent
+                            ? "border-indigo-100 dark:border-indigo-500/10"
+                            : "border-violet-100 dark:border-violet-500/10"
+                        }`}>
+                          <div className={`flex items-center justify-between border-b px-3 py-1.5 ${
+                            isAdultStudent
+                              ? "border-indigo-100 bg-indigo-50 dark:border-indigo-500/10 dark:bg-indigo-500/10"
+                              : "border-violet-100 bg-violet-50 dark:border-violet-500/10 dark:bg-violet-500/10"
+                          }`}>
+                            <span className={`text-[11px] font-medium ${
+                              isAdultStudent
+                                ? "text-indigo-700 dark:text-indigo-300"
+                                : "text-violet-700 dark:text-violet-300"
+                            }`}>
                               📋 {isRTL ? "معاينة الرسالة الفعلية" : "Live preview"}
                             </span>
-                            <span className="text-[11px] text-violet-400">
-                              {studentLang === "ar" ? "🇸🇦" : "🇬🇧"} · {gender === "female" ? "👧" : "👦"} · {relationship === "mother" ? "👩" : "👨"}
+                            <span className={`text-[11px] ${
+                              isAdultStudent ? "text-indigo-400" : "text-violet-400"
+                            }`}>
+                              {studentLang === "ar" ? "🇸🇦" : "🇬🇧"} · {gender === "female" ? "👧" : "👦"}
+                              {!isAdultStudent && ` · ${relationship === "mother" ? "👩" : "👨"}`}
                             </span>
                           </div>
                           <div
@@ -1137,7 +1321,11 @@ export default function AttendanceModal({
                         </div>
                       )}
 
-                      <div className="flex justify-end border-t border-violet-100 pt-2 dark:border-violet-500/10">
+                      <div className={`flex justify-end border-t pt-2 ${
+                        isAdultStudent
+                          ? "border-indigo-100 dark:border-indigo-500/10"
+                          : "border-violet-100 dark:border-violet-500/10"
+                      }`}>
                         <button
                           onClick={() => saveTemplateToDatabase(studentId, rawMsg)}
                           disabled={!rawMsg || savingTemplate[studentId] || loadingTemplates[studentId]}

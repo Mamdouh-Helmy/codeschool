@@ -37,6 +37,7 @@ export async function POST(req, { params }) {
 
     // ═══════════════════════════════════════════════════════════
     // MODE 1: إرسال لطالب واحد فقط (يُستخدم من الـ Modal بعدّاد)
+    // ✅ NEW: لو الطالب adults → منبعتش رسالة ولي الأمر خالص
     // ═══════════════════════════════════════════════════════════
     if (singleStudent) {
       const { studentId, studentMessage, guardianMessage } = singleStudent;
@@ -63,11 +64,15 @@ export async function POST(req, { params }) {
         );
       }
 
+      // ✅ هل الطالب بالغ؟
+      const isAdultStudent = student.studentType === "adults";
+
       const language =
         student.communicationPreferences?.preferredLanguage || "ar";
       const sentTo = { student: false, guardian: false };
       const errors = {};
 
+      // ── رسالة الطالب ────────────────────────────────────────
       if (studentMessage?.trim() && student.personalInfo?.whatsappNumber) {
         try {
           await wapilotService.sendAndLogMessage({
@@ -79,6 +84,7 @@ export async function POST(req, { params }) {
             metadata: {
               groupId: id,
               recipientType: "student",
+              isAdult: isAdultStudent,
             },
           });
           sentTo.student = true;
@@ -92,7 +98,16 @@ export async function POST(req, { params }) {
         }
       }
 
-      if (guardianMessage?.trim() && student.guardianInfo?.whatsappNumber) {
+      // ── رسالة ولي الأمر — للـ kids بس ─────────────────────
+      // ✅ حماية مزدوجة: بنرفض نبعت حتى لو وصلت رسالة guardian من الفرونت
+      if (isAdultStudent) {
+        console.log(
+          `   ⏭️ [ADULT] Skipping guardian completion message for ${student.personalInfo?.fullName}`
+        );
+      } else if (
+        guardianMessage?.trim() &&
+        student.guardianInfo?.whatsappNumber
+      ) {
         try {
           await wapilotService.sendAndLogMessage({
             studentId,
@@ -121,6 +136,7 @@ export async function POST(req, { params }) {
         success: sentTo.student || sentTo.guardian,
         studentId,
         studentName: student.personalInfo?.fullName,
+        isAdult: isAdultStudent,
         sentTo,
         errors: Object.keys(errors).length > 0 ? errors : undefined,
       });
@@ -169,6 +185,8 @@ export async function POST(req, { params }) {
 
     // ═══════════════════════════════════════════════════════════
     // MODE 2: إرسال لكل الطلاب تلقائيًا (Auto / Cron-style)
+    // ✅ onGroupCompleted في groupAutomation.js بتتخطى رسالة ولي الأمر
+    //    للطالب البالغ بنفسها (isAdult check جواها)
     // ═══════════════════════════════════════════════════════════
     let automationResult = null;
 

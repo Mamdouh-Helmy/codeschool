@@ -18,7 +18,7 @@ import {
 import ModalShell from "./ModalShell";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// resolveVar — gender-aware value from a DB TemplateVariable object
+// resolveVar
 // ─────────────────────────────────────────────────────────────────────────────
 function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
   const v = dbVars[key];
@@ -50,7 +50,7 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tone maps (full class strings so Tailwind can see them)
+// TONES
 // ─────────────────────────────────────────────────────────────────────────────
 const TONES = {
   student: {
@@ -124,7 +124,10 @@ export default function GroupCompletionModal({
   const guardianTextareaRef = useRef(null);
   const hintsRef = useRef({ student: null, guardian: null });
 
-  // ── Fetch DB template variables on mount ──────────────────────────────────
+  // ✅ NEW: هل الطالب المختار بالغ؟
+  const isAdultStudent = selectedStudentForPreview?.studentType === "adults";
+
+  // ── Fetch DB template variables ──────────────────────────────────────────
   useEffect(() => {
     fetch("/api/whatsapp/template-variables")
       .then((r) => r.json())
@@ -138,7 +141,7 @@ export default function GroupCompletionModal({
       .catch((err) => console.error("❌ Failed to load template variables:", err));
   }, []);
 
-  // ── Click outside handler ─────────────────────────────────────────────────
+  // ── Click outside handler ────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e) => {
       if (hintsRef.current.student  && !hintsRef.current.student.contains(e.target))
@@ -169,6 +172,9 @@ export default function GroupCompletionModal({
       const isFather     = relationship !== "mother";
       const genderCtx    = { studentGender: gender, guardianType: relationship };
 
+      // ✅ NEW
+      const isAdult = student.studentType === "adults";
+
       const studentFirstName =
         lang === "ar"
           ? student.personalInfo?.nickname?.ar?.trim() || student.personalInfo?.fullName?.split(" ")[0] || "الطالب"
@@ -184,8 +190,7 @@ export default function GroupCompletionModal({
         (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
 
       const salutationBase_en =
-        resolveVar(dbVars, "salutation_en", "en", genderCtx) ||
-        "Dear";
+        resolveVar(dbVars, "salutation_en", "en", genderCtx) || "Dear";
 
       const guardianSalBase_ar =
         resolveVar(dbVars, "guardianSalutation_ar", "ar", genderCtx) ||
@@ -218,27 +223,29 @@ export default function GroupCompletionModal({
         studentSalutation_ar,
         studentSalutation_en,
 
-        guardianSalutation,
-        guardianSalutation_ar,
-        guardianSalutation_en,
+        // ✅ Guardian — فاضية للطالب البالغ
+        guardianSalutation: isAdult ? "" : guardianSalutation,
+        guardianSalutation_ar: isAdult ? "" : guardianSalutation_ar,
+        guardianSalutation_en: isAdult ? "" : guardianSalutation_en,
 
         salutation_ar: studentSalutation_ar,
         salutation_en: studentSalutation_en,
 
-        salutation: guardianSalutation,
+        salutation: isAdult ? studentSalutation : guardianSalutation,
 
         studentName:      studentFirstName,
         studentFullName:  student.personalInfo?.fullName || "",
-        guardianName:     guardianFirstName,
-        guardianFullName: student.guardianInfo?.name || "",
+        guardianName:     isAdult ? "" : guardianFirstName,
+        guardianFullName: isAdult ? "" : (student.guardianInfo?.name || ""),
 
-        childTitle,
+        childTitle: isAdult ? "" : childTitle,
 
         groupName:        group?.name || "",
         groupCode:        group?.code || "",
         courseName:       group?.courseSnapshot?.title || "",
         enrollmentNumber: student.enrollmentNumber || "",
         feedbackLink:     formData.feedbackLink || "",
+        isAdult,
       };
     },
     [group, formData.feedbackLink, dbVars]
@@ -279,10 +286,14 @@ export default function GroupCompletionModal({
             });
             const json = await res.json();
             if (json.success) {
+              const isAdult = student.studentType === "adults";
               return {
                 studentId:       student._id,
                 studentTemplate:  json.data.student?.rawContent  || json.data.student?.content  || "",
-                guardianTemplate: json.data.guardian?.rawContent || json.data.guardian?.content || "",
+                // ✅ للطالب البالغ: منستخدمش قالب ولي الأمر
+                guardianTemplate: isAdult
+                  ? ""
+                  : (json.data.guardian?.rawContent || json.data.guardian?.content || ""),
               };
             }
             return null;
@@ -304,7 +315,11 @@ export default function GroupCompletionModal({
 
         if (groupStudents[0]) {
           setCurrentStudentMessage(newStudentTemplates[groupStudents[0]._id]  || "");
-          setCurrentGuardianMessage(newGuardianTemplates[groupStudents[0]._id] || "");
+          setCurrentGuardianMessage(
+            groupStudents[0].studentType === "adults"
+              ? ""
+              : (newGuardianTemplates[groupStudents[0]._id] || "")
+          );
         }
       } catch (err) {
         console.error("Error fetching templates:", err);
@@ -321,30 +336,44 @@ export default function GroupCompletionModal({
   useEffect(() => {
     if (!selectedStudentForPreview) return;
     setPreviewStudentMessage(renderTemplate(currentStudentMessage,  selectedStudentForPreview));
-    setPreviewGuardianMessage(renderTemplate(currentGuardianMessage, selectedStudentForPreview));
-  }, [currentStudentMessage, currentGuardianMessage, selectedStudentForPreview, renderTemplate]);
 
-  // ── Available variables for hints ─────────────────────────────────────────
-  const availableVariables = useMemo(
-    () => [
-      { key: "{studentSalutation}",     label: isRTL ? "تحية الطالب (حسب اللغة)"    : "Student Salutation",        icon: "👶" },
-      { key: "{studentSalutation_ar}",  label: isRTL ? "تحية الطالب - عربي"          : "Student Salutation (AR)",    icon: "👶" },
-      { key: "{studentSalutation_en}",  label: isRTL ? "تحية الطالب - إنجليزي"       : "Student Salutation (EN)",    icon: "👶" },
-      { key: "{salutation_ar}",         label: isRTL ? "التحية - عربي"               : "Salutation (AR)",            icon: "👋" },
-      { key: "{salutation_en}",         label: isRTL ? "التحية - إنجليزي"            : "Salutation (EN)",            icon: "👋" },
-      { key: "{guardianSalutation}",    label: isRTL ? "تحية ولي الأمر (حسب اللغة)" : "Guardian Salutation",        icon: "👤" },
-      { key: "{guardianSalutation_ar}", label: isRTL ? "تحية ولي الأمر - عربي"       : "Guardian Salutation (AR)",   icon: "👤" },
-      { key: "{guardianSalutation_en}", label: isRTL ? "تحية ولي الأمر - إنجليزي"   : "Guardian Salutation (EN)",   icon: "👤" },
-      { key: "{salutation}",            label: isRTL ? "التحية العامة (ولي الأمر)"   : "Salutation (guardian alias)", icon: "👋" },
-      { key: "{studentName}",           label: isRTL ? "اسم الطالب"                  : "Student Name",               icon: "👶" },
-      { key: "{guardianName}",          label: isRTL ? "اسم ولي الأمر"              : "Guardian Name",              icon: "👤" },
-      { key: "{childTitle}",            label: isRTL ? "ابنك/ابنتك"                  : "Son/Daughter",               icon: "👪" },
-      { key: "{groupName}",             label: isRTL ? "اسم المجموعة"               : "Group Name",                 icon: "👥" },
-      { key: "{groupCode}",             label: isRTL ? "كود المجموعة"               : "Group Code",                 icon: "🔢" },
-      { key: "{courseName}",            label: isRTL ? "اسم الكورس"                 : "Course Name",                icon: "📘" },
-      { key: "{enrollmentNumber}",      label: isRTL ? "الرقم التعريفي"             : "Enrollment No.",             icon: "🔢" },
-      { key: "{feedbackLink}",          label: isRTL ? "رابط التقييم"               : "Feedback Link",              icon: "🔗" },
-    ],
+    if (isAdultStudent) {
+      setPreviewGuardianMessage("");
+    } else {
+      setPreviewGuardianMessage(renderTemplate(currentGuardianMessage, selectedStudentForPreview));
+    }
+  }, [currentStudentMessage, currentGuardianMessage, selectedStudentForPreview, renderTemplate, isAdultStudent]);
+
+  // ── Available variables — dynamic حسب نوع الطالب ─────────────────────────
+  const getAvailableVariables = useCallback(
+    (isAdult) => {
+      const studentVars = [
+        { key: "{studentSalutation}",     label: isRTL ? "تحية الطالب (حسب اللغة)"    : "Student Salutation",        icon: "👶" },
+        { key: "{studentSalutation_ar}",  label: isRTL ? "تحية الطالب - عربي"          : "Student Salutation (AR)",    icon: "👶" },
+        { key: "{studentSalutation_en}",  label: isRTL ? "تحية الطالب - إنجليزي"       : "Student Salutation (EN)",    icon: "👶" },
+        { key: "{salutation_ar}",         label: isRTL ? "التحية - عربي"               : "Salutation (AR)",            icon: "👋" },
+        { key: "{salutation_en}",         label: isRTL ? "التحية - إنجليزي"            : "Salutation (EN)",            icon: "👋" },
+        { key: "{studentName}",           label: isRTL ? "اسم الطالب"                  : "Student Name",               icon: "👶" },
+        { key: "{groupName}",             label: isRTL ? "اسم المجموعة"               : "Group Name",                 icon: "👥" },
+        { key: "{groupCode}",             label: isRTL ? "كود المجموعة"               : "Group Code",                 icon: "🔢" },
+        { key: "{courseName}",            label: isRTL ? "اسم الكورس"                 : "Course Name",                icon: "📘" },
+        { key: "{enrollmentNumber}",      label: isRTL ? "الرقم التعريفي"             : "Enrollment No.",             icon: "🔢" },
+        { key: "{feedbackLink}",          label: isRTL ? "رابط التقييم"               : "Feedback Link",              icon: "🔗" },
+      ];
+
+      if (isAdult) return studentVars;
+
+      const guardianVars = [
+        { key: "{guardianSalutation}",    label: isRTL ? "تحية ولي الأمر (حسب اللغة)" : "Guardian Salutation",        icon: "👤" },
+        { key: "{guardianSalutation_ar}", label: isRTL ? "تحية ولي الأمر - عربي"       : "Guardian Salutation (AR)",   icon: "👤" },
+        { key: "{guardianSalutation_en}", label: isRTL ? "تحية ولي الأمر - إنجليزي"   : "Guardian Salutation (EN)",   icon: "👤" },
+        { key: "{salutation}",            label: isRTL ? "التحية العامة (ولي الأمر)"   : "Salutation (guardian alias)", icon: "👋" },
+        { key: "{guardianName}",          label: isRTL ? "اسم ولي الأمر"              : "Guardian Name",              icon: "👤" },
+        { key: "{childTitle}",            label: isRTL ? "ابنك/ابنتك"                  : "Son/Daughter",               icon: "👪" },
+      ];
+
+      return [...studentVars, ...guardianVars];
+    },
     [isRTL]
   );
 
@@ -367,16 +396,20 @@ export default function GroupCompletionModal({
 
       setSelectedStudentForPreview(student);
 
+      const isAdult = student.studentType === "adults";
+
       setCurrentStudentMessage(
         editedStudentTemplates[studentId]  ?? studentTemplates[studentId]  ?? ""
       );
       setCurrentGuardianMessage(
-        editedGuardianTemplates[studentId] ?? guardianTemplates[studentId] ?? ""
+        isAdult
+          ? ""
+          : (editedGuardianTemplates[studentId] ?? guardianTemplates[studentId] ?? "")
       );
 
       setManuallyEdited({
         student:  !!editedStudentTemplates[studentId],
-        guardian: !!editedGuardianTemplates[studentId],
+        guardian: isAdult ? false : !!editedGuardianTemplates[studentId],
       });
     },
     [groupStudents, studentTemplates, guardianTemplates, editedStudentTemplates, editedGuardianTemplates]
@@ -389,6 +422,7 @@ export default function GroupCompletionModal({
     setLoadingTemplates(true);
     try {
       const studentId = selectedStudentForPreview._id;
+      const isAdult = selectedStudentForPreview.studentType === "adults";
 
       const res = await fetch(`/api/groups/${resolvedGroupId}/completion-templates`, {
         method:  "POST",
@@ -399,7 +433,10 @@ export default function GroupCompletionModal({
 
       if (json.success) {
         const st = json.data.student?.rawContent  || json.data.student?.content  || "";
-        const gt = json.data.guardian?.rawContent || json.data.guardian?.content || "";
+        // ✅ للطالب البالغ: منستخدمش قالب ولي الأمر
+        const gt = isAdult
+          ? ""
+          : (json.data.guardian?.rawContent || json.data.guardian?.content || "");
 
         setStudentTemplates((prev)  => ({ ...prev, [studentId]: st }));
         setGuardianTemplates((prev) => ({ ...prev, [studentId]: gt }));
@@ -425,6 +462,9 @@ export default function GroupCompletionModal({
   const saveTemplateToDatabase = useCallback(
     async (type, content) => {
       if (!content?.trim() || !selectedStudentForPreview) return;
+
+      // ✅ حماية: مايحفظش قوالب ولي أمر للطالب البالغ
+      if (isAdultStudent && type === "guardian") return;
 
       setSavingTemplate((prev) => ({ ...prev, [type]: true }));
       try {
@@ -516,7 +556,7 @@ export default function GroupCompletionModal({
         setSavingTemplate((prev) => ({ ...prev, [type]: false }));
       }
     },
-    [selectedStudentForPreview, isRTL]
+    [selectedStudentForPreview, isRTL, isAdultStudent]
   );
 
   // ── Insert variable into textarea ─────────────────────────────────────────
@@ -594,27 +634,36 @@ export default function GroupCompletionModal({
   const handleKeyDown = useCallback(
     (type) => (e) => {
       if (!showHints[type]) return;
+      const varsList = getAvailableVariables(isAdultStudent);
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedHintIndex((prev) => ({ ...prev, [type]: (prev[type] + 1) % availableVariables.length }));
+        setSelectedHintIndex((prev) => ({ ...prev, [type]: (prev[type] + 1) % varsList.length }));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        setSelectedHintIndex((prev) => ({ ...prev, [type]: (prev[type] - 1 + availableVariables.length) % availableVariables.length }));
+        setSelectedHintIndex((prev) => ({ ...prev, [type]: (prev[type] - 1 + varsList.length) % varsList.length }));
       } else if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
-        insertVariable(type, availableVariables[selectedHintIndex[type]]);
+        insertVariable(type, varsList[selectedHintIndex[type]]);
       } else if (e.key === "Escape") {
         setShowHints((prev) => ({ ...prev, [type]: false }));
       }
     },
-    [showHints, selectedHintIndex, availableVariables, insertVariable]
+    [showHints, selectedHintIndex, getAvailableVariables, insertVariable, isAdultStudent]
   );
 
   // ── Send messages ─────────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {
-    if (!currentStudentMessage?.trim() || !currentGuardianMessage?.trim()) {
-      toast.error(isRTL ? "الرجاء كتابة الرسالتين" : "Please write both messages");
-      return;
+    // ✅ للطالب البالغ: نتحقق من رسالة الطالب بس
+    if (isAdultStudent) {
+      if (!currentStudentMessage?.trim()) {
+        toast.error(isRTL ? "الرجاء كتابة رسالة الطالب" : "Please write the student message");
+        return;
+      }
+    } else {
+      if (!currentStudentMessage?.trim() || !currentGuardianMessage?.trim()) {
+        toast.error(isRTL ? "الرجاء كتابة الرسالتين" : "Please write both messages");
+        return;
+      }
     }
 
     setSending(true);
@@ -625,12 +674,16 @@ export default function GroupCompletionModal({
       for (let i = 0; i < groupStudents.length; i++) {
         const student   = groupStudents[i];
         const studentId = student._id;
+        const studentIsAdult = student.studentType === "adults";
 
         const rawStudent  = editedStudentTemplates[studentId]  ?? studentTemplates[studentId]  ?? "";
-        const rawGuardian = editedGuardianTemplates[studentId] ?? guardianTemplates[studentId] ?? "";
+        // ✅ للطالب البالغ: مش بنقرا قالب ولي الأمر
+        const rawGuardian = studentIsAdult
+          ? ""
+          : (editedGuardianTemplates[studentId] ?? guardianTemplates[studentId] ?? "");
 
         const studentMsg  = renderTemplate(rawStudent,  student);
-        const guardianMsg = renderTemplate(rawGuardian, student);
+        const guardianMsg = studentIsAdult ? "" : renderTemplate(rawGuardian, student);
 
         try {
           const res = await fetch(`/api/groups/${resolvedGroupId}/complete`, {
@@ -640,6 +693,7 @@ export default function GroupCompletionModal({
               singleStudent: {
                 studentId:      student._id,
                 studentMessage:  studentMsg,
+                // ✅ للطالب البالغ: نبعت نص فاضي (الباك إند بيتخطاه)
                 guardianMessage: guardianMsg,
               },
               feedbackLink: formData.feedbackLink || null,
@@ -684,13 +738,14 @@ export default function GroupCompletionModal({
     studentTemplates, guardianTemplates,
     editedStudentTemplates, editedGuardianTemplates,
     renderTemplate, formData.feedbackLink,
-    isRTL, onClose, onRefresh,
+    isRTL, onClose, onRefresh, isAdultStudent,
   ]);
 
   // ── Hints dropdown ────────────────────────────────────────────────────────
   const renderHints = (type) => {
     if (!showHints[type]) return null;
     const c = TONES[type];
+    const varsList = getAvailableVariables(isAdultStudent);
     return (
       <div
         ref={(el) => (hintsRef.current[type] = el)}
@@ -701,7 +756,7 @@ export default function GroupCompletionModal({
             <Zap className="h-3 w-3" /> {isRTL ? "المتغيرات المتاحة" : "Available Variables"}
           </p>
         </div>
-        {availableVariables.map((v, i) => (
+        {varsList.map((v, i) => (
           <button
             key={v.key}
             type="button"
@@ -809,7 +864,8 @@ export default function GroupCompletionModal({
           sending ||
           loadingTemplates ||
           !currentStudentMessage?.trim() ||
-          !currentGuardianMessage?.trim()
+          // ✅ للطالب البالغ: مش بنطلب guardian message
+          (!isAdultStudent && !currentGuardianMessage?.trim())
         }
         className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-amber-500/20 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
       >
@@ -891,6 +947,7 @@ export default function GroupCompletionModal({
                   const gender = (student.personalInfo?.gender || "male").toLowerCase().trim();
                   const rel    = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
                   const isEdited = editedStudentTemplates[student._id] || editedGuardianTemplates[student._id];
+                  const isAdult = student.studentType === "adults";
 
                   return (
                     <button
@@ -903,10 +960,13 @@ export default function GroupCompletionModal({
                           : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300 dark:border-white/10 dark:bg-transparent dark:text-slate-300"
                       }`}
                     >
-                      <span>{gender === "female" ? "👧" : "👦"}</span>
+                      <span>{isAdult ? "🧑" : gender === "female" ? "👧" : "👦"}</span>
                       <span>{student.personalInfo?.fullName?.split(" ")[0]}</span>
                       <span className="opacity-70">{lang === "ar" ? "🇸🇦" : "🇬🇧"}</span>
-                      <span className="opacity-70">{rel === "mother" ? "👩" : rel === "father" ? "👨" : "👤"}</span>
+                      {/* ✅ للأطفال بس نعرض علاقة ولي الأمر */}
+                      {!isAdult && (
+                        <span className="opacity-70">{rel === "mother" ? "👩" : rel === "father" ? "👨" : "👤"}</span>
+                      )}
                       {isEdited && <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />}
                     </button>
                   );
@@ -921,18 +981,36 @@ export default function GroupCompletionModal({
                     </span>
                     <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.student}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-28 shrink-0 font-medium text-violet-600 dark:text-violet-400">
-                      👪 {isRTL ? "تحية ولي الأمر:" : "Guardian:"}
-                    </span>
-                    <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.guardian}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-28 shrink-0 font-medium text-emerald-600 dark:text-emerald-400">
-                      👶 {isRTL ? "ابنك/ابنتك:" : "Child title:"}
-                    </span>
-                    <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.childTitle}</span>
-                  </div>
+
+                  {/* ✅ لولي الأمر — للـ kids بس */}
+                  {!isAdultStudent && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className="w-28 shrink-0 font-medium text-violet-600 dark:text-violet-400">
+                          👪 {isRTL ? "تحية ولي الأمر:" : "Guardian:"}
+                        </span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.guardian}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-28 shrink-0 font-medium text-emerald-600 dark:text-emerald-400">
+                          👶 {isRTL ? "ابنك/ابنتك:" : "Child title:"}
+                        </span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.childTitle}</span>
+                      </div>
+                    </>
+                  )}
+
+                  {isAdultStudent && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="w-28 shrink-0 font-medium text-indigo-600 dark:text-indigo-400">
+                        🧑 {isRTL ? "نوع الطالب:" : "Type:"}
+                      </span>
+                      <span className="font-semibold text-indigo-700 dark:text-indigo-300">
+                        {isRTL ? "بالغ — بدون ولي أمر" : "Adult — No guardian"}
+                      </span>
+                    </div>
+                  )}
+
                   {(manuallyEdited.student || manuallyEdited.guardian) && (
                     <p className="pt-0.5 text-orange-500 dark:text-orange-400">
                       ✏️ {isRTL ? "هذا الطالب لديه رسائل معدلة يدوياً" : "This student has manually edited messages"}
@@ -943,8 +1021,27 @@ export default function GroupCompletionModal({
             </div>
           )}
 
+          {/* ✅ للطالب البالغ: بانر يوضح إن رسالة ولي الأمر اتخطّت */}
+          {isAdultStudent && (
+            <div className="flex items-start gap-2.5 rounded-xl border border-indigo-200 bg-indigo-100/60 p-3.5 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+              <span className="text-lg shrink-0">🧑</span>
+              <div className="text-xs text-indigo-800 dark:text-indigo-200">
+                <p className="font-bold mb-0.5">
+                  {isRTL ? "الطالب بالغ (Adults)" : "Adult Student (Adults)"}
+                </p>
+                <p className="opacity-90 leading-relaxed">
+                  {isRTL
+                    ? "هتتبعت رسالة تهنئة للطالب بس — مفيش رسالة لولي الأمر لأنه طالب بالغ."
+                    : "Only the student will get the completion message — no guardian message since the student is an adult."}
+                </p>
+              </div>
+            </div>
+          )}
+
           {renderMessageEditor("student")}
-          {renderMessageEditor("guardian")}
+
+          {/* ✅ رسالة ولي الأمر — للـ kids بس */}
+          {!isAdultStudent && renderMessageEditor("guardian")}
 
           {/* Save template buttons */}
           <div className="flex justify-end gap-2 border-t border-amber-100 pt-3 dark:border-amber-500/10">
@@ -959,17 +1056,21 @@ export default function GroupCompletionModal({
                 <><Save className="h-3 w-3" /> {isRTL ? "حفظ قالب الطالب" : "Save Student Template"}</>
               )}
             </button>
-            <button
-              onClick={() => saveTemplateToDatabase("guardian", currentGuardianMessage)}
-              disabled={!currentGuardianMessage || savingTemplate.guardian || loadingTemplates}
-              className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {savingTemplate.guardian ? (
-                <><RefreshCw className="h-3 w-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</>
-              ) : (
-                <><Save className="h-3 w-3" /> {isRTL ? "حفظ قالب ولي الأمر" : "Save Guardian Template"}</>
-              )}
-            </button>
+
+            {/* ✅ زر حفظ قالب ولي الأمر — للـ kids بس */}
+            {!isAdultStudent && (
+              <button
+                onClick={() => saveTemplateToDatabase("guardian", currentGuardianMessage)}
+                disabled={!currentGuardianMessage || savingTemplate.guardian || loadingTemplates}
+                className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {savingTemplate.guardian ? (
+                  <><RefreshCw className="h-3 w-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</>
+                ) : (
+                  <><Save className="h-3 w-3" /> {isRTL ? "حفظ قالب ولي الأمر" : "Save Guardian Template"}</>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
@@ -978,8 +1079,8 @@ export default function GroupCompletionModal({
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <p>
             {isRTL
-              ? `هيتبعت رسالتين مخصصتين لكل طالب (رسالة للطالب ورسالة لولي الأمر) حسب بيانات كل طالب: اللغة والجنس وعلاقة ولي الأمر. إجمالي الطلاب: ${groupStudents.length}`
-              : `Two personalized messages are sent per student (student + guardian) based on each student's language, gender and guardian relationship. Total students: ${groupStudents.length}`}
+              ? `لكل طالب: رسالة تهنئة (ورسالة ولي أمر للأطفال بس). إجمالي الطلاب: ${groupStudents.length}`
+              : `Per student: a completion message (plus a guardian message for kids). Total students: ${groupStudents.length}`}
           </p>
         </div>
       </div>

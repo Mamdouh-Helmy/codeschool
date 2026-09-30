@@ -57,7 +57,6 @@ function isSessionLockedByHold(session, group, allGroupSessions) {
 
 const json = (body, status = 200) => NextResponse.json(body, { status });
 
-/** بيرجع response لو المستخدم مش مصرح له، وإلا null */
 function checkRole(user) {
   if (!user) return json({ success: false, message: 'غير مصرح بالوصول' }, 401);
   if (user.role !== 'instructor' && user.role !== 'admin') {
@@ -66,7 +65,6 @@ function checkRole(user) {
   return null;
 }
 
-/** الأدمن يعدّي دايمًا، المدرس لازم يكون مسؤول عن الجروب */
 function checkGroupOwnership(user, group) {
   if (user.role === 'admin') return null;
   const isOwner = group?.instructors?.some(
@@ -77,7 +75,6 @@ function checkGroupOwnership(user, group) {
     : json({ success: false, message: 'مش مدرس هذا الجروب' }, 403);
 }
 
-/** مجموعة IDs الطلاب اللي في الجروب (بتدعم الشكلين: ObjectId أو { studentId }) */
 function getGroupStudentIdSet(group) {
   return new Set((group?.students || []).map((s) => String(s.studentId || s)));
 }
@@ -91,20 +88,25 @@ async function parseBody(req) {
 // ✅ CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ✅ قوالب الأطفال — بتتبعت لولي الأمر
 const EVALUATION_TEMPLATE_MAP = {
   pass: 'evaluation_pass',
   review: 'evaluation_review',
   repeat: 'evaluation_repeat',
 };
 
+// ✅ NEW: قوالب البالغين — بتتبعت للطالب مباشرة، مفيش ولي أمر
+const EVALUATION_TEMPLATE_MAP_ADULT = {
+  pass: 'evaluation_pass_adult',
+  review: 'evaluation_review_adult',
+  repeat: 'evaluation_repeat_adult',
+};
+
 const VALID_DECISIONS = Object.keys(EVALUATION_TEMPLATE_MAP);
 const EXCLUDED_FROM_EVALUATION_STATUSES = ['absent', 'late', 'excused'];
 
-// ✅ الـ select الموحد لبيانات الجروب في كل الـ handlers.
-// deliveryMode لازم يكون موجود عشان الـ fallback (session.deliveryMode || group.deliveryMode) يشتغل.
 const GROUP_POPULATE_SELECT = 'name code students instructors hold status deliveryMode';
 
-/** ✅ مصدر واحد لتحديد نوع السيشن (بيدعم الـ fallback على الجروب) */
 function resolveDeliveryMode(session) {
   return session?.deliveryMode || session?.groupId?.deliveryMode || 'online';
 }
@@ -181,8 +183,9 @@ function buildGuardianSalutation(guardianFirstName, isFather, lang) {
 }
 
 /**
- * ✅ كل اللي الرسائل التلاتة محتاجاه من بيانات الطالب/ولي الأمر في مكان واحد
- * (كان متكرر حرفيًا في 3 دوال).
+ * ✅ كل اللي الرسائل محتاجاه من بيانات الطالب/ولي الأمر في مكان واحد
+ * ✅ NEW: دلوقتي بيرجع كمان studentSalutation عشان القوالب البالغة
+ *         (`evaluation_*_adult`) اللي بتستخدم {studentSalutation}
  */
 function buildRecipientContext(student, dbVars) {
   const lang = student.communicationPreferences?.preferredLanguage || 'ar';
@@ -201,10 +204,20 @@ function buildRecipientContext(student, dbVars) {
     ? student.guardianInfo?.nickname?.ar?.trim() || student.guardianInfo?.name?.split(' ')[0] || 'ولي الأمر'
     : student.guardianInfo?.nickname?.en?.trim() || student.guardianInfo?.name?.split(' ')[0] || 'Guardian';
 
+  // ✅ Guardian salutation
   const salutationFromDb = resolveVar(dbVars, 'guardianSalutation', lang, genderCtx);
   const guardianSalutation = salutationFromDb
     ? salutationFromDb.replace(/\{guardianName\}/g, guardianFirstName)
     : buildGuardianSalutation(guardianFirstName, isFather, lang);
+
+  // ✅ NEW: Student salutation (للبالغين)
+  const salutationBaseAr =
+    resolveVar(dbVars, 'salutation_ar', 'ar', genderCtx) ||
+    (isMale ? 'عزيزي الطالب' : 'عزيزتي الطالبة');
+  const salutationBaseEn = resolveVar(dbVars, 'salutation_en', 'en', genderCtx) || 'Dear';
+  const studentSalutationAr = `${salutationBaseAr} ${studentFirstName}`;
+  const studentSalutationEn = `${salutationBaseEn} ${studentFirstName}`;
+  const studentSalutation = isAr ? studentSalutationAr : studentSalutationEn;
 
   const childTitle =
     resolveVar(dbVars, 'childTitle', lang, genderCtx) ||
@@ -213,7 +226,12 @@ function buildRecipientContext(student, dbVars) {
   return {
     lang,
     genderCtx,
+    isMale,
+    isFather,
     studentFirstName,
+    studentSalutation,
+    studentSalutationAr,
+    studentSalutationEn,
     guardianFirstName,
     guardianSalutation,
     childTitle,
@@ -269,12 +287,19 @@ async function getSessionBlogInfo(session) {
   }
 }
 
-// ─── Evaluation message ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ Evaluation message
+// ✅ NEW: للطالب البالغ → يستخدم قوالب `_adult` + يبعت للطالب
+//         للطفل → يستخدم القوالب العادية + يبعت لولي الأمر
+// ═══════════════════════════════════════════════════════════════════════════
 async function buildEvaluationMessage(student, decision, session, extra = {}) {
   const dbVars = await loadDbVars();
   const ctx = buildRecipientContext(student, dbVars);
   const { lang, genderCtx } = ctx;
   const isAr = lang === 'ar';
+
+  // ✅ NEW: هل الطالب بالغ؟
+  const isAdult = student.studentType === 'adults';
 
   const decisionText =
     resolveVar(dbVars, 'evaluationDecision', lang, genderCtx) ||
@@ -296,8 +321,6 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
 
   const ratings = extra.ratings || {};
 
-  // ✅ مينفعش نحط لينك تسجيل في رسالة سيشن Offline حتى لو كان
-  // session.recordingLink متسجل بطريقة تانية على السيشن نفسها
   const isSessionOffline = resolveDeliveryMode(session) === 'offline';
   const recordingLinkText =
     session?.recordingLink && !isSessionOffline
@@ -308,19 +331,33 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
     ? await getCompletedSessionsCount(extra.groupId, student._id)
     : 0;
 
+  // ✅ NEW: اختيار القالب حسب نوع الطالب
+  const templateType = isAdult
+    ? EVALUATION_TEMPLATE_MAP_ADULT[decision]
+    : EVALUATION_TEMPLATE_MAP[decision];
+
   let template = extra.rawContent;
   let isFallback = false;
   if (!template) {
-    const result = await MessageTemplate.getOrFallback(EVALUATION_TEMPLATE_MAP[decision], lang);
+    const result = await MessageTemplate.getOrFallback(templateType, lang);
     template = result.content;
     isFallback = result.isFallback;
   }
 
   const variables = {
-    guardianSalutation: ctx.guardianSalutation,
-    guardianName: ctx.guardianFirstName,
+    // ✅ Student — دايمًا متاحة
+    studentSalutation: ctx.studentSalutation,
+    studentSalutation_ar: ctx.studentSalutationAr,
+    studentSalutation_en: ctx.studentSalutationEn,
     studentName: ctx.studentFirstName,
-    childTitle: ctx.childTitle,
+
+    // ✅ Guardian — فاضية للطالب البالغ
+    guardianSalutation: isAdult ? '' : ctx.guardianSalutation,
+    guardianName: isAdult ? '' : ctx.guardianFirstName,
+    childTitle: isAdult ? '' : ctx.childTitle,
+    salutation: isAdult ? ctx.studentSalutation : ctx.guardianSalutation,
+
+    // باقي المتغيرات
     sessionName: session?.title || '',
     sessionDate,
     sessionNumber: session?.sessionNumber || '',
@@ -341,17 +378,28 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
     moduleDescription:
       extra.moduleDescription || resolveVar(dbVars, 'moduleDescription', lang, genderCtx) || '',
     supervisorName,
+
+    // ✅ flag مفيد للقوالب
+    isAdult,
   };
+
+  // ✅ NEW: الـ recipient حسب نوع الطالب
+  const recipientPhone = isAdult
+    ? (student.personalInfo?.whatsappNumber || student.personalInfo?.phone || '')
+    : (student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone || '');
 
   return {
     rendered: renderTemplate(template, variables),
     lang,
     isFallback,
-    guardianPhone: student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone || '',
+    recipientPhone,
+    recipientType: isAdult ? 'student' : 'guardian',
+    isAdult,
+    templateType,
   };
 }
 
-// ─── Recording message ───────────────────────────────────────────────────────
+// ─── Recording message (للأطفال فقط) ─────────────────────────────────────
 async function buildRecordingMessage(student, session, recordingLink) {
   const dbVars = await loadDbVars();
   const ctx = buildRecipientContext(student, dbVars);
@@ -370,7 +418,7 @@ async function buildRecordingMessage(student, session, recordingLink) {
   return { rendered, lang: ctx.lang, isFallback: result.isFallback };
 }
 
-// ─── Session blog message ────────────────────────────────────────────────────
+// ─── Session blog message (للأطفال فقط) ──────────────────────────────────
 async function buildBlogMessage(student, session, blogInfo) {
   const lang = student.communicationPreferences?.preferredLanguage || 'ar';
   const hasContentForLang = lang === 'ar' ? blogInfo?.hasAr : blogInfo?.hasEn;
@@ -439,7 +487,6 @@ export async function GET(req, { params }) {
       .lean();
     if (!session) return json({ success: false, message: 'الجلسة غير موجودة' }, 404);
 
-    // ✅ الملكية الأول (قبل أي معلومة تانية)
     const ownershipError = checkGroupOwnership(user, session.groupId);
     if (ownershipError) return ownershipError;
 
@@ -452,8 +499,11 @@ export async function GET(req, { params }) {
 
     const allStudentIds = (session.groupId?.students || []).map((s) => s.studentId || s);
 
+    // ✅ NEW: ضفنا studentType عشان الفرونت/الباك يعرفوا نوع الطالب
     const students = await Student.find({ _id: { $in: allStudentIds }, isDeleted: false })
-      .select('_id personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem')
+      .select(
+        '_id personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem studentType',
+      )
       .lean();
 
     const attendanceMap = {};
@@ -490,13 +540,21 @@ export async function GET(req, { params }) {
       })
       .map((s) => {
         const sid = s._id.toString();
+        // ✅ NEW: isAdult flag
+        const isAdult = s.studentType === 'adults';
         return {
           _id: s._id,
           name: s.personalInfo?.fullName || 'بدون اسم',
           enrollmentNumber: s.enrollmentNumber || '',
           credits: s.creditSystem?.currentPackage?.remainingHours ?? 0,
-          guardianPhone: s.guardianInfo?.whatsappNumber || s.guardianInfo?.phone || '',
-          guardianName: s.guardianInfo?.name || '',
+          // ✅ NEW: بيانات ولي الأمر للـ kids، بيانات الطالب للـ adults
+          studentType: s.studentType || 'kids',
+          isAdult,
+          studentPhone: s.personalInfo?.whatsappNumber || s.personalInfo?.phone || '',
+          guardianPhone: isAdult
+            ? ''
+            : (s.guardianInfo?.whatsappNumber || s.guardianInfo?.phone || ''),
+          guardianName: isAdult ? '' : (s.guardianInfo?.name || ''),
           preferredLanguage: s.communicationPreferences?.preferredLanguage || 'ar',
           attendanceStatus: attendanceMap[sid] || null,
           currentDecision: existingEvalMap[sid]?.decision || null,
@@ -505,7 +563,6 @@ export async function GET(req, { params }) {
         };
       });
 
-    // ✅ نوع السيشن (مع fallback على الجروب) — الفرونت بيعتمد عليه لإخفاء لينك التسجيل
     const deliveryMode = resolveDeliveryMode(session);
     const isOffline = deliveryMode === 'offline';
 
@@ -520,11 +577,9 @@ export async function GET(req, { params }) {
           endTime: session.endTime,
           sessionNumber: session.sessionNumber,
           moduleIndex: session.moduleIndex,
-          // ✅ سياسة: السيشنات الـ offline معندهاش تسجيل — حتى لو فيه قيمة قديمة مخزنة
           recordingLink: isOffline ? '' : (session.recordingLink || ''),
           deliveryMode,
           isOffline,
-          // ✅ عشان الفرونت يعرض بادج "حصة تعويضية"
           isComplimentary: session.isComplimentary === true,
           group: {
             _id: session.groupId?._id,
@@ -576,8 +631,11 @@ export async function POST(req, { params }) {
     }
 
     const [student, session] = await Promise.all([
+      // ✅ NEW: studentType لازم يكون موجود
       Student.findById(studentId)
-        .select('personalInfo guardianInfo communicationPreferences enrollmentNumber')
+        .select(
+          'personalInfo guardianInfo communicationPreferences enrollmentNumber studentType',
+        )
         .lean(),
       Session.findById(id)
         .populate({ path: 'groupId', select: GROUP_POPULATE_SELECT })
@@ -587,7 +645,6 @@ export async function POST(req, { params }) {
     if (!session) return json({ success: false, error: 'Session not found' }, 404);
     if (!student) return json({ success: false, error: 'Student not found' }, 404);
 
-    // ✅ المدرس لازم يكون مسؤول عن الجروب والطالب لازم يكون فيه
     const ownershipError = checkGroupOwnership(user, session.groupId);
     if (ownershipError) return ownershipError;
 
@@ -605,22 +662,27 @@ export async function POST(req, { params }) {
 
     const blogInfo = await getSessionBlogInfo(session);
 
-    const { rendered, lang, isFallback, guardianPhone } = await buildEvaluationMessage(
-      student,
-      decision,
-      session,
-      {
-        rawContent: customContent || null,
-        ratings: ratings || {},
-        comment: comment || '',
-        attendanceStatus: attendanceStatus || null,
-        groupId,
-        moduleTitle,
-        moduleDescription,
-      },
-    );
+    const {
+      rendered,
+      lang,
+      isFallback,
+      recipientPhone,
+      recipientType,
+      isAdult,
+    } = await buildEvaluationMessage(student, decision, session, {
+      rawContent: customContent || null,
+      ratings: ratings || {},
+      comment: comment || '',
+      attendanceStatus: attendanceStatus || null,
+      groupId,
+      moduleTitle,
+      moduleDescription,
+    });
 
-    const blogMessage = await buildBlogMessage(student, session, blogInfo);
+    // ✅ blog + recording للـ kids بس
+    const blogMessage = !isAdult
+      ? await buildBlogMessage(student, session, blogInfo)
+      : null;
 
     return json({
       success: true,
@@ -629,8 +691,15 @@ export async function POST(req, { params }) {
         blogContent: blogMessage?.rendered || null,
         lang,
         isFallback,
-        guardianPhone,
-        guardianName: student.guardianInfo?.name || '',
+
+        // ✅ NEW: الـ recipient الصح حسب نوع الطالب
+        recipientPhone,
+        recipientType, // 'student' أو 'guardian'
+        isAdult,
+
+        // ✅ حقول legacy للتوافق مع أي كود قديم
+        guardianPhone: recipientType === 'guardian' ? recipientPhone : '',
+        guardianName: isAdult ? '' : (student.guardianInfo?.name || ''),
         studentName: student.personalInfo?.fullName || '',
       },
     });
@@ -675,11 +744,10 @@ export async function PATCH(req, { params }) {
 
     const wasAlreadyCompleted = session.status === 'completed';
 
-    // ✅ الحصة التعويضية: الرسايل بتتبعت حتى لو رصيد الطالب صفر (مفيش خصم أصلاً)
+    // ✅ الحصة التعويضية: الرسايل بتتبعت حتى لو رصيد الطالب صفر
     const isComplimentary = session.isComplimentary === true;
 
-    // ✅ السيشن الـ Offline معندهاش لينك تسجيل أصلاً — الفرونت بيخفي
-    // الحقل، لكن لازم نمنعه من الباك كمان لو حد بعت request مباشر
+    // ✅ السيشن الـ Offline معندهاش لينك تسجيل أصلاً
     const sessionIsOffline = resolveDeliveryMode(session) === 'offline';
 
     const groupId = session.groupId?._id;
@@ -712,7 +780,6 @@ export async function PATCH(req, { params }) {
       const { studentId, decision, notes, recordingLink, ratings, comment } = ev;
       if (!VALID_DECISIONS.includes(decision)) continue;
 
-      // ✅ مينفعش نقيّم/نبعت لطالب مش في جروب السيشن
       if (!groupStudentIds.has(String(studentId))) {
         results.push(skippedResult(studentId, decision, null, 'student_not_in_group'));
         continue;
@@ -721,31 +788,37 @@ export async function PATCH(req, { params }) {
       const attendanceStatus = attendanceMap[String(studentId)] || 'absent';
 
       if (EXCLUDED_FROM_EVALUATION_STATUSES.includes(attendanceStatus)) {
-        results.push(skippedResult(studentId, decision, attendanceStatus, 'excluded_attendance_status'));
+        results.push(
+          skippedResult(studentId, decision, attendanceStatus, 'excluded_attendance_status'),
+        );
         continue;
       }
 
+      // ✅ NEW: studentType لازم يكون موجود
       const student = await Student.findById(studentId)
-        .select('personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem')
+        .select(
+          'personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem studentType',
+        )
         .lean();
       if (!student) continue;
 
       const lang = student.communicationPreferences?.preferredLanguage || 'ar';
 
-      const { rendered, guardianPhone, isFallback } = await buildEvaluationMessage(
-        student,
-        decision,
-        session,
-        {
-          rawContent: null,
-          ratings: ratings || {},
-          comment: comment || notes || '',
-          attendanceStatus,
-          groupId,
-          moduleTitle,
-          moduleDescription,
-        },
-      );
+      const {
+        rendered,
+        recipientPhone,
+        recipientType,
+        isAdult,
+        isFallback,
+      } = await buildEvaluationMessage(student, decision, session, {
+        rawContent: null,
+        ratings: ratings || {},
+        comment: comment || notes || '',
+        attendanceStatus,
+        groupId,
+        moduleTitle,
+        moduleDescription,
+      });
 
       const attendanceScore = { present: 5, late: 3 }[attendanceStatus] ?? 1;
       const perfScore = { pass: 4, review: 3, repeat: 2 }[decision];
@@ -774,8 +847,7 @@ export async function PATCH(req, { params }) {
         { upsert: true, new: true },
       );
 
-      // ✅ فحص الرصيد الصفري بيتطبق على الحصص العادية بس.
-      // الحصة التعويضية غالبًا بتتعمل لطالب رصيده خلص، فمينفعش نمنع عنه الرسالة.
+      // ✅ فحص الرصيد الصفري (مش بيتطبق على الحصة التعويضية)
       const remainingHours = student.creditSystem?.currentPackage?.remainingHours ?? 0;
       if (!isComplimentary && remainingHours <= 0) {
         results.push(skippedResult(studentId, decision, attendanceStatus, 'zero_balance'));
@@ -786,63 +858,86 @@ export async function PATCH(req, { params }) {
       let recordingLinkSent = false;
       let blogSent = false;
 
-      if (guardianPhone && rendered) {
+      // ✅ نتأكد إن فيه recipientPhone (سواء الطالب أو ولي الأمر)
+      if (recipientPhone && rendered) {
         try {
           const { wapilotService } = await import('../../../../../services/wapilot-service');
 
           const baseMeta = {
             sessionId: id,
             sessionTitle: session.title,
-            recipientType: 'guardian',
+            recipientType, // 'student' أو 'guardian'
             remainingHours,
             isComplimentary,
+            isAdult,
           };
 
           const evalResult = await wapilotService.sendAndLogEvalMessage({
             studentId,
-            phoneNumber: guardianPhone,
+            phoneNumber: recipientPhone,
             messageContent: rendered,
-            messageType: `evaluation_${decision}`,
+            messageType: `evaluation_${decision}${isAdult ? '_adult' : ''}`,
             language: lang,
             metadata: { ...baseMeta, decision, attendanceStatus, isFallback, moduleTitle },
           });
           messageSent = evalResult?.success || false;
 
-          if (recordingLink?.trim() && !sessionIsOffline) {
-            const { rendered: recRendered } = await buildRecordingMessage(student, session, recordingLink);
-            const linkResult = await wapilotService.sendAndLogMessage({
-              studentId,
-              phoneNumber: guardianPhone,
-              messageContent: recRendered,
-              messageType: 'session_recording',
-              language: lang,
-              metadata: baseMeta,
-            });
-            recordingLinkSent = linkResult?.success || false;
-          }
-
-          const blogMessage = await buildBlogMessage(student, session, blogInfo);
-          if (blogMessage?.rendered) {
-            try {
-              const blogResult = await wapilotService.sendAndLogMessage({
+          // ✅ للـ kids بس: ابعت recording link + session blog
+          //    للبالغين: بنتخطاهم تمامًا (القوالب دي موجهة لولي الأمر)
+          if (!isAdult) {
+            if (recordingLink?.trim() && !sessionIsOffline) {
+              const { rendered: recRendered } = await buildRecordingMessage(
+                student,
+                session,
+                recordingLink,
+              );
+              const linkResult = await wapilotService.sendAndLogMessage({
                 studentId,
-                phoneNumber: guardianPhone,
-                messageContent: blogMessage.rendered,
-                messageType: 'session_blog',
-                language: blogMessage.lang,
+                phoneNumber: recipientPhone,
+                messageContent: recRendered,
+                messageType: 'session_recording',
+                language: lang,
                 metadata: baseMeta,
               });
-              blogSent = blogResult?.success || false;
-            } catch (blogErr) {
-              console.error('❌ BLOG SEND ERROR:', blogErr);
+              recordingLinkSent = linkResult?.success || false;
             }
+
+            const blogMessage = await buildBlogMessage(student, session, blogInfo);
+            if (blogMessage?.rendered) {
+              try {
+                const blogResult = await wapilotService.sendAndLogMessage({
+                  studentId,
+                  phoneNumber: recipientPhone,
+                  messageContent: blogMessage.rendered,
+                  messageType: 'session_blog',
+                  language: blogMessage.lang,
+                  metadata: baseMeta,
+                });
+                blogSent = blogResult?.success || false;
+              } catch (blogErr) {
+                console.error('❌ BLOG SEND ERROR:', blogErr);
+              }
+            }
+          } else {
+            console.log(
+              `   ⏭️ [ADULT] Skipping recording + blog messages for ${student.personalInfo?.fullName}`,
+            );
           }
         } catch (err) {
           console.error('❌ SEND ERROR:', err);
         }
       }
 
-      results.push({ studentId, decision, attendanceStatus, messageSent, recordingLinkSent, blogSent });
+      results.push({
+        studentId,
+        decision,
+        attendanceStatus,
+        recipientType, // ✅ NEW: نرجّع نوع المستلم في الـ result
+        isAdult,       // ✅ NEW
+        messageSent,
+        recordingLinkSent,
+        blogSent,
+      });
     }
 
     // ── إكمال السيشن + ساعات المدرس + المرتب ────────────────────────────────

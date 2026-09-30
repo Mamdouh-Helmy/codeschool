@@ -14,7 +14,7 @@ import {
 import ModalShell from "./ModalShell";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// extractSessionShortName — بياخد الجزء المهم من عنوان الجلسة
+// extractSessionShortName
 // ─────────────────────────────────────────────────────────────────────────────
 function extractSessionShortName(title) {
   if (!title) return "";
@@ -35,7 +35,7 @@ function extractSessionShortName(title) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// resolveVar — gender-aware value from a DB TemplateVariable object
+// resolveVar
 // ─────────────────────────────────────────────────────────────────────────────
 function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
   const v = dbVars[key];
@@ -67,7 +67,7 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// buildVariables — DB-first, hardcoded fallback
+// buildVariables — بيطلع guardian variables فاضية للطالب البالغ
 // ─────────────────────────────────────────────────────────────────────────────
 function buildVariables(student, session, dbVars = {}) {
   if (!student) return {};
@@ -78,6 +78,9 @@ function buildVariables(student, session, dbVars = {}) {
   const isMale = gender !== "female";
   const isFather = relationship !== "mother";
   const genderCtx = { studentGender: gender, guardianType: relationship };
+
+  // ✅ NEW
+  const isAdult = student.studentType === "adults";
 
   const studentFirstName =
     lang === "ar"
@@ -139,21 +142,22 @@ function buildVariables(student, session, dbVars = {}) {
     studentSalutation_ar,
     studentSalutation_en,
 
-    guardianSalutation,
-    guardianSalutation_ar,
-    guardianSalutation_en,
+    // ✅ Guardian — فاضية للطالب البالغ
+    guardianSalutation: isAdult ? "" : guardianSalutation,
+    guardianSalutation_ar: isAdult ? "" : guardianSalutation_ar,
+    guardianSalutation_en: isAdult ? "" : guardianSalutation_en,
 
     salutation_ar: studentSalutation_ar,
     salutation_en: studentSalutation_en,
 
-    salutation: guardianSalutation,
+    salutation: isAdult ? studentSalutation : guardianSalutation,
 
     studentName: studentFirstName,
     studentFullName: student.personalInfo?.fullName || "",
-    guardianName: guardianFirstName,
-    guardianFullName: student.guardianInfo?.name || "",
+    guardianName: isAdult ? "" : guardianFirstName,
+    guardianFullName: isAdult ? "" : (student.guardianInfo?.name || ""),
 
-    childTitle,
+    childTitle: isAdult ? "" : childTitle,
 
     sessionName: extractSessionShortName(session?.title) || "",
     date: sessionDate,
@@ -162,11 +166,12 @@ function buildVariables(student, session, dbVars = {}) {
     groupCode: session?.groupId?.code || "",
     groupName: session?.groupId?.name || "",
     enrollmentNumber: student.enrollmentNumber || "",
+    isAdult,
   };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// renderTemplate — replace every {variable} with its resolved value
+// renderTemplate
 // ─────────────────────────────────────────────────────────────────────────────
 function renderTemplate(template, variables) {
   if (!template) return "";
@@ -180,7 +185,7 @@ function renderTemplate(template, variables) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tone maps (full class strings so Tailwind can see them)
+// TONES
 // ─────────────────────────────────────────────────────────────────────────────
 const TONES = {
   student: {
@@ -260,6 +265,9 @@ export default function ReminderModal({
   const guardianTextareaRef = useRef(null);
   const hintsRef = useRef({ student: null, guardian: null });
 
+  // ✅ NEW: هل الطالب المختار بالغ؟
+  const isAdultStudent = selectedStudentForPreview?.studentType === "adults";
+
   useEffect(() => {
     fetch("/api/whatsapp/template-variables")
       .then((r) => r.json())
@@ -290,6 +298,9 @@ export default function ReminderModal({
     }
   }, [groupStudents]);
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ Fetch all templates — بتتخطى guardian للطالب البالغ
+  // ═══════════════════════════════════════════════════════════════════════
   useEffect(() => {
     const fetchAllTemplates = async () => {
       if (!groupStudents.length) return;
@@ -312,10 +323,14 @@ export default function ReminderModal({
             const json = await res.json();
 
             if (json.success) {
+              const isAdult = student.studentType === "adults";
               return {
                 studentId: student._id,
                 studentTemplate: json.data.student?.rawContent || json.data.student?.content || "",
-                guardianTemplate: json.data.guardian?.rawContent || json.data.guardian?.content || "",
+                // ✅ للطالب البالغ: منستخدمش قالب ولي الأمر
+                guardianTemplate: isAdult
+                  ? ""
+                  : (json.data.guardian?.rawContent || json.data.guardian?.content || ""),
               };
             }
             return null;
@@ -337,7 +352,11 @@ export default function ReminderModal({
 
         if (groupStudents[0]) {
           setCurrentStudentMessage(newStudentTemplates[groupStudents[0]._id] || "");
-          setCurrentGuardianMessage(newGuardianTemplates[groupStudents[0]._id] || "");
+          setCurrentGuardianMessage(
+            groupStudents[0].studentType === "adults"
+              ? ""
+              : (newGuardianTemplates[groupStudents[0]._id] || "")
+          );
         }
       } catch (err) {
         console.error("Error fetching templates:", err);
@@ -350,12 +369,20 @@ export default function ReminderModal({
     fetchAllTemplates();
   }, [groupStudents, reminderType, session.id, session.meetingLink, isRTL]);
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ Preview — بتخلي guardian preview فاضي للطالب البالغ
+  // ═══════════════════════════════════════════════════════════════════════
   useEffect(() => {
     if (!selectedStudentForPreview) return;
     const vars = buildVariables(selectedStudentForPreview, session, dbVars);
     setPreviewStudentMessage(renderTemplate(currentStudentMessage, vars));
-    setPreviewGuardianMessage(renderTemplate(currentGuardianMessage, vars));
-  }, [currentStudentMessage, currentGuardianMessage, selectedStudentForPreview, session, dbVars]);
+
+    if (isAdultStudent) {
+      setPreviewGuardianMessage("");
+    } else {
+      setPreviewGuardianMessage(renderTemplate(currentGuardianMessage, vars));
+    }
+  }, [currentStudentMessage, currentGuardianMessage, selectedStudentForPreview, session, dbVars, isAdultStudent]);
 
   const handleSelectStudentForPreview = useCallback(
     (student) => {
@@ -363,19 +390,29 @@ export default function ReminderModal({
       setManuallyEdited({ student: false, guardian: false });
 
       const sid = student._id;
+      const isAdult = student.studentType === "adults";
+
       setCurrentStudentMessage(
         editedStudentTemplates[sid] ?? studentTemplates[sid] ?? ""
       );
       setCurrentGuardianMessage(
-        editedGuardianTemplates[sid] ?? guardianTemplates[sid] ?? ""
+        isAdult
+          ? ""
+          : (editedGuardianTemplates[sid] ?? guardianTemplates[sid] ?? "")
       );
     },
     [editedStudentTemplates, editedGuardianTemplates, studentTemplates, guardianTemplates]
   );
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ saveTemplateToDatabase — حماية: مايحفظش قوالب ولي أمر للطالب البالغ
+  // ═══════════════════════════════════════════════════════════════════════
   const saveTemplateToDatabase = useCallback(
     async (type, content) => {
       if (!selectedStudentForPreview || !content?.trim()) return;
+
+      // ✅ حماية
+      if (isAdultStudent && type === "guardian") return;
 
       setSavingTemplate((prev) => ({ ...prev, [type]: true }));
 
@@ -481,9 +518,12 @@ export default function ReminderModal({
         setSavingTemplate((prev) => ({ ...prev, [type]: false }));
       }
     },
-    [reminderType, selectedStudentForPreview, isRTL]
+    [reminderType, selectedStudentForPreview, isRTL, isAdultStudent]
   );
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ handleSend — بتتخطى guardianMessages للطالب البالغ
+  // ═══════════════════════════════════════════════════════════════════════
   const handleSend = useCallback(async () => {
     setSending(true);
     try {
@@ -493,12 +533,18 @@ export default function ReminderModal({
       groupStudents.forEach((student) => {
         const sid = student._id.toString();
         const vars = buildVariables(student, session, dbVars);
+        const studentIsAdult = student.studentType === "adults";
 
         const rawStudent = editedStudentTemplates[sid] ?? studentTemplates[sid] ?? "";
-        const rawGuardian = editedGuardianTemplates[sid] ?? guardianTemplates[sid] ?? "";
+        const rawGuardian = studentIsAdult
+          ? ""
+          : (editedGuardianTemplates[sid] ?? guardianTemplates[sid] ?? "");
 
         studentMessages[sid] = renderTemplate(rawStudent, vars);
-        guardianMessages[sid] = renderTemplate(rawGuardian, vars);
+        // ✅ للطالب البالغ: مش بنضيف رسالة ولي الأمر
+        if (!studentIsAdult) {
+          guardianMessages[sid] = renderTemplate(rawGuardian, vars);
+        }
       });
 
       const res = await fetch(`/api/sessions/${session.id}/send-reminder`, {
@@ -542,26 +588,38 @@ export default function ReminderModal({
     onRefresh,
   ]);
 
-  const availableVariables = useMemo(
-    () => [
-      { key: "{studentSalutation}", label: isRTL ? "تحية الطالب (حسب اللغة)" : "Student Salutation", icon: "👶" },
-      { key: "{studentSalutation_ar}", label: isRTL ? "تحية الطالب - عربي" : "Student Salutation (AR)", icon: "👶" },
-      { key: "{studentSalutation_en}", label: isRTL ? "تحية الطالب - إنجليزي" : "Student Salutation (EN)", icon: "👶" },
-      { key: "{salutation_ar}", label: isRTL ? "التحية - عربي" : "Salutation (AR)", icon: "👋" },
-      { key: "{salutation_en}", label: isRTL ? "التحية - إنجليزي" : "Salutation (EN)", icon: "👋" },
-      { key: "{guardianSalutation}", label: isRTL ? "تحية ولي الأمر (حسب اللغة)" : "Guardian Salutation", icon: "👤" },
-      { key: "{guardianSalutation_ar}", label: isRTL ? "تحية ولي الأمر - عربي" : "Guardian Salutation (AR)", icon: "👤" },
-      { key: "{guardianSalutation_en}", label: isRTL ? "تحية ولي الأمر - إنجليزي" : "Guardian Salutation (EN)", icon: "👤" },
-      { key: "{salutation}", label: isRTL ? "التحية العامة (ولي الأمر)" : "Salutation (guardian alias)", icon: "👋" },
-      { key: "{studentName}", label: isRTL ? "اسم الطالب" : "Student Name", icon: "👶" },
-      { key: "{guardianName}", label: isRTL ? "اسم ولي الأمر" : "Guardian Name", icon: "👤" },
-      { key: "{childTitle}", label: isRTL ? "ابنك/ابنتك" : "Son/Daughter", icon: "👪" },
-      { key: "{sessionName}", label: isRTL ? "اسم الجلسة" : "Session Name", icon: "📘" },
-      { key: "{date}", label: isRTL ? "التاريخ" : "Date", icon: "📅" },
-      { key: "{time}", label: isRTL ? "الوقت" : "Time", icon: "⏰" },
-      { key: "{meetingLink}", label: isRTL ? "رابط الاجتماع" : "Meeting Link", icon: "🔗" },
-      { key: "{enrollmentNumber}", label: isRTL ? "الرقم التعريفي" : "Enrollment No.", icon: "🔢" },
-    ],
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ getAvailableVariables — dynamic per student
+  // ═══════════════════════════════════════════════════════════════════════
+  const getAvailableVariables = useCallback(
+    (isAdult) => {
+      const studentVars = [
+        { key: "{studentSalutation}", label: isRTL ? "تحية الطالب (حسب اللغة)" : "Student Salutation", icon: "👶" },
+        { key: "{studentSalutation_ar}", label: isRTL ? "تحية الطالب - عربي" : "Student Salutation (AR)", icon: "👶" },
+        { key: "{studentSalutation_en}", label: isRTL ? "تحية الطالب - إنجليزي" : "Student Salutation (EN)", icon: "👶" },
+        { key: "{salutation_ar}", label: isRTL ? "التحية - عربي" : "Salutation (AR)", icon: "👋" },
+        { key: "{salutation_en}", label: isRTL ? "التحية - إنجليزي" : "Salutation (EN)", icon: "👋" },
+        { key: "{studentName}", label: isRTL ? "اسم الطالب" : "Student Name", icon: "👶" },
+        { key: "{sessionName}", label: isRTL ? "اسم الجلسة" : "Session Name", icon: "📘" },
+        { key: "{date}", label: isRTL ? "التاريخ" : "Date", icon: "📅" },
+        { key: "{time}", label: isRTL ? "الوقت" : "Time", icon: "⏰" },
+        { key: "{meetingLink}", label: isRTL ? "رابط الاجتماع" : "Meeting Link", icon: "🔗" },
+        { key: "{enrollmentNumber}", label: isRTL ? "الرقم التعريفي" : "Enrollment No.", icon: "🔢" },
+      ];
+
+      if (isAdult) return studentVars;
+
+      const guardianVars = [
+        { key: "{guardianSalutation}", label: isRTL ? "تحية ولي الأمر (حسب اللغة)" : "Guardian Salutation", icon: "👤" },
+        { key: "{guardianSalutation_ar}", label: isRTL ? "تحية ولي الأمر - عربي" : "Guardian Salutation (AR)", icon: "👤" },
+        { key: "{guardianSalutation_en}", label: isRTL ? "تحية ولي الأمر - إنجليزي" : "Guardian Salutation (EN)", icon: "👤" },
+        { key: "{salutation}", label: isRTL ? "التحية العامة (ولي الأمر)" : "Salutation (guardian alias)", icon: "👋" },
+        { key: "{guardianName}", label: isRTL ? "اسم ولي الأمر" : "Guardian Name", icon: "👤" },
+        { key: "{childTitle}", label: isRTL ? "ابنك/ابنتك" : "Son/Daughter", icon: "👪" },
+      ];
+
+      return [...studentVars, ...guardianVars];
+    },
     [isRTL]
   );
 
@@ -663,27 +721,28 @@ export default function ReminderModal({
   const handleKeyDown = useCallback(
     (e, type) => {
       if (!showHints[type]) return;
+      const varsList = getAvailableVariables(isAdultStudent);
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedHintIndex((prev) => ({
           ...prev,
-          [type]: (prev[type] + 1) % availableVariables.length,
+          [type]: (prev[type] + 1) % varsList.length,
         }));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedHintIndex((prev) => ({
           ...prev,
-          [type]: (prev[type] - 1 + availableVariables.length) % availableVariables.length,
+          [type]: (prev[type] - 1 + varsList.length) % varsList.length,
         }));
       } else if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
-        insertVariable(type, availableVariables[selectedHintIndex[type]]);
+        insertVariable(type, varsList[selectedHintIndex[type]]);
       } else if (e.key === "Escape") {
         setShowHints((prev) => ({ ...prev, [type]: false }));
       }
     },
-    [showHints, selectedHintIndex, availableVariables, insertVariable]
+    [showHints, selectedHintIndex, getAvailableVariables, insertVariable, isAdultStudent]
   );
 
   const salutationPreview = useMemo(() => {
@@ -695,6 +754,7 @@ export default function ReminderModal({
   const renderHints = (type) => {
     if (!showHints[type]) return null;
     const c = TONES[type];
+    const varsList = getAvailableVariables(isAdultStudent);
     return (
       <div
         ref={(el) => (hintsRef.current[type] = el)}
@@ -705,7 +765,7 @@ export default function ReminderModal({
             <Zap className="h-3 w-3" /> {isRTL ? "المتغيرات المتاحة" : "Available Variables"}
           </p>
         </div>
-        {availableVariables.map((v, i) => (
+        {varsList.map((v, i) => (
           <button
             key={v.key}
             type="button"
@@ -879,6 +939,7 @@ export default function ReminderModal({
               const gender = (student.personalInfo?.gender || "male").toLowerCase();
               const rel = (student.guardianInfo?.relationship || "father").toLowerCase();
               const hasEdited = editedStudentTemplates[sid] || editedGuardianTemplates[sid];
+              const isAdult = student.studentType === "adults";
 
               return (
                 <button
@@ -890,10 +951,13 @@ export default function ReminderModal({
                       : "border-slate-200 text-slate-700 hover:border-indigo-300 dark:border-white/10 dark:text-slate-300"
                   }`}
                 >
-                  <span>{gender === "female" ? "👧" : "👦"}</span>
+                  <span>{isAdult ? "🧑" : gender === "female" ? "👧" : "👦"}</span>
                   <span>{student.personalInfo?.fullName?.split(" ")[0]}</span>
                   <span className="opacity-70">{lang === "ar" ? "🇸🇦" : "🇬🇧"}</span>
-                  <span className="opacity-70">{rel === "mother" ? "👩" : "👨"}</span>
+                  {/* ✅ للأطفال بس نعرض علاقة ولي الأمر */}
+                  {!isAdult && (
+                    <span className="opacity-70">{rel === "mother" ? "👩" : "👨"}</span>
+                  )}
                   {hasEdited && <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />}
                 </button>
               );
@@ -910,23 +974,58 @@ export default function ReminderModal({
               </span>
               <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.studentSalutation}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="w-28 shrink-0 font-medium text-violet-600 dark:text-violet-400">
-                👪 {isRTL ? "تحية ولي الأمر:" : "Guardian:"}
-              </span>
-              <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.guardianSalutation}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-28 shrink-0 font-medium text-emerald-600 dark:text-emerald-400">
-                👶 {isRTL ? "ابنك/ابنتك:" : "Child title:"}
-              </span>
-              <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.childTitle}</span>
-            </div>
+
+            {/* ✅ صفوف ولي الأمر — للـ kids بس */}
+            {!isAdultStudent && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="w-28 shrink-0 font-medium text-violet-600 dark:text-violet-400">
+                    👪 {isRTL ? "تحية ولي الأمر:" : "Guardian:"}
+                  </span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.guardianSalutation}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-28 shrink-0 font-medium text-emerald-600 dark:text-emerald-400">
+                    👶 {isRTL ? "ابنك/ابنتك:" : "Child title:"}
+                  </span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.childTitle}</span>
+                </div>
+              </>
+            )}
+
+            {isAdultStudent && (
+              <div className="flex items-center gap-2">
+                <span className="w-28 shrink-0 font-medium text-indigo-600 dark:text-indigo-400">
+                  🧑 {isRTL ? "نوع الطالب:" : "Type:"}
+                </span>
+                <span className="font-semibold text-indigo-700 dark:text-indigo-300">
+                  {isRTL ? "بالغ — بدون ولي أمر" : "Adult — No guardian"}
+                </span>
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
               <span className="w-28 shrink-0 font-medium text-amber-600 dark:text-amber-400">
                 📘 {isRTL ? "اسم الجلسة:" : "Session:"}
               </span>
               <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.sessionName}</span>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ بانر الطالب البالغ */}
+        {isAdultStudent && (
+          <div className="flex items-start gap-2.5 rounded-xl border border-indigo-200 bg-indigo-100/60 p-3.5 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+            <span className="text-lg shrink-0">🧑</span>
+            <div className="text-xs text-indigo-800 dark:text-indigo-200">
+              <p className="font-bold mb-0.5">
+                {isRTL ? "الطالب بالغ (Adults)" : "Adult Student (Adults)"}
+              </p>
+              <p className="opacity-90 leading-relaxed">
+                {isRTL
+                  ? "هيتبعت تذكير للطالب بس — مفيش تذكير لولي الأمر لأنه طالب بالغ."
+                  : "Only the student will get the reminder — no guardian reminder since the student is an adult."}
+              </p>
             </div>
           </div>
         )}
@@ -942,7 +1041,8 @@ export default function ReminderModal({
         ) : (
           <div className="space-y-4">
             {renderMessageEditor("student")}
-            {renderMessageEditor("guardian")}
+            {/* ✅ رسالة ولي الأمر — للـ kids بس */}
+            {!isAdultStudent && renderMessageEditor("guardian")}
           </div>
         )}
       </div>

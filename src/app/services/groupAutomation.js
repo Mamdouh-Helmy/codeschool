@@ -443,40 +443,63 @@ export async function getMessageTemplate(
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ getAttendanceTemplates
+// ✅ NEW: للطالب البالغ → ترجع قالب _adult (student) بدل قالب ولي الأمر
+// ═══════════════════════════════════════════════════════════════════════════
 export async function getAttendanceTemplates(attendanceStatus, student) {
   try {
     const language =
       student.communicationPreferences?.preferredLanguage || "ar";
 
-    let guardianTemplateType = "";
+    // ✅ هل الطالب بالغ؟
+    const isAdult = student.studentType === "adults";
+
+    let templateType = "";
     switch (attendanceStatus) {
       case "absent":
-        guardianTemplateType = "absence_notification";
+        templateType = isAdult
+          ? "absence_notification_adult"
+          : "absence_notification";
         break;
       case "late":
-        guardianTemplateType = "late_notification";
+        templateType = isAdult
+          ? "late_notification_adult"
+          : "late_notification";
         break;
       case "excused":
-        guardianTemplateType = "excused_notification";
+        templateType = isAdult
+          ? "excused_notification_adult"
+          : "excused_notification";
         break;
       default:
         throw new Error(`Unknown attendance status: ${attendanceStatus}`);
     }
 
-    const guardianTemplate = await getMessageTemplate(
-      guardianTemplateType,
+    const recipientType = isAdult ? "student" : "guardian";
+
+    const template = await getMessageTemplate(
+      templateType,
       language,
-      "guardian",
+      recipientType,
     );
 
     return {
-      guardian: guardianTemplate,
+      // ✅ نحتفظ بالمفتاح "guardian" عشان الـ frontend القديم يفضل شغال —
+      // بس القالب اللي بيتحط جواه هو الصح حسب نوع الطالب
+      guardian: template,
+      student: template,
+      recipientType,
+      isAdult,
       metadata: {
         language,
         gender: student.personalInfo?.gender || "male",
         relationship: student.guardianInfo?.relationship || "father",
-        studentName: student.personalInfo?.fullName?.split(" ")[0] || "الطالب",
-        guardianName: student.guardianInfo?.name?.split(" ")[0] || "ولي الأمر",
+        studentName:
+          student.personalInfo?.fullName?.split(" ")[0] || "الطالب",
+        guardianName:
+          student.guardianInfo?.name?.split(" ")[0] || "ولي الأمر",
+        isAdult,
       },
     };
   } catch (error) {

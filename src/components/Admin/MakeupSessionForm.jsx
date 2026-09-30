@@ -25,10 +25,17 @@ const STEPS = [
   { id: "review",     icon: CheckCircle,  titleAr: "مراجعة وتأكيد",       titleEn: "Review & Confirm" },
 ];
 
-// الرسائل الـ 3 اللي بتتبعت بعد الإنشاء (بنفس مفاتيح results اللي راجعة من الـ API)
-const NOTIFY_ROLES = [
+// ✅ الرسائل اللي بتتبعت بعد الإنشاء
+//    (بنفس مفاتيح results اللي راجعة من الـ API)
+const ALL_NOTIFY_ROLES = [
   { key: "student",    ar: "الطالب",    en: "Student" },
   { key: "guardian",   ar: "ولي الأمر", en: "Guardian" },
+  { key: "instructor", ar: "المدرس",    en: "Instructor" },
+];
+
+// ✅ للطالب البالغ: منبعتش رسالة ولي الأمر
+const ADULT_NOTIFY_ROLES = [
+  { key: "student",    ar: "الطالب",    en: "Student" },
   { key: "instructor", ar: "المدرس",    en: "Instructor" },
 ];
 
@@ -122,9 +129,21 @@ function TimelineRow({ icon: Icon, label, value, done, isLast }) {
 // ─── Summary panel ────────────────────────────────────────────────────────────
 function SummaryPanel({ student, group, session, instructor, details, selectedLinkIds, step, isAr }) {
   const t = (ar, en) => (isAr ? ar : en);
+  const isAdult = student?.studentType === "adults"; // ✅ NEW
 
   const rows = [
     { icon: User,        label: t("الطالب", "Student"),        value: student?.name,      done: !!student },
+
+    // ✅ نضيف صف يوضح نوع الطالب لو بالغ
+    ...(isAdult
+      ? [{
+          icon: AlertCircle,
+          label: t("نوع الطالب", "Student Type"),
+          value: t("بالغ — بدون ولي أمر", "Adult — No guardian"),
+          done: true,
+        }]
+      : []),
+
     { icon: Users,       label: t("الجروب الأصلي", "Original Group"), value: group?.name,  done: !!group },
     { icon: BookOpen,    label: t("السيشن", "Session"),        value: session?.title,     done: !!session },
     { icon: UserCheck,   label: t("المدرس", "Instructor"),     value: instructor?.name,   done: !!instructor },
@@ -451,7 +470,7 @@ function InstructorPicker({ instructors, selected, onSelect, isAr }) {
 }
 
 // ─── Details Form ─────────────────────────────────────────────────────────────
-function DetailsForm({ form, onChange, isAr }) {
+function DetailsForm({ form, onChange, isAr, isAdultStudent }) {
   const t = (ar, en) => (isAr ? ar : en);
 
   return (
@@ -464,6 +483,22 @@ function DetailsForm({ form, onChange, isAr }) {
           {t("لازم يكون اسم مختلف عن أي جروب موجود", "Must be different from any existing group")}
         </p>
       </div>
+
+      {/* ✅ تنبيه الطالب البالغ */}
+      {isAdultStudent && (
+        <div className="rounded-2xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 p-3.5 flex items-start gap-2.5">
+          <span className="text-lg shrink-0">🧑</span>
+          <div className="text-xs text-indigo-800 dark:text-indigo-300">
+            <p className="font-bold mb-0.5">
+              {t("طالب بالغ — بدون رسالة لولي الأمر", "Adult student — No guardian message")}
+            </p>
+            <p className="opacity-90">
+              {t("هيتبعت رسالتين بس: للطالب والمدرس. ولي الأمر مش هيتواصل معاه.",
+                 "Only 2 messages will be sent: student and instructor. Guardian will not be contacted.")}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-PowderBlueBorder dark:border-dark_border p-3.5 space-y-3.5 bg-gray-50/50 dark:bg-dark_input/30">
         <div className="flex items-center gap-2 text-xs font-semibold text-SlateBlueText dark:text-darktext">
@@ -528,6 +563,7 @@ function DetailsForm({ form, onChange, isAr }) {
 function ReviewStep({ data, isAr }) {
   const t = (ar, en) => (isAr ? ar : en);
   const isOnline = data.details.deliveryMode === "online";
+  const isAdult = data.student?.studentType === "adults"; // ✅ NEW
 
   return (
     <div className="space-y-4">
@@ -543,6 +579,22 @@ function ReviewStep({ data, isAr }) {
              "Check the summary on the side — if it all looks right, hit Create Make-up Session.")}
         </p>
       </div>
+
+      {/* ✅ بانر الطالب البالغ */}
+      {isAdult && (
+        <div className="rounded-2xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 p-3.5 flex items-start gap-2.5">
+          <span className="text-lg shrink-0">🧑</span>
+          <div className="text-xs text-indigo-800 dark:text-indigo-300">
+            <p className="font-bold mb-0.5">
+              {t("الطالب بالغ — رسالة ولي الأمر هتتخطى", "Adult Student — Guardian message will be skipped")}
+            </p>
+            <p className="opacity-90">
+              {t("هيتبعت رسالتين بس: للطالب والمدرس. الوالد مش هيتواصل معاه.",
+                 "Only 2 messages will be sent: student and instructor. Guardian will not be contacted.")}
+            </p>
+          </div>
+        </div>
+      )}
 
       {isOnline && data.selectedLinkIds?.length > 0 && (
         <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-3.5">
@@ -563,8 +615,15 @@ function ReviewStep({ data, isAr }) {
         <div className="flex items-start gap-2.5">
           <Zap className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
           <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed">
-            {t("بالضغط على \"إنشاء الحصة التعويضية\" — السيشن هتتولّد واللينكات هتتحجز والرسائل هتتبعت للطالب وولي الأمر والمدرس فورًا.",
-               "By clicking \"Create Make-up Session\" — the session will be generated, links reserved, and messages sent to the student, guardian, and instructor immediately.")}
+            {isAdult
+              ? t(
+                  "بالضغط على \"إنشاء الحصة التعويضية\" — السيشن هتتولّد واللينكات هتتحجز وهتتبعت رسالتين (الطالب + المدرس). ولي الأمر مش هيتواصل معاه لأنه طالب بالغ.",
+                  "By clicking \"Create Make-up Session\" — session will be generated, links reserved, and 2 messages sent (student + instructor). No guardian message since the student is an adult."
+                )
+              : t(
+                  "بالضغط على \"إنشاء الحصة التعويضية\" — السيشن هتتولّد واللينكات هتتحجز والرسائل هتتبعت للطالب وولي الأمر والمدرس فورًا.",
+                  "By clicking \"Create Make-up Session\" — the session will be generated, links reserved, and messages sent to the student, guardian, and instructor immediately."
+                )}
           </p>
         </div>
       </div>
@@ -573,6 +632,9 @@ function ReviewStep({ data, isAr }) {
         <SectionHeading icon={Layers} title={t("الملخص", "Summary")} badgeTone="muted" />
         <div className="space-y-2 text-xs">
           <div className="flex justify-between"><span className="text-SlateBlueText dark:text-darktext">{t("الطالب", "Student")}</span><span className="font-semibold text-MidnightNavyText dark:text-white">{data.student?.name || "—"}</span></div>
+          {isAdult && (
+            <div className="flex justify-between"><span className="text-SlateBlueText dark:text-darktext">{t("النوع", "Type")}</span><span className="font-semibold text-indigo-600 dark:text-indigo-400">{t("بالغ", "Adult")}</span></div>
+          )}
           <div className="flex justify-between"><span className="text-SlateBlueText dark:text-darktext">{t("الجروب", "Group")}</span><span className="font-semibold text-MidnightNavyText dark:text-white">{data.group?.name || "—"}</span></div>
           <div className="flex justify-between"><span className="text-SlateBlueText dark:text-darktext">{t("المدرس", "Instructor")}</span><span className="font-semibold text-MidnightNavyText dark:text-white">{data.instructor?.name || "—"}</span></div>
           <div className="flex justify-between"><span className="text-SlateBlueText dark:text-darktext">{t("الميعاد", "Schedule")}</span><span className="font-semibold text-MidnightNavyText dark:text-white">{data.details.scheduledDate ? `${data.details.scheduledDate} · ${data.details.startTime}-${data.details.endTime}` : "—"}</span></div>
@@ -621,6 +683,9 @@ export default function MakeupSessionForm({ onClose, onSaved }) {
   const [selectedLinkIds, setSelectedLinkIds] = useState([]);
   const [forceActivate, setForceActivate] = useState(false);
   const [releaseReserved, setReleaseReserved] = useState(false);
+
+  // ✅ هل الطالب بالغ؟
+  const isAdultStudent = student?.studentType === "adults";
 
   // ═════════════════════════════════════════════════════════════════════════
   // ✅ schedule object memoized — لمنع الـ infinite loop
@@ -791,14 +856,19 @@ export default function MakeupSessionForm({ onClose, onSaved }) {
         return;
       }
 
-      // ✅ اتعمل — نشوف مين من الـ 3 رسائل ما اتبعتش
+      // ✅ اتعمل — نشوف مين من الرسائل ما اتبعتش
+      //    ✅ للطالب البالغ: بنستبعد "guardian" من قائمة الفحص
       const notif = json.notifications || {};
-      const failed = NOTIFY_ROLES.filter(({ key }) => !notif.results?.[key]?.sent);
+      const rolesToCheck = isAdultStudent ? ADULT_NOTIFY_ROLES : ALL_NOTIFY_ROLES;
+      const failed = rolesToCheck.filter(({ key }) => !notif.results?.[key]?.sent);
 
       if (failed.length === 0) {
         toast.success(
-          t("🎉 تم إنشاء الحصة التعويضية وإرسال الرسائل للطالب وولي الأمر والمدرس",
-            "🎉 Make-up session created and all 3 messages sent"),
+          isAdultStudent
+            ? t("🎉 تم إنشاء الحصة التعويضية وإرسال الرسائل للطالب والمدرس",
+                "🎉 Make-up session created and 2 messages sent (student + instructor)")
+            : t("🎉 تم إنشاء الحصة التعويضية وإرسال الرسائل للطالب وولي الأمر والمدرس",
+                "🎉 Make-up session created and all 3 messages sent"),
           { id: toastId, duration: 6000 },
         );
       } else {
@@ -889,8 +959,14 @@ export default function MakeupSessionForm({ onClose, onSaved }) {
                 <StepIcon className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-MidnightNavyText dark:text-white">
+                <h3 className="text-sm font-bold text-MidnightNavyText dark:text-white flex items-center gap-2 flex-wrap">
                   {isAr ? currentStep.titleAr : currentStep.titleEn}
+                  {/* ✅ بادج طالب بالغ */}
+                  {isAdultStudent && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 ring-1 ring-inset ring-indigo-200 dark:ring-indigo-800">
+                      🧑 {t("طالب بالغ", "Adult Student")}
+                    </span>
+                  )}
                 </h3>
                 <p className="text-xs text-SlateBlueText dark:text-darktext">
                   {step === 0 && t("ابحث واختر الطالب اللي عايز تعمله حصة تعويضية", "Search and pick the student")}
@@ -910,7 +986,7 @@ export default function MakeupSessionForm({ onClose, onSaved }) {
             {step === 1 && <GroupPicker student={student} groups={groups} loading={groupsLoading} selected={group} onSelect={handleSelectGroup} isAr={isAr} />}
             {step === 2 && <SessionPicker sessions={sessions} loading={sessionsLoading} selected={session} onSelect={handleSelectSession} studentId={student?._id} isAr={isAr} />}
             {step === 3 && <InstructorPicker instructors={group?.instructors || []} selected={instructor} onSelect={handleSelectInstructor} isAr={isAr} />}
-            {step === 4 && <DetailsForm form={details} onChange={handleChangeDetail} isAr={isAr} />}
+            {step === 4 && <DetailsForm form={details} onChange={handleChangeDetail} isAr={isAr} isAdultStudent={isAdultStudent} />}
 
             {step === 5 && (
               isOnline ? (

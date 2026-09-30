@@ -38,11 +38,12 @@ export async function GET(req, { params }) {
     }
 
     // ✅ جلب كل الطلاب في المجموعة مع كل البيانات المطلوبة
+    // ✅ NEW: ضفنا studentType للـ select
     let students = await Student.find({
       'academicInfo.groupIds': new mongoose.Types.ObjectId(id),
       isDeleted: false
     })
-    .select('personalInfo enrollmentNumber guardianInfo communicationPreferences creditSystem')
+    .select('personalInfo enrollmentNumber guardianInfo communicationPreferences creditSystem studentType')
     .sort({ 'personalInfo.fullName': 1 })
     .lean();
 
@@ -74,10 +75,16 @@ export async function GET(req, { params }) {
         };
       }
 
+      // ✅ NEW: نضمن إن studentType دايمًا موجود (default: "kids")
+      const studentType = student.studentType || 'kids';
+
       return {
         id: student._id,
         _id: student._id,
         enrollmentNumber: student.enrollmentNumber || 'N/A',
+        // ✅ NEW: نمرر studentType للفرونت
+        studentType,
+        isAdult: studentType === 'adults',
         personalInfo: student.personalInfo || {},
         guardianInfo: student.guardianInfo || {},
         communicationPreferences: student.communicationPreferences || { preferredLanguage: 'ar' },

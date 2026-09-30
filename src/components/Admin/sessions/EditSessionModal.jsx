@@ -329,6 +329,15 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
 
   const groupIsOnHold = !!session?.group?.isOnHold;
 
+  // ✅ NEW: هل الطالب المختار للـ preview بالغ؟
+  const isAdultStudent = selectedStudentForPreview?.studentType === "adults";
+
+  // ✅ هل الجروب فيه طلاب بالغين بس؟ (للتفاصيل بس)
+  const groupHasAdults = useMemo(
+    () => (groupStudents || []).some((s) => s.studentType === "adults"),
+    [groupStudents]
+  );
+
   const cascadePreview = useMemo(() => {
     if (!isCancelling || groupIsOnHold) return { shifting: [], skipped: [] };
     return getShiftedChainPreview(allSessions, session, 7);
@@ -362,12 +371,21 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
     }
   }, [groupStudents]);
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ fetchTemplates — بتتخطى ولي الأمر للطالب البالغ
+  // ═══════════════════════════════════════════════════════════════════════
   useEffect(() => {
     if (groupIsOnHold) return;
 
     const fetchTemplates = async () => {
       if (!showReasonField || !selectedStudentForPreview) return;
-      if (manuallyEdited.student && manuallyEdited.guardian) return;
+
+      // ✅ للطالب البالغ: بنحتاج student template بس
+      if (isAdultStudent) {
+        if (manuallyEdited.student) return;
+      } else {
+        if (manuallyEdited.student && manuallyEdited.guardian) return;
+      }
 
       setLoadingTemplates(true);
       try {
@@ -388,8 +406,15 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
           if (!manuallyEdited.student && json.data.student) {
             setFormData((prev) => ({ ...prev, studentMessage: json.data.student.rawContent || json.data.student.content || "" }));
           }
-          if (!manuallyEdited.guardian && json.data.guardian) {
-            setFormData((prev) => ({ ...prev, guardianMessage: json.data.guardian.rawContent || json.data.guardian.content || "" }));
+
+          // ✅ ولي الأمر — للـ kids بس
+          if (!isAdultStudent) {
+            if (!manuallyEdited.guardian && json.data.guardian) {
+              setFormData((prev) => ({ ...prev, guardianMessage: json.data.guardian.rawContent || json.data.guardian.content || "" }));
+            }
+          } else {
+            // نفضّي رسالة ولي الأمر لأي طالب بالغ
+            setFormData((prev) => ({ ...prev, guardianMessage: "" }));
           }
         }
       } catch (error) {
@@ -401,21 +426,36 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
     };
 
     fetchTemplates();
-  }, [formData.status, selectedStudentForPreview?._id, formData.newDate, formData.newTime, groupIsOnHold]);
+  }, [formData.status, selectedStudentForPreview?._id, formData.newDate, formData.newTime, groupIsOnHold, isAdultStudent]);
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ Preview effect — بتتخطى guardian preview للطالب البالغ
+  // ═══════════════════════════════════════════════════════════════════════
   useEffect(() => {
     if (!selectedStudentForPreview) return;
     const vars = buildVariables(selectedStudentForPreview, session, formData, dbVars);
-    setPreviewStudentMessage(renderTemplate(formData.studentMessage,  vars));
-    setPreviewGuardianMessage(renderTemplate(formData.guardianMessage, vars));
-  }, [formData.studentMessage, formData.guardianMessage, formData.meetingLink, formData.newDate, formData.newTime, selectedStudentForPreview, session, dbVars]);
+    setPreviewStudentMessage(renderTemplate(formData.studentMessage, vars));
 
+    if (isAdultStudent) {
+      setPreviewGuardianMessage("");
+    } else {
+      setPreviewGuardianMessage(renderTemplate(formData.guardianMessage, vars));
+    }
+  }, [formData.studentMessage, formData.guardianMessage, formData.meetingLink, formData.newDate, formData.newTime, selectedStudentForPreview, session, dbVars, isAdultStudent]);
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ saveTemplateToDatabase — بتمنع حفظ قالب ولي الأمر للطالب البالغ
+  // ═══════════════════════════════════════════════════════════════════════
   const saveTemplateToDatabase = useCallback(
     async (type, content) => {
       if (groupIsOnHold) {
         toast.error(isRTL ? "الجروب على Hold — مينفعش تحفظ قوالب" : "Group is on hold — can't save templates");
         return;
       }
+
+      // ✅ حماية: مايحفظش قوالب ولي أمر لطالب بالغ
+      if (isAdultStudent && type === "guardian") return;
+
       if (!selectedStudentForPreview || !content?.trim()) return;
       setSavingTemplate((prev) => ({ ...prev, [type]: true }));
 
@@ -478,7 +518,7 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
         setSavingTemplate((prev) => ({ ...prev, [type]: false }));
       }
     },
-    [formData.status, selectedStudentForPreview, isRTL, groupIsOnHold]
+    [formData.status, selectedStudentForPreview, isRTL, groupIsOnHold, isAdultStudent]
   );
 
   const salutationPreview = useMemo(() => {
@@ -486,24 +526,36 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
     return buildVariables(selectedStudentForPreview, session, formData, dbVars);
   }, [selectedStudentForPreview, session, formData, dbVars]);
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ availableVariables — بتشيل متغيرات ولي الأمر للطالب البالغ
+  // ═══════════════════════════════════════════════════════════════════════
   const availableVariables = useMemo(() => {
-    const vars = [
-      { key: "{guardianSalutation}", label: isRTL ? "تحية ولي الأمر" : "Guardian Salutation", icon: "👤" },
+    const studentVars = [
       { key: "{studentSalutation}",  label: isRTL ? "تحية الطالب"    : "Student Salutation",  icon: "👶" },
       { key: "{studentName}",        label: isRTL ? "اسم الطالب"     : "Student Name",         icon: "👶" },
-      { key: "{guardianName}",       label: isRTL ? "اسم ولي الأمر"  : "Guardian Name",        icon: "👤" },
-      { key: "{childTitle}",         label: isRTL ? "ابنك/ابنتك"     : "Son/Daughter",         icon: "👪" },
       { key: "{sessionName}",        label: isRTL ? "اسم الجلسة"     : "Session Name",         icon: "📘" },
       { key: "{date}",               label: isRTL ? "التاريخ"        : "Date",                 icon: "📅" },
       { key: "{time}",               label: isRTL ? "الوقت"          : "Time",                 icon: "⏰" },
       { key: "{meetingLink}",        label: isRTL ? "رابط الاجتماع"  : "Meeting Link",         icon: "🔗" },
       { key: "{enrollmentNumber}",   label: isRTL ? "الرقم التعريفي" : "Enrollment No.",       icon: "🔢" },
     ];
+
+    const guardianVars = [
+      { key: "{guardianSalutation}", label: isRTL ? "تحية ولي الأمر" : "Guardian Salutation", icon: "👤" },
+      { key: "{guardianName}",       label: isRTL ? "اسم ولي الأمر"  : "Guardian Name",        icon: "👤" },
+      { key: "{childTitle}",         label: isRTL ? "ابنك/ابنتك"     : "Son/Daughter",         icon: "👪" },
+    ];
+
+    // ✅ للطالب البالغ: متغيرات الطالب فقط
+    const vars = isAdultStudent
+      ? [...studentVars]
+      : [...studentVars.slice(0, 2), ...guardianVars, ...studentVars.slice(2)];
+
     if (isPostponed) {
       vars.push({ key: "{newDate}", label: isRTL ? "التاريخ الجديد" : "New Date", icon: "📅" }, { key: "{newTime}", label: isRTL ? "الوقت الجديد" : "New Time", icon: "⏰" });
     }
     return vars;
-  }, [isRTL, isPostponed]);
+  }, [isRTL, isPostponed, isAdultStudent]);
 
   const insertVariable = useCallback(
     (type, variable) => {
@@ -572,6 +624,9 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
     [showHints, selectedHintIndex, availableVariables, insertVariable]
   );
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ handleStudentPreviewChange — بتتخطى guardian fetch للطالب البالغ
+  // ═══════════════════════════════════════════════════════════════════════
   const handleStudentPreviewChange = useCallback(
     async (studentId) => {
       const student = groupStudents.find((s) => s._id === studentId);
@@ -579,26 +634,43 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
       setSelectedStudentForPreview(student);
       if (groupIsOnHold) return;
 
-      if (!manuallyEdited.student || !manuallyEdited.guardian) {
-        setLoadingTemplates(true);
-        try {
-          const eventType = formData.status === "cancelled" ? "session_cancelled" : "session_postponed";
-          const res  = await fetch(`/api/sessions/${session.id}/templates`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ eventType, studentId: student._id }) });
-          const json = await res.json();
-          if (json.success) {
-            if (!manuallyEdited.student && json.data.student) setFormData((prev) => ({ ...prev, studentMessage: json.data.student.rawContent || json.data.student.content || "" }));
-            if (!manuallyEdited.guardian && json.data.guardian) setFormData((prev) => ({ ...prev, guardianMessage: json.data.guardian.rawContent || json.data.guardian.content || "" }));
+      const studentIsAdult = student.studentType === "adults";
+
+      // ✅ للطالب البالغ: student بس
+      const needsStudentFetch  = !manuallyEdited.student;
+      const needsGuardianFetch = !studentIsAdult && !manuallyEdited.guardian;
+
+      if (!needsStudentFetch && !needsGuardianFetch) return;
+
+      setLoadingTemplates(true);
+      try {
+        const eventType = formData.status === "cancelled" ? "session_cancelled" : "session_postponed";
+        const res  = await fetch(`/api/sessions/${session.id}/templates`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ eventType, studentId: student._id }) });
+        const json = await res.json();
+        if (json.success) {
+          if (needsStudentFetch && json.data.student) {
+            setFormData((prev) => ({ ...prev, studentMessage: json.data.student.rawContent || json.data.student.content || "" }));
           }
-        } catch (error) {
-          console.error("Error fetching templates:", error);
-        } finally {
-          setLoadingTemplates(false);
+          if (needsGuardianFetch && json.data.guardian) {
+            setFormData((prev) => ({ ...prev, guardianMessage: json.data.guardian.rawContent || json.data.guardian.content || "" }));
+          }
+          // ✅ للطالب البالغ: نفضّي رسالة ولي الأمر
+          if (studentIsAdult) {
+            setFormData((prev) => ({ ...prev, guardianMessage: "" }));
+          }
         }
+      } catch (error) {
+        console.error("Error fetching templates:", error);
+      } finally {
+        setLoadingTemplates(false);
       }
     },
     [groupStudents, manuallyEdited, formData.status, session.id, groupIsOnHold]
   );
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ resetToDefault — بتتخطى guardian للطالب البالغ
+  // ═══════════════════════════════════════════════════════════════════════
   const resetToDefault = useCallback(async () => {
     if (groupIsOnHold) return;
     if (!selectedStudentForPreview) return;
@@ -611,7 +683,14 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
       });
       const json = await res.json();
       if (json.success) {
-        setFormData((prev) => ({ ...prev, studentMessage: json.data.student?.rawContent || json.data.student?.content || "", guardianMessage: json.data.guardian?.rawContent || json.data.guardian?.content || "" }));
+        setFormData((prev) => ({
+          ...prev,
+          studentMessage: json.data.student?.rawContent || json.data.student?.content || "",
+          // ✅ للطالب البالغ: منحدثش رسالة ولي الأمر
+          guardianMessage: isAdultStudent
+            ? ""
+            : (json.data.guardian?.rawContent || json.data.guardian?.content || ""),
+        }));
         setManuallyEdited({ student: false, guardian: false });
         toast.success(isRTL ? "تم استعادة القوالب الافتراضية" : "Default templates restored");
       }
@@ -621,7 +700,7 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
     } finally {
       setLoadingTemplates(false);
     }
-  }, [selectedStudentForPreview, formData.status, formData.newDate, formData.newTime, formData.meetingLink, session.id, isRTL, groupIsOnHold]);
+  }, [selectedStudentForPreview, formData.status, formData.newDate, formData.newTime, formData.meetingLink, session.id, isRTL, groupIsOnHold, isAdultStudent]);
 
   const renderHints = (type) => {
     if (!showHints[type]) return null;
@@ -653,14 +732,28 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
     );
   };
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ handleSave — بتبني guardianMessages للـ kids بس
+  // ═══════════════════════════════════════════════════════════════════════
   const handleSave = useCallback(async () => {
     if (groupIsOnHold) {
       toast.error(isRTL ? "الجروب على Hold — مينفعش تعدّل أي حاجة في الجلسة" : "Group is on hold — can't make any changes");
       return;
     }
-    if (showReasonField && (!formData.studentMessage?.trim() || !formData.guardianMessage?.trim())) {
-      toast.error(isRTL ? "الرجاء كتابة الرسالتين" : "Please write both messages");
-      return;
+
+    // ✅ التحقق من الرسائل حسب نوع الطالب المختار للـ preview
+    if (showReasonField) {
+      if (isAdultStudent) {
+        if (!formData.studentMessage?.trim()) {
+          toast.error(isRTL ? "الرجاء كتابة رسالة الطالب" : "Please write the student message");
+          return;
+        }
+      } else {
+        if (!formData.studentMessage?.trim() || !formData.guardianMessage?.trim()) {
+          toast.error(isRTL ? "الرجاء كتابة الرسالتين" : "Please write both messages");
+          return;
+        }
+      }
     }
 
     setSaving(true);
@@ -673,7 +766,12 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
           const sid  = student._id.toString();
           const vars = buildVariables(student, session, formData, dbVars);
           studentMessages[sid]  = renderTemplate(formData.studentMessage,  vars);
-          guardianMessages[sid] = renderTemplate(formData.guardianMessage, vars);
+
+          // ✅ للطالب البالغ: مش بنضيف رسالة ولي الأمر
+          const studentIsAdult = student.studentType === "adults";
+          if (!studentIsAdult) {
+            guardianMessages[sid] = renderTemplate(formData.guardianMessage, vars);
+          }
         });
       }
 
@@ -712,7 +810,7 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
     } finally {
       setSaving(false);
     }
-  }, [formData, showReasonField, isPostponed, session, groupStudents, dbVars, isRTL, onClose, onRefresh, groupIsOnHold]);
+  }, [formData, showReasonField, isPostponed, session, groupStudents, dbVars, isRTL, onClose, onRefresh, groupIsOnHold, isAdultStudent]);
 
   const footer = (
     <>
@@ -721,7 +819,16 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
       </button>
       <button
         onClick={handleSave}
-        disabled={saving || loadingTemplates || groupIsOnHold || (showReasonField && (!formData.studentMessage?.trim() || !formData.guardianMessage?.trim()))}
+        disabled={
+          saving ||
+          loadingTemplates ||
+          groupIsOnHold ||
+          (showReasonField && (
+            isAdultStudent
+              ? !formData.studentMessage?.trim()
+              : (!formData.studentMessage?.trim() || !formData.guardianMessage?.trim())
+          ))
+        }
         title={groupIsOnHold ? (isRTL ? "الجروب على Hold — التعديل معطّل" : "Group is on hold — editing disabled") : ""}
         className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold shadow-sm transition-colors ${
           groupIsOnHold ? "cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-white/5 dark:text-slate-500" : "bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
@@ -876,6 +983,7 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
                     const lang   = student.communicationPreferences?.preferredLanguage || "ar";
                     const gender = (student.personalInfo?.gender || "male").toLowerCase();
                     const rel    = (student.guardianInfo?.relationship || "father").toLowerCase();
+                    const isAdult = student.studentType === "adults";
                     return (
                       <button
                         key={student._id}
@@ -885,10 +993,10 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
                           isSelected ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-200 text-slate-700 hover:border-indigo-300 dark:border-white/10 dark:text-slate-300"
                         }`}
                       >
-                        <span>{gender === "female" ? "👧" : "👦"}</span>
+                        <span>{isAdult ? "🧑" : gender === "female" ? "👧" : "👦"}</span>
                         <span>{student.personalInfo?.fullName?.split(" ")[0]}</span>
                         <span className="opacity-70">{lang === "ar" ? "🇸🇦" : "🇬🇧"}</span>
-                        <span className="opacity-70">{rel === "mother" ? "👩" : "👨"}</span>
+                        {!isAdult && <span className="opacity-70">{rel === "mother" ? "👩" : "👨"}</span>}
                       </button>
                     );
                   })}
@@ -900,14 +1008,21 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
                       <span className="w-28 shrink-0 font-medium text-indigo-600 dark:text-indigo-400">👶 {isRTL ? "تحية الطالب:" : "Student:"}</span>
                       <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.studentSalutation}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-28 shrink-0 font-medium text-violet-600 dark:text-violet-400">👪 {isRTL ? "تحية ولي الأمر:" : "Guardian:"}</span>
-                      <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.guardianSalutation}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-28 shrink-0 font-medium text-emerald-600 dark:text-emerald-400">👶 {isRTL ? "ابنك/ابنتك:" : "Child title:"}</span>
-                      <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.childTitle}</span>
-                    </div>
+
+                    {/* ✅ تحية ولي الأمر + childTitle — للـ kids بس */}
+                    {!isAdultStudent && (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 shrink-0 font-medium text-violet-600 dark:text-violet-400">👪 {isRTL ? "تحية ولي الأمر:" : "Guardian:"}</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.guardianSalutation}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-28 shrink-0 font-medium text-emerald-600 dark:text-emerald-400">👶 {isRTL ? "ابنك/ابنتك:" : "Child title:"}</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.childTitle}</span>
+                        </div>
+                      </>
+                    )}
+
                     {(manuallyEdited.student || manuallyEdited.guardian) && (
                       <p className="pt-1 text-orange-500 dark:text-orange-400">✏️ {isRTL ? "الرسائل معدلة يدوياً" : "Messages manually edited"}</p>
                     )}
@@ -916,6 +1031,24 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
               </div>
             )}
 
+            {/* ✅ للطالب البالغ: بانر توضيحي */}
+            {isAdultStudent && (
+              <div className="flex items-start gap-2.5 rounded-xl border border-indigo-200 bg-indigo-100/60 p-3.5 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+                <span className="text-lg shrink-0">🧑</span>
+                <div className="text-xs text-indigo-800 dark:text-indigo-200">
+                  <p className="font-bold mb-0.5">
+                    {isRTL ? "الطالب بالغ (Adults)" : "Adult Student (Adults)"}
+                  </p>
+                  <p className="opacity-90 leading-relaxed">
+                    {isRTL
+                      ? "هتتبعت رسالة للطالب بس — مفيش رسالة لولي الأمر لأنه طالب بالغ."
+                      : "Only the student will be notified — no guardian message since the student is an adult."}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* ✅ رسالة الطالب — دايمًا */}
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-500/20">
@@ -950,46 +1083,54 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
               )}
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-500/20">
-                  <Users className="h-4 w-4 text-violet-600 dark:text-violet-300" />
-                </div>
-                <h4 className="text-sm font-semibold text-violet-900 dark:text-violet-200">{isRTL ? "رسالة لولي الأمر" : "Guardian Message"}</h4>
-              </div>
-              <div className="relative">
-                <textarea
-                  ref={guardianTextareaRef}
-                  value={formData.guardianMessage}
-                  onChange={(e) => handleInput(e, "guardian")}
-                  onKeyDown={(e) => handleKeyDown(e, "guardian")}
-                  onSelect={(e) => setCursorPosition((prev) => ({ ...prev, guardian: e.target.selectionStart }))}
-                  placeholder={isRTL ? "اكتب @ لإظهار المتغيرات..." : "Type @ for variables..."}
-                  className="h-36 w-full resize-none rounded-lg border border-violet-200 bg-white px-3 py-2.5 font-mono text-sm outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-violet-500/20 dark:bg-white/5 dark:text-white"
-                  dir={(selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar" ? "rtl" : "ltr"}
-                />
-                {renderHints("guardian")}
-              </div>
-              {previewGuardianMessage && (
-                <div className="overflow-hidden rounded-lg border border-violet-200 bg-white dark:border-violet-500/10 dark:bg-white/5">
-                  <div className="flex items-center gap-2 border-b bg-violet-50 px-3 py-1.5 dark:border-violet-500/10 dark:bg-violet-500/10">
-                    <MessageCircle className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />
-                    <span className="text-xs font-medium text-violet-700 dark:text-violet-300">{isRTL ? "معاينة رسالة ولي الأمر" : "Guardian Preview"}</span>
+            {/* ✅ رسالة ولي الأمر — للـ kids بس */}
+            {!isAdultStudent && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-500/20">
+                    <Users className="h-4 w-4 text-violet-600 dark:text-violet-300" />
                   </div>
-                  <div className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words p-3 text-sm" dir={(selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar" ? "rtl" : "ltr"}>
-                    {previewGuardianMessage}
-                  </div>
+                  <h4 className="text-sm font-semibold text-violet-900 dark:text-violet-200">{isRTL ? "رسالة لولي الأمر" : "Guardian Message"}</h4>
                 </div>
-              )}
-            </div>
+                <div className="relative">
+                  <textarea
+                    ref={guardianTextareaRef}
+                    value={formData.guardianMessage}
+                    onChange={(e) => handleInput(e, "guardian")}
+                    onKeyDown={(e) => handleKeyDown(e, "guardian")}
+                    onSelect={(e) => setCursorPosition((prev) => ({ ...prev, guardian: e.target.selectionStart }))}
+                    placeholder={isRTL ? "اكتب @ لإظهار المتغيرات..." : "Type @ for variables..."}
+                    className="h-36 w-full resize-none rounded-lg border border-violet-200 bg-white px-3 py-2.5 font-mono text-sm outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-violet-500/20 dark:bg-white/5 dark:text-white"
+                    dir={(selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar" ? "rtl" : "ltr"}
+                  />
+                  {renderHints("guardian")}
+                </div>
+                {previewGuardianMessage && (
+                  <div className="overflow-hidden rounded-lg border border-violet-200 bg-white dark:border-violet-500/10 dark:bg-white/5">
+                    <div className="flex items-center gap-2 border-b bg-violet-50 px-3 py-1.5 dark:border-violet-500/10 dark:bg-violet-500/10">
+                      <MessageCircle className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />
+                      <span className="text-xs font-medium text-violet-700 dark:text-violet-300">{isRTL ? "معاينة رسالة ولي الأمر" : "Guardian Preview"}</span>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words p-3 text-sm" dir={(selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar" ? "rtl" : "ltr"}>
+                      {previewGuardianMessage}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
+            {/* ✅ أزرار الحفظ */}
             <div className="flex justify-end gap-2 border-t border-indigo-100 pt-3 dark:border-indigo-500/10">
               <button onClick={() => saveTemplateToDatabase("student", formData.studentMessage)} disabled={!formData.studentMessage || savingTemplate.student || loadingTemplates} className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
                 {savingTemplate.student ? <><RefreshCw className="h-3 w-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</> : <><Save className="h-3 w-3" /> {isRTL ? "حفظ قالب الطالب" : "Save Student Template"}</>}
               </button>
-              <button onClick={() => saveTemplateToDatabase("guardian", formData.guardianMessage)} disabled={!formData.guardianMessage || savingTemplate.guardian || loadingTemplates} className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-                {savingTemplate.guardian ? <><RefreshCw className="h-3 w-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</> : <><Save className="h-3 w-3" /> {isRTL ? "حفظ قالب ولي الأمر" : "Save Guardian Template"}</>}
-              </button>
+
+              {/* ✅ زر حفظ قالب ولي الأمر — للـ kids بس */}
+              {!isAdultStudent && (
+                <button onClick={() => saveTemplateToDatabase("guardian", formData.guardianMessage)} disabled={!formData.guardianMessage || savingTemplate.guardian || loadingTemplates} className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                  {savingTemplate.guardian ? <><RefreshCw className="h-3 w-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</> : <><Save className="h-3 w-3" /> {isRTL ? "حفظ قالب ولي الأمر" : "Save Guardian Template"}</>}
+                </button>
+              )}
             </div>
           </div>
         )}
