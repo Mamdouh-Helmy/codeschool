@@ -166,6 +166,17 @@ export async function PUT(req, { params }) {
       );
     }
 
+    // ✅ deliveryMode: لو اتبعت لازم يكون online أو offline
+    if (
+      updateData.deliveryMode !== undefined &&
+      !["online", "offline"].includes(updateData.deliveryMode)
+    ) {
+      return NextResponse.json(
+        { success: false, error: "نوع التسليم لازم يكون online أو offline" },
+        { status: 400 },
+      );
+    }
+
     const metadata = existingGroup.metadata || {};
     const updatePayload = {
       ...updateData,
@@ -180,6 +191,23 @@ export async function PUT(req, { params }) {
     if (updateData.metadata) delete updatePayload.metadata;
 
     if (!updatePayload.tags) updatePayload.tags = [];
+
+    // ✅ لو الجروب بقى (أو لسه) أونلاين → نصفّر بيانات المكان عشان مايفضلش
+    //    فيه بقايا أوفلاين قديمة
+    const finalDeliveryMode =
+      updateData.deliveryMode || existingGroup.deliveryMode || "online";
+
+    if (finalDeliveryMode === "online") {
+      updatePayload.location = "";
+      updatePayload.locationDetails = {
+        lat: null,
+        lng: null,
+        placeName: "",
+        country: "",
+        address: "",
+        extraDetails: "",
+      };
+    }
 
     const updatedGroup = await Group.findByIdAndUpdate(
       id,
@@ -200,33 +228,36 @@ export async function PUT(req, { params }) {
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    // ✅ FIX: مزامنة deliveryMode مع كل السيشنات اللي لسه مش Completed.
-    //    السبب: لما الأدمن يعدّل نوع الجروب من Online → Offline (أو العكس)،
-    //    الجروب بيتحدّث صح لكن السيشنات القديمة بتفضل بالـ mode القديم،
-    //    فالكرون بعد كده يصنّفها غلط ويبعت نوع قوالب مختلف عن الجروب.
+    // ✅ مزامنة deliveryMode — بتشتغل دايماً (مش بس لحظة التغيير)
+    //    بنقارن بقيمة الجروب بعد التحديث، وبنصلّح أي سيشنة مختلفة.
+    //    بكده حتى السيشنات اللي اتبعترت قبل كده بتتصلّح لأول ما الجروب يتحفظ.
+    //    السيشنات المكتملة بتتساب زي ما هي (تاريخ).
     // ═════════════════════════════════════════════════════════════════════
-    const deliveryModeChanged =
-      updateData.deliveryMode !== undefined &&
-      ["online", "offline"].includes(updateData.deliveryMode) &&
-      updateData.deliveryMode !== (existingGroup.deliveryMode || "online");
+    const groupMode =
+      updatedGroup.deliveryMode === "offline" ? "offline" : "online";
 
-    let sessionsSynced = 0;
-    if (deliveryModeChanged) {
-      const syncResult = await Session.updateMany(
-        {
-          groupId: id,
-          isDeleted: false,
-          status: { $ne: "completed" },
-        },
-        {
-          $set: {
-            deliveryMode: updateData.deliveryMode,
-          },
-        },
-      );
-      sessionsSynced = syncResult.modifiedCount || 0;
+    const deliveryModeChanged =
+      groupMode !== (existingGroup.deliveryMode || "online");
+
+    const syncResult = await Session.updateMany(
+      {
+        groupId: id,
+        isDeleted: false,
+        status: { $ne: "completed" },
+        $or: [
+          { deliveryMode: { $ne: groupMode } },
+          { deliveryMode: null },
+          { deliveryMode: { $exists: false } },
+        ],
+      },
+      { $set: { deliveryMode: groupMode } },
+    );
+
+    const sessionsSynced = syncResult.modifiedCount || 0;
+
+    if (sessionsSynced > 0 || deliveryModeChanged) {
       console.log(
-        `🔄 [Sync] Synced deliveryMode="${updateData.deliveryMode}" to ${sessionsSynced} sessions`,
+        `🔄 [Sync] Group ${updatedGroup.code} mode="${groupMode}" (changed: ${deliveryModeChanged}) → synced ${sessionsSynced} session(s)`,
       );
     }
 
@@ -249,7 +280,7 @@ export async function PUT(req, { params }) {
     return NextResponse.json({
       success: true,
       message: "Group updated successfully",
-      deliveryModeSynced: deliveryModeChanged,
+      deliveryModeSynced: deliveryModeChanged || sessionsSynced > 0,
       sessionsSynced,
       data: responseData,
     });

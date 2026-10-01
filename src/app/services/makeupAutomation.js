@@ -12,6 +12,7 @@ import {
   prepareInstructorVariables,
   replaceVariables,
 } from "./groupAutomation";
+import { resolveDeliveryMode } from "./deliveryMode";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🎁 MAKE-UP SESSION — Automation
@@ -370,8 +371,7 @@ export async function sendMakeupGroupNotifications(group, generatedSessions = []
   // ✅ NEW: هل الطالب بالغ؟ لو آه → مش بنبعت لولي الأمر خالص
   const isAdult = student.studentType === "adults";
 
-  const isOffline =
-    group.deliveryMode === "offline" || newSession.deliveryMode === "offline";
+ const isOffline = resolveDeliveryMode(newSession, group) === "offline";
 
   console.log(
     `\n🎁 [Make-up] ${group.name} (${isOffline ? "OFFLINE" : "ONLINE"}) → ${newSession.title}` +

@@ -8,6 +8,7 @@ import MessageTemplate from "../models/MessageTemplate";
 import { wapilotService } from "./wapilot-service";
 import { isSessionLockedByHold } from "./holdGuard";
 import { routeMessage } from "./messageRouting";
+import { resolveDeliveryMode } from "./deliveryMode";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ HOLD GUARD — حماية من إرسال أي رسالة لجروب على Hold
@@ -3485,13 +3486,6 @@ export async function onSessionStatusChanged(
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ✅ sendManualSessionReminder
-// ✅ NEW:
-//   - kids   → reminder_24h_offline_student/guardian  (offline)
-//   - adults → reminder_24h_offline_adult            (offline)
-//   - pre_attendance_ping → pre_attendance_ping_student (+ _guardian للـ kids)
-// ═══════════════════════════════════════════════════════════════════════════
 export async function sendManualSessionReminder(
   sessionId,
   reminderType,
@@ -3510,17 +3504,25 @@ export async function sendManualSessionReminder(
     const group = session.groupId;
 
     // ═══════════════════════════════════════════════════════════════
-    // ✅ تحديد الـ delivery mode
+    // ✅ نوع التسليم — الجروب هو الـ Source of Truth
+    //    metadata.isOffline من الواجهة بقى بيتتجاهل (كان بيكسر الجروبات الأونلاين)
     // ═══════════════════════════════════════════════════════════════
-    const deliveryMode =
-      group?.deliveryMode || session.deliveryMode || "online";
-    const forceOffline = metadata?.isOffline === true;
+    const deliveryMode = resolveDeliveryMode(session, group);
+    const isOfflineMode = deliveryMode === "offline";
+
+    if (
+      typeof metadata?.isOffline === "boolean" &&
+      metadata.isOffline !== isOfflineMode
+    ) {
+      console.warn(
+        `⚠️ [MODE MISMATCH] client sent isOffline=${metadata.isOffline} but group is "${deliveryMode}" — using group value (session ${sessionId})`,
+      );
+    }
 
     // ═══════════════════════════════════════════════════════════════
     // ✅ Pre-Attendance Ping — Offline فقط
     // ═══════════════════════════════════════════════════════════════
     const isPrePing = reminderType === "pre_attendance_ping";
-    const isOfflineMode = deliveryMode === "offline" || forceOffline;
 
     if (isPrePing && !isOfflineMode) {
       console.warn(
@@ -3538,10 +3540,13 @@ export async function sendManualSessionReminder(
       };
     }
 
-    // ✅ لو الجروب Offline والمودال مطلبش offline → نرفض (حماية)
-    if (deliveryMode === "offline" && !forceOffline && !isPrePing) {
+    // ✅ لو الجروب Offline ومحاولين نبعت تذكير أونلاين عادي (24h / 15min) → نرفض
+    //    (الأوفلاين ليه دوال مخصوصة: sendOfflineLocationReminder / sendOfflineDropoffAlert)
+    //    ملحوظة: الاستدعاء اللي بيجي من الواجهة بـ isOffline:true بيعدّي لأنه
+    //    صريح إنه بيستخدم المسار ده للأوفلاين، والجروب فعلاً أوفلاين.
+    if (isOfflineMode && metadata?.isOffline !== true && !isPrePing) {
       console.warn(
-        `⏭️ [GUARD] sendManualSessionReminder skipped — session is OFFLINE (${sessionId}). Use offline reminder instead.`,
+        `⏭️ [GUARD] sendManualSessionReminder skipped — group is OFFLINE (${sessionId}). Use offline reminder instead.`,
       );
       return {
         success: false,
@@ -3618,7 +3623,6 @@ export async function sendManualSessionReminder(
         let guardianTemplateType;
 
         if (isPrePing) {
-          // ✅ Pre-Ping — مشترك بين kids/adults (قالب واحد للطالب)
           studentTemplateType = "pre_attendance_ping_student";
           guardianTemplateType = "pre_attendance_ping_guardian"; // للـ kids فقط
         } else if (isOfflineMode) {
@@ -3735,6 +3739,7 @@ export async function sendManualSessionReminder(
             reminderType,
             isAdult,
             isOffline: isOfflineMode,
+            deliveryMode,
             isPrePing,
           },
         });
@@ -3757,7 +3762,7 @@ export async function sendManualSessionReminder(
       }
     }
 
-    // ── Update automation events (للـ cron بس) ──
+    // ── Update automation events (للكرون بس) ──
     if (metadata?.automatedCron && successCount > 0) {
       try {
         let updateField = {};
@@ -3835,6 +3840,7 @@ export async function sendManualSessionReminder(
       successCount,
       failCount,
       reminderType,
+      deliveryMode,
       isOffline: isOfflineMode,
       isPrePing,
       notificationResults,
@@ -5167,7 +5173,7 @@ export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
       return { success: false, reason: holdCheck.reason };
     }
 
-    const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
+    const deliveryMode = resolveDeliveryMode(session, group);
     if (deliveryMode !== "offline") {
       return {
         success: false,
@@ -5306,7 +5312,7 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
       return { success: false, reason: holdCheck.reason };
     }
 
-    const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
+    const deliveryMode = resolveDeliveryMode(session, group);
     if (deliveryMode !== "offline") {
       return { success: false, reason: "not_offline" };
     }
@@ -5435,7 +5441,7 @@ export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
       return { success: false, reason: holdCheck.reason };
     }
 
-    const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
+    const deliveryMode = resolveDeliveryMode(session, group);
     if (deliveryMode !== "offline") {
       return { success: false, reason: "not_offline" };
     }
@@ -5548,7 +5554,7 @@ export async function sendInstructorOfflineReminder(
       return { success: false, reason: holdCheck.reason };
     }
 
-    const deliveryMode = session.deliveryMode || group.deliveryMode || "online";
+    const deliveryMode = resolveDeliveryMode(session, group);
     if (deliveryMode !== "offline") {
       return { success: false, reason: "not_offline" };
     }

@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Session from '../../../models/Session';
 import Interview from '../../../models/Interview';
+import { resolveDeliveryMode } from '../../../services/deliveryMode';
 import {
   // ✅ ONLINE
   sendManualSessionReminder,
@@ -43,27 +44,10 @@ const INTERVIEW_WINDOWS = {
 
 // ============================================================
 // ✅ Helper: تحديد نوع الجلسة (offline / online)
-// ✅ FIX: نعتمد على GROUP deliveryMode كـ Source of Truth، لأن
-//    الـ Session.deliveryMode ممكن يكون اتولّد قديمًا بقيمة مختلفة،
-//    أو يساوي null. لو الجروب عنده deliveryMode واضح، هو اللي يحكم
-//    عشان نضمن إن كل سيشنات الجروب بنفس النوع (مافيش 2 online + 2 offline
-//    في نفس الجروب).
+//    الجروب هو الـ Source of Truth (من deliveryMode.js)
 // ============================================================
 function getSessionDeliveryMode(session) {
-  // ✅ الجروب أولًا (Source of Truth)
-  const groupMode = session?.groupId?.deliveryMode;
-  if (groupMode === 'offline' || groupMode === 'online') {
-    return groupMode;
-  }
-
-  // ✅ Fallback: لو الجروب مش محدد، نستخدم السيشن
-  const sessionMode = session?.deliveryMode;
-  if (sessionMode === 'offline' || sessionMode === 'online') {
-    return sessionMode;
-  }
-
-  // ✅ Default: online
-  return 'online';
+  return resolveDeliveryMode(session, session?.groupId);
 }
 
 // ============================================================
@@ -197,6 +181,9 @@ export async function GET(req) {
         timeZone: 'Africa/Cairo',
       }),
 
+      // 🛠️ عدد السيشنات اللي اتصلح deliveryMode بتاعها تلقائيًا
+      autoFixedDeliveryMode: 0,
+
       // 🌐 ONLINE
       reminder24h: {
         checked: 0,
@@ -300,9 +287,47 @@ export async function GET(req) {
     );
 
     // ============================================================
+    // 🛠️ SELF-HEALING: أي سيشن deliveryMode بتاعها مختلف عن الجروب
+    //    بنصلحها في الداتابيز وفي الذاكرة قبل ما نصنّف.
+    // ============================================================
+    const fixOps = [];
+
+    for (const s of allCandidates) {
+      const groupMode = s.groupId?.deliveryMode;
+
+      if (
+        (groupMode === 'online' || groupMode === 'offline') &&
+        s.deliveryMode !== groupMode
+      ) {
+        console.warn(
+          `🛠️ Mode mismatch — session "${s.title}" (${s._id}): session=${s.deliveryMode ?? 'null'} → group="${s.groupId?.name}"=${groupMode}`
+        );
+
+        fixOps.push({
+          updateOne: {
+            filter: { _id: s._id },
+            update: { $set: { deliveryMode: groupMode } },
+          },
+        });
+
+        s.deliveryMode = groupMode; // نصلحها في الذاكرة كمان
+      }
+    }
+
+    if (fixOps.length > 0) {
+      try {
+        await Session.bulkWrite(fixOps);
+        console.warn(
+          `🛠️ Auto-fixed deliveryMode on ${fixOps.length} session(s)`
+        );
+        results.autoFixedDeliveryMode = fixOps.length;
+      } catch (fixErr) {
+        console.error('❌ deliveryMode self-heal failed:', fixErr.message);
+      }
+    }
+
+    // ============================================================
     // ✅ نقسم المرشحين: Online / Offline
-    //    ✅ FIX: بنستخدم getSessionDeliveryMode الموحّد، عشان التصنيف
-    //    يكون متسق في كل الملف (نفس المصدر بتاع processReminder).
     // ============================================================
     const onlineSessions = [];
     const offlineSessions = [];

@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import mongoose from "mongoose";
+import { resolveDeliveryMode } from "../services/deliveryMode";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sub-schemas
@@ -224,6 +225,7 @@ const SessionSchema = new mongoose.Schema(
     // ── Delivery Mode ──────────────────────────────────────────────────────
     // Snapshot من نوع الجروب وقت الإنشاء (auto-populated via pre-insertMany
     // و pre-save hooks — لو null بيتقرا من الجروب وقت الحساب)
+    // ⚠️ الجروب هو الـ Source of Truth — شوف services/deliveryMode.js
     deliveryMode: {
       type: String,
       enum: ["online", "offline", null],
@@ -640,14 +642,13 @@ SessionSchema.virtual("hasActiveEarlyAccess").get(function () {
   return !!(this.earlyAccess?.enabled && !this.earlyAccess?.consumedAt);
 });
 
+// ✅ الجروب هو الـ Source of Truth (لو populated)، والسيشن fallback
 SessionSchema.virtual("isOffline").get(function () {
-  const mode = this.deliveryMode || this.populated?.groupId?.deliveryMode;
-  return mode === "offline";
+  return resolveDeliveryMode(this) === "offline";
 });
 
 SessionSchema.virtual("isOnline").get(function () {
-  const mode = this.deliveryMode || this.populated?.groupId?.deliveryMode;
-  return mode !== "offline";
+  return resolveDeliveryMode(this) !== "offline";
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -682,11 +683,13 @@ SessionSchema.methods.isEffectivelyToday = function () {
 };
 
 SessionSchema.methods.getSummary = function () {
-  const isOfflineMode =
-    (this.deliveryMode || this.populated?.groupId?.deliveryMode) === "offline";
+  // ✅ الجروب أولًا (لو populated) وبعدين السيشن
+  const resolvedMode = resolveDeliveryMode(this);
+  const isOfflineMode = resolvedMode === "offline";
 
-  const groupLoc = this.populated?.groupId?.locationDetails || {};
-  const groupLocation = this.populated?.groupId?.location || "";
+  // groupId بيبقى object بـ locationDetails بس لو populated
+  const groupLoc = this.groupId?.locationDetails || {};
+  const groupLocation = this.groupId?.location || "";
 
   const locationInfo = isOfflineMode
     ? {
@@ -721,7 +724,7 @@ SessionSchema.methods.getSummary = function () {
     isToday: this.isToday(),
     moduleIndex: this.moduleIndex,
     modulePosition: this.modulePosition,
-    deliveryMode: this.deliveryMode || null,
+    deliveryMode: resolvedMode,
     isOffline: isOfflineMode,
     locationInfo,
     meetingLink: this.meetingLink,
@@ -752,11 +755,12 @@ SessionSchema.methods.getDisplayDetails = function () {
     .map((idx) => `Lesson ${idx + 1}`)
     .join(" & ");
 
-  const isOfflineMode =
-    (this.deliveryMode || this.populated?.groupId?.deliveryMode) === "offline";
+  // ✅ الجروب أولًا (لو populated) وبعدين السيشن
+  const resolvedMode = resolveDeliveryMode(this);
+  const isOfflineMode = resolvedMode === "offline";
 
-  const groupLoc = this.populated?.groupId?.locationDetails || {};
-  const groupLocation = this.populated?.groupId?.location || "";
+  const groupLoc = this.groupId?.locationDetails || {};
+  const groupLocation = this.groupId?.location || "";
 
   return {
     id: this._id,
@@ -776,7 +780,7 @@ SessionSchema.methods.getDisplayDetails = function () {
     isUpcoming: this.isUpcoming(),
     isToday: this.isToday(),
     attendanceTaken: this.attendanceTaken,
-    deliveryMode: this.deliveryMode || null,
+    deliveryMode: resolvedMode,
     isOffline: isOfflineMode,
     locationInfo: isOfflineMode
       ? {

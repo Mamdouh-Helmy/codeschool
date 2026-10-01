@@ -497,16 +497,8 @@ function summarizeDistribution(sessions) {
   }
 
   return { distribution, uniqueDates: Array.from(dateSet).sort() };
+  
 }
-
-/**
- * ✅ Generate sessions based on module selection
- *
- * options.linkAssignmentMode: "first_available" (default) | "round_robin"
- *
- * 🆕 الحصة التعويضية: لو group.isMakeupGroup === true → سيشن واحدة بس،
- * مربوطة بالسيشن الأصلية، وعليها isComplimentary: true.
- */
 export async function generateSessionsForGroup(
   groupId,
   group,
@@ -553,6 +545,13 @@ export async function generateSessionsForGroup(
     }
 
     const linkSchedule = { daysOfWeek, timeFrom, timeTo };
+
+    // ✅ نوع التسليم من الجروب (Source of Truth) — بيتحط صراحةً على كل سيشن
+    const groupDeliveryMode =
+      group.deliveryMode === "offline" ? "offline" : "online";
+    const isOfflineGroup = groupDeliveryMode === "offline";
+
+    console.log(`📍 Delivery mode: ${groupDeliveryMode}`);
 
     // ═══════════════════════════════════════════════════════════════════
     // 🎯 MAKE-UP GROUP FLOW — سيشن واحدة بس
@@ -601,6 +600,9 @@ export async function generateSessionsForGroup(
         attendanceTaken: false,
         attendance: [],
 
+        // ✅ نوع التسليم صريح من الجروب
+        deliveryMode: groupDeliveryMode,
+
         // ✅ العلامة المهمة جدًا
         isComplimentary: true,
         makeupInfo: {
@@ -627,8 +629,8 @@ export async function generateSessionsForGroup(
         isDeleted: false,
       };
 
-      // 🔗 اللينكات
-      const links = await loadSelectedLinks(selectedLinkIds);
+      // 🔗 اللينكات — الأوفلاين مبيحتاجش لينكات خالص
+      const links = isOfflineGroup ? [] : await loadSelectedLinks(selectedLinkIds);
       const {
         sessions: sessionsWithLinks,
         assigned,
@@ -675,6 +677,7 @@ export async function generateSessionsForGroup(
           mode: linkMode,
           linksUsed,
         },
+        deliveryMode: groupDeliveryMode,
         isMakeupGroup: true,
       };
     }
@@ -765,6 +768,10 @@ export async function generateSessionsForGroup(
           status: "scheduled",
           attendanceTaken: false,
           attendance: [],
+
+          // ✅ نوع التسليم صريح من الجروب
+          deliveryMode: groupDeliveryMode,
+
           isComplimentary: false,
           automationEvents: {
             reminderSent: false,
@@ -785,8 +792,8 @@ export async function generateSessionsForGroup(
       }
     }
 
-    // ── ✅ Assign meeting links ──────────────────────────────────────────
-    const links = await loadSelectedLinks(selectedLinkIds);
+    // ── ✅ Assign meeting links (الأوفلاين مبياخدش لينكات) ─────────────────
+    const links = isOfflineGroup ? [] : await loadSelectedLinks(selectedLinkIds);
     console.log(`🔗 Mode: ${linkMode} | Available selected links: ${links.length}`);
 
     const {
@@ -807,7 +814,7 @@ export async function generateSessionsForGroup(
     const { distribution, uniqueDates } = summarizeDistribution(sessionsWithLinks);
 
     console.log(
-      `✅ Generated ${sessionsWithLinks.length} sessions | links assigned: ${linksAssigned} | links used: ${linksUsed.length}`,
+      `✅ Generated ${sessionsWithLinks.length} sessions | mode: ${groupDeliveryMode} | links assigned: ${linksAssigned} | links used: ${linksUsed.length}`,
     );
 
     return {
@@ -837,6 +844,7 @@ export async function generateSessionsForGroup(
         mode: linkMode,
         linksUsed,
       },
+      deliveryMode: groupDeliveryMode,
     };
   } catch (error) {
     console.error("❌ Error generating sessions:", error);
