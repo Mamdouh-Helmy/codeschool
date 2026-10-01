@@ -8,12 +8,11 @@ import Group from '../../../../../models/Group';
 import StudentEvaluation from '../../../../../models/StudentEvaluation';
 import MessageTemplate from '../../../../../models/MessageTemplate';
 import TemplateVariable from '../../../../../models/TemplateVariable';
-// ✅ مشتركين (بدل النسخ المكررة)
 import { resolveSessionLock } from '../../../../../services/holdGuard';
 import { routeMessage } from '../../../../../services/messageRouting';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ✅ AUTH / OWNERSHIP HELPERS
+// AUTH / OWNERSHIP HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
 
 const json = (body, status = 200) => NextResponse.json(body, { status });
@@ -46,13 +45,13 @@ async function parseBody(req) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ✅ CONSTANTS
+// CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════
 
 const VALID_DECISIONS = ['pass', 'review', 'repeat'];
 const EXCLUDED_FROM_EVALUATION_STATUSES = ['absent', 'late', 'excused'];
 
-// ✅ كل أنواع رسائل التقييم — الـ dedupe بيطابق أي واحد منهم (تغيير القرار مايبعتش رسالة تانية)
+// كل أنواع رسائل التقييم — الـ dedupe بيطابق أي واحد منهم
 const EVAL_MESSAGE_TYPES = VALID_DECISIONS.flatMap((d) => [
   `evaluation_${d}`,
   `evaluation_${d}_adult`,
@@ -65,7 +64,7 @@ function resolveDeliveryMode(session) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ✅ TEMPLATE HELPERS
+// TEMPLATE HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
 
 function resolveVar(dbVars, key, lang = 'ar', genderContext = {}) {
@@ -185,9 +184,13 @@ function buildRecipientContext(student, dbVars) {
 }
 
 function renderTemplate(template, variables) {
-  let rendered = template;
+  let rendered = template || '';
   Object.entries(variables).forEach(([key, value]) => {
-    rendered = rendered.replace(new RegExp(`\\{${key}\\}`, 'g'), value ?? '');
+    // function replacer عشان $& و $1 في القيمة (مثلاً تعليق المدرس) ما تتفسرش
+    rendered = rendered.replace(
+      new RegExp(`\\{${key}\\}`, 'g'),
+      () => String(value ?? ''),
+    );
   });
   return rendered;
 }
@@ -234,7 +237,7 @@ async function getSessionBlogInfo(session) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ✅ Evaluation message — الـ template والـ recipient من routeMessage
+// Evaluation message — الـ template والـ recipient من routeMessage
 //    Minor → قالب ولي الأمر + ولي الأمر | Adult → قالب _adult + الطالب
 // ═══════════════════════════════════════════════════════════════════════════
 async function buildEvaluationMessage(student, decision, session, extra = {}) {
@@ -282,7 +285,8 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
   let template = extra.rawContent;
   let isFallback = false;
   if (!template) {
-    const result = await MessageTemplate.getOrFallback(templateType, lang);
+    // ✅ بنمرر recipientType عشان قالب البالغ (student) ما يتلخبطش مع قالب ولي الأمر
+    const result = await MessageTemplate.getOrFallback(templateType, lang, recipientType);
     template = result.content;
     isFallback = result.isFallback;
   }
@@ -352,29 +356,31 @@ async function buildRecordingMessage(student, session, recordingLink) {
   return { rendered, lang: ctx.lang, isFallback: result.isFallback };
 }
 
-// ─── Session blog message (للأطفال فقط) ──────────────────────────────────
+// ─── Session blog message (للكل: الطفل → ولي الأمر | البالغ → الطالب) ─────
 async function buildBlogMessage(student, session, blogInfo) {
   const lang = student.communicationPreferences?.preferredLanguage || 'ar';
   const hasContentForLang = lang === 'ar' ? blogInfo?.hasAr : blogInfo?.hasEn;
   if (!hasContentForLang) return null;
 
   const dbVars = await loadDbVars();
-  const { guardianSalutation } = buildRecipientContext(student, dbVars);
+  const ctx = buildRecipientContext(student, dbVars);
+  const isAdult = student.studentType === 'adults';
+  const salutation = isAdult ? ctx.studentSalutation : ctx.guardianSalutation;
 
   const baseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
   const blogUrl = `${baseUrl}/session-blog/${session._id}`;
 
   const rendered =
     lang === 'ar'
-      ? `${guardianSalutation}،\n\n📝 تقدروا تقروا ملخص الجلسة كامل من هنا:\n${blogUrl}`
-      : `${guardianSalutation},\n\n📝 You can read the full session summary here:\n${blogUrl}`;
+      ? `${salutation}،\n\n📝 ${isAdult ? 'تقدر تقرا' : 'تقدروا تقروا'} ملخص الجلسة كامل من هنا:\n${blogUrl}`
+      : `${salutation},\n\n📝 You can read the full session summary here:\n${blogUrl}`;
 
   return { rendered, lang };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ✅ HOLD — بيرجّع true لو السيشن دي مقفولة. بيستخدم الـ helper المشترك.
-//    GET/POST (المعاينة) بيرفضوا بـ 403. الـ PATCH مبيرفضش — بيمنع الرسائل بس.
+// HOLD — بيرجّع true لو السيشن دي مقفولة.
+//    GET مبيرفضش (بيمنع الرسائل بس). POST (المعاينة) بيرفض بـ 403.
 // ═══════════════════════════════════════════════════════════════════════════
 async function isSessionOnHold(session) {
   const group = session?.groupId;
@@ -410,8 +416,6 @@ export async function GET(req, { params }) {
     const ownershipError = checkGroupOwnership(user, session.groupId);
     if (ownershipError) return ownershipError;
 
-    // ✅ الـ Hold مبيمنعش فتح صفحة التقييم (عشان إكمال السيشن وحساب المدرس)
-    //    — بيمنع الرسائل بس، والصفحة بتعرض تنبيه من messagesSuppressed
     const messagesSuppressed = await isSessionOnHold(session);
 
     if (!session.attendanceTaken) {
@@ -461,6 +465,10 @@ export async function GET(req, { params }) {
       .map((s) => {
         const sid = s._id.toString();
         const isAdult = s.studentType === 'adults';
+        const studentPhone = s.personalInfo?.whatsappNumber || s.personalInfo?.phone || '';
+        const guardianPhone = isAdult
+          ? ''
+          : (s.guardianInfo?.whatsappNumber || s.guardianInfo?.phone || '');
         return {
           _id: s._id,
           name: s.personalInfo?.fullName || 'بدون اسم',
@@ -468,11 +476,11 @@ export async function GET(req, { params }) {
           credits: s.creditSystem?.currentPackage?.remainingHours ?? 0,
           studentType: s.studentType || 'kids',
           isAdult,
-          studentPhone: s.personalInfo?.whatsappNumber || s.personalInfo?.phone || '',
-          guardianPhone: isAdult
-            ? ''
-            : (s.guardianInfo?.whatsappNumber || s.guardianInfo?.phone || ''),
+          studentPhone,
+          guardianPhone,
           guardianName: isAdult ? '' : (s.guardianInfo?.name || ''),
+          // ✅ للواجهة: تنبيه لو مفيش رقم للمستلم
+          hasRecipientPhone: !!(isAdult ? studentPhone : guardianPhone),
           preferredLanguage: s.communicationPreferences?.preferredLanguage || 'ar',
           attendanceStatus: attendanceMap[sid] || null,
           currentDecision: existingEvalMap[sid]?.decision || null,
@@ -500,7 +508,6 @@ export async function GET(req, { params }) {
           isOffline,
           isComplimentary: session.isComplimentary === true,
           messagesSuppressed,
-          // ✅ الصفحة تستخدمه لعرض زرار "إكمال الجلسة" لما كل الطلاب غايبين/معذورين
           allStudentsExcluded: studentsForEval.length === 0 && students.length > 0,
           group: {
             _id: session.groupId?._id,
@@ -590,9 +597,8 @@ export async function POST(req, { params }) {
         moduleDescription,
       });
 
-    const blogMessage = !isAdult
-      ? await buildBlogMessage(student, session, blogInfo)
-      : null;
+    // ✅ الملخص للكل (طفل → ولي أمر | بالغ → الطالب)
+    const blogMessage = await buildBlogMessage(student, session, blogInfo);
 
     return json({
       success: true,
@@ -646,9 +652,7 @@ export async function PATCH(req, { params }) {
     const ownershipError = checkGroupOwnership(user, session.groupId);
     if (ownershipError) return ownershipError;
 
-    // ✅ كل الطلاب غايبين/معذورين → evaluations فاضية مسموحة، والسيشن بتكمل
-    //    والمدرس بيتحاسب (حساب المدرس مبيعتمدش على وجود تقييمات).
-    //    ⚠️ لازم يكون فيه سجل حضور فعلي — مصفوفة فاضية مش معناها "الكل غايب".
+    // كل الطلاب غايبين/معذورين → evaluations فاضية مسموحة والسيشن بتكمل
     if (evaluations.length === 0) {
       const attendance = session.attendance || [];
       const allExcluded =
@@ -660,7 +664,7 @@ export async function PATCH(req, { params }) {
       }
     }
 
-    // ✅ الـ Hold بيمنع الرسائل بس — التقييم وإكمال السيشن وحساب المدرس بيكملوا
+    // الـ Hold بيمنع الرسائل بس
     const messagesSuppressed = await isSessionOnHold(session);
 
     const wasAlreadyCompleted = session.status === 'completed';
@@ -720,7 +724,7 @@ export async function PATCH(req, { params }) {
 
       const lang = student.communicationPreferences?.preferredLanguage || 'ar';
 
-      const { rendered, recipientPhone, recipientType, isAdult, isFallback } =
+      const { rendered, recipientPhone, recipientType, isAdult, isFallback, templateType } =
         await buildEvaluationMessage(student, decision, session, {
           rawContent: null,
           ratings: ratings || {},
@@ -731,6 +735,13 @@ export async function PATCH(req, { params }) {
           moduleDescription,
         });
 
+      console.log(
+        `🧪 [Eval] student=${studentId} adult=${isAdult} type=${recipientType} ` +
+          `template=${templateType} phone=${recipientPhone ? 'yes' : 'NO'} ` +
+          `rendered=${rendered?.trim() ? rendered.length : 'EMPTY'} ` +
+          `hold=${messagesSuppressed} dedupe=${resend !== true} fallback=${isFallback}`,
+      );
+
       const attendanceScore = { present: 5, late: 3 }[attendanceStatus] ?? 1;
       const perfScore = { pass: 4, review: 3, repeat: 2 }[decision];
       const criteria = {
@@ -740,7 +751,7 @@ export async function PATCH(req, { params }) {
         participation: ratings?.participation ?? perfScore,
       };
 
-      // ✅ التقييم بيتحفظ دايمًا (حتى مع الـ Hold)
+      // التقييم بيتحفظ دايمًا (حتى مع الـ Hold)
       await StudentEvaluation.findOneAndUpdate(
         { groupId, studentId, sessionId: session._id },
         {
@@ -756,19 +767,42 @@ export async function PATCH(req, { params }) {
           'metadata.lastModifiedAt': new Date(),
           'metadata.lastModifiedBy': user.id,
         },
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: 'after' },
       );
 
-      // ✅ Hold → مفيش أي رسالة
+      // Hold → مفيش أي رسالة
       if (messagesSuppressed) {
         results.push(skippedResult(studentId, decision, attendanceStatus, 'session_on_hold'));
         continue;
       }
 
-      // ✅ فحص الرصيد الصفري (مش بيتطبق على الحصة التعويضية)
+      // فحص الرصيد الصفري (مش بيتطبق على الحصة التعويضية)
       const remainingHours = student.creditSystem?.currentPackage?.remainingHours ?? 0;
       if (!isComplimentary && remainingHours <= 0) {
         results.push(skippedResult(studentId, decision, attendanceStatus, 'zero_balance'));
+        continue;
+      }
+
+      // ✅ مفيش رقم للمستلم → skip بسبب واضح
+      if (!recipientPhone) {
+        console.warn(
+          `⏭️ [Eval] ${studentId} skipped — no phone (adult: ${isAdult}, recipient: ${recipientType})`,
+        );
+        results.push(
+          skippedResult(
+            studentId,
+            decision,
+            attendanceStatus,
+            isAdult ? 'no_student_phone' : 'no_guardian_phone',
+          ),
+        );
+        continue;
+      }
+
+      // ✅ القالب فاضي → skip بسبب واضح
+      if (!rendered?.trim()) {
+        console.warn(`⏭️ [Eval] ${studentId} skipped — empty template ${templateType}`);
+        results.push(skippedResult(studentId, decision, attendanceStatus, 'empty_template'));
         continue;
       }
 
@@ -776,82 +810,93 @@ export async function PATCH(req, { params }) {
       let recordingLinkSent = false;
       let blogSent = false;
       let duplicate = false;
+      let sendError = null;
 
-      if (recipientPhone && rendered) {
-        try {
-          const { wapilotService } = await import('../../../../../services/wapilot-service');
+      try {
+        const { wapilotService } = await import('../../../../../services/wapilot-service');
 
-          // ✅ dedupe: نفس الحدث مايتبعتش مرتين (إلا لو resend صريح)
-          const dedupe = resend !== true;
+        // dedupe: نفس الحدث مايتبعتش مرتين (إلا لو resend صريح)
+        const dedupe = resend !== true;
 
-          const baseMeta = {
-            sessionId: id,
-            sessionTitle: session.title,
-            recipientType,
-            remainingHours,
-            isComplimentary,
-            isAdult,
-            dedupe,
-          };
+        const baseMeta = {
+          sessionId: id,
+          sessionTitle: session.title,
+          recipientType,
+          remainingHours,
+          isComplimentary,
+          isAdult,
+          dedupe,
+        };
 
-          // ✅ dedupeTypes: أي رسالة تقييم اتبعتت لنفس السيشن (أياً كان القرار) تمنع التكرار
-          const evalResult = await wapilotService.sendAndLogEvalMessage({
-            studentId,
-            phoneNumber: recipientPhone,
-            messageContent: rendered,
-            messageType: `evaluation_${decision}${isAdult ? '_adult' : ''}`,
-            language: lang,
-            metadata: {
-              ...baseMeta,
-              decision,
-              attendanceStatus,
-              isFallback,
-              moduleTitle,
-              dedupeTypes: EVAL_MESSAGE_TYPES,
-            },
-          });
-          messageSent = evalResult?.success || false;
-          duplicate = evalResult?.duplicate === true;
+        const evalResult = await wapilotService.sendAndLogEvalMessage({
+          studentId,
+          phoneNumber: recipientPhone,
+          messageContent: rendered,
+          messageType: `evaluation_${decision}${isAdult ? '_adult' : ''}`,
+          language: lang,
+          metadata: {
+            ...baseMeta,
+            decision,
+            attendanceStatus,
+            isFallback,
+            moduleTitle,
+            dedupeTypes: EVAL_MESSAGE_TYPES,
+          },
+        });
 
-          // للـ kids بس: recording + blog (وبرضه dedupe)
-          if (!isAdult && !duplicate) {
-            if (recordingLink?.trim() && !sessionIsOffline) {
-              const { rendered: recRendered } = await buildRecordingMessage(
-                student,
-                session,
-                recordingLink,
-              );
-              const linkResult = await wapilotService.sendAndLogMessage({
+        messageSent = evalResult?.success || false;
+        duplicate = evalResult?.duplicate === true;
+        if (!messageSent && !duplicate) sendError = evalResult?.error || 'send_failed';
+
+        console.log(
+          `🧪 [Eval] result:`,
+          JSON.stringify({
+            success: evalResult?.success,
+            duplicate: evalResult?.duplicate,
+            error: evalResult?.error,
+          }),
+        );
+
+        if (!duplicate) {
+          // ✅ التسجيل للأطفال بس (قالبه مبني على ولي الأمر)
+          if (!isAdult && recordingLink?.trim() && !sessionIsOffline) {
+            const { rendered: recRendered } = await buildRecordingMessage(
+              student,
+              session,
+              recordingLink,
+            );
+            const linkResult = await wapilotService.sendAndLogMessage({
+              studentId,
+              phoneNumber: recipientPhone,
+              messageContent: recRendered,
+              messageType: 'session_recording',
+              language: lang,
+              metadata: baseMeta,
+            });
+            recordingLinkSent = linkResult?.success || false;
+          }
+
+          // ✅ الملخص للكل (طفل → ولي أمر | بالغ → الطالب)
+          const blogMessage = await buildBlogMessage(student, session, blogInfo);
+          if (blogMessage?.rendered) {
+            try {
+              const blogResult = await wapilotService.sendAndLogMessage({
                 studentId,
                 phoneNumber: recipientPhone,
-                messageContent: recRendered,
-                messageType: 'session_recording',
-                language: lang,
+                messageContent: blogMessage.rendered,
+                messageType: 'session_blog',
+                language: blogMessage.lang,
                 metadata: baseMeta,
               });
-              recordingLinkSent = linkResult?.success || false;
-            }
-
-            const blogMessage = await buildBlogMessage(student, session, blogInfo);
-            if (blogMessage?.rendered) {
-              try {
-                const blogResult = await wapilotService.sendAndLogMessage({
-                  studentId,
-                  phoneNumber: recipientPhone,
-                  messageContent: blogMessage.rendered,
-                  messageType: 'session_blog',
-                  language: blogMessage.lang,
-                  metadata: baseMeta,
-                });
-                blogSent = blogResult?.success || false;
-              } catch (blogErr) {
-                console.error('❌ BLOG SEND ERROR:', blogErr);
-              }
+              blogSent = blogResult?.success || false;
+            } catch (blogErr) {
+              console.error('❌ BLOG SEND ERROR:', blogErr);
             }
           }
-        } catch (err) {
-          console.error('❌ SEND ERROR:', err);
         }
+      } catch (err) {
+        console.error('❌ SEND ERROR:', err);
+        sendError = err.message;
       }
 
       results.push({
@@ -864,6 +909,7 @@ export async function PATCH(req, { params }) {
         recordingLinkSent,
         blogSent,
         ...(duplicate ? { duplicate: true } : {}),
+        ...(sendError ? { error: sendError } : {}),
       });
     }
 
@@ -876,8 +922,6 @@ export async function PATCH(req, { params }) {
     }
 
     // ── المرتب — بيتحاول في كل مرة طالما مش processed ─────────────────────
-    // ✅ processSessionPayroll idempotent، فلو المدرس مالوش سعر وقت الإكمال
-    //    الأول، والأدمن ظبط السعر وفتح التقييم تاني، بيتحاسب هنا.
     let payrollResult = null;
     if (!session.payroll?.processed) {
       try {

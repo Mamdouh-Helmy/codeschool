@@ -286,22 +286,29 @@ MessageTemplateSchema.methods.getExample = function (language = "ar") {
   return this.render(examples, language);
 };
 
-// ─── Static: getOrFallback ────────────────────────────────────────────────────
 MessageTemplateSchema.statics.getOrFallback = async function (
   templateType,
   language = "ar",
+  recipientType = null,
 ) {
-  const doc = await this.findOne({
-    templateType,
-    isDefault: true,
-    isActive: true,
-  }).lean();
-  if (doc) {
-    return {
-      content: language === "ar" ? doc.contentAr : doc.contentEn,
-      isFallback: false,
-      variables: doc.variables || [],
-    };
+  const query = { templateType, isDefault: true, isActive: true };
+  if (recipientType) query.recipientType = recipientType;
+
+  const docs = await this.find(query).sort({ updatedAt: -1 }).lean();
+
+  for (const doc of docs) {
+    const [preferred, other] =
+      language === "ar"
+        ? [doc.contentAr, doc.contentEn]
+        : [doc.contentEn, doc.contentAr];
+    const content = preferred?.trim() ? preferred : other?.trim() ? other : "";
+    if (content) {
+      return { content, isFallback: false, variables: doc.variables || [] };
+    }
+  }
+
+  if (docs.length) {
+    console.warn(`⚠️ Template ${templateType} found but empty — using fallback`);
   }
 
   const fallbacks = getFallbackTemplates();
