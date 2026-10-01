@@ -8,48 +8,9 @@ import Group from '../../../../../models/Group';
 import StudentEvaluation from '../../../../../models/StudentEvaluation';
 import MessageTemplate from '../../../../../models/MessageTemplate';
 import TemplateVariable from '../../../../../models/TemplateVariable';
-
-// ═══════════════════════════════════════════════════════════════════════════
-// ✅ HOLD HELPERS
-// ═══════════════════════════════════════════════════════════════════════════
-
-function sortSessionsForHold(sessions) {
-  return [...sessions].sort((a, b) => {
-    if (a.moduleIndex !== b.moduleIndex) return a.moduleIndex - b.moduleIndex;
-    if (a.sessionNumber !== b.sessionNumber) return a.sessionNumber - b.sessionNumber;
-    return new Date(a.scheduledDate) - new Date(b.scheduledDate);
-  });
-}
-
-function isSessionLockedByHold(session, group, allGroupSessions) {
-  if (!group?.hold?.isHeld) return false;
-  if (session?.status === 'completed') return false;
-
-  const hold = group.hold;
-
-  if (hold.holdType === 'indefinite' || hold.holdType === 'duration') return true;
-  if (!Array.isArray(allGroupSessions) || allGroupSessions.length === 0) return true;
-
-  const sorted = sortSessionsForHold(allGroupSessions);
-  const myIndex = sorted.findIndex((s) => String(s._id) === String(session._id));
-  if (myIndex === -1) return false;
-
-  if (hold.holdType === 'sessions') {
-    const consumed = hold.holdSessionsConsumed || 0;
-    if (consumed === 0) return true;
-    return myIndex < consumed;
-  }
-
-  if (hold.holdType === 'until_session') {
-    const targetId = hold.holdUntilSessionId;
-    if (!targetId) return true;
-    const targetIndex = sorted.findIndex((s) => String(s._id) === String(targetId));
-    if (targetIndex === -1) return true;
-    return myIndex <= targetIndex;
-  }
-
-  return false;
-}
+// ✅ مشتركين (بدل النسخ المكررة)
+import { resolveSessionLock } from '../../../../../services/holdGuard';
+import { routeMessage } from '../../../../../services/messageRouting';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ AUTH / OWNERSHIP HELPERS
@@ -88,22 +49,14 @@ async function parseBody(req) {
 // ✅ CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ✅ قوالب الأطفال — بتتبعت لولي الأمر
-const EVALUATION_TEMPLATE_MAP = {
-  pass: 'evaluation_pass',
-  review: 'evaluation_review',
-  repeat: 'evaluation_repeat',
-};
-
-// ✅ NEW: قوالب البالغين — بتتبعت للطالب مباشرة، مفيش ولي أمر
-const EVALUATION_TEMPLATE_MAP_ADULT = {
-  pass: 'evaluation_pass_adult',
-  review: 'evaluation_review_adult',
-  repeat: 'evaluation_repeat_adult',
-};
-
-const VALID_DECISIONS = Object.keys(EVALUATION_TEMPLATE_MAP);
+const VALID_DECISIONS = ['pass', 'review', 'repeat'];
 const EXCLUDED_FROM_EVALUATION_STATUSES = ['absent', 'late', 'excused'];
+
+// ✅ كل أنواع رسائل التقييم — الـ dedupe بيطابق أي واحد منهم (تغيير القرار مايبعتش رسالة تانية)
+const EVAL_MESSAGE_TYPES = VALID_DECISIONS.flatMap((d) => [
+  `evaluation_${d}`,
+  `evaluation_${d}_adult`,
+]);
 
 const GROUP_POPULATE_SELECT = 'name code students instructors hold status deliveryMode';
 
@@ -182,11 +135,6 @@ function buildGuardianSalutation(guardianFirstName, isFather, lang) {
   return isFather ? `Dear Mr. ${guardianFirstName}` : `Dear Mrs. ${guardianFirstName}`;
 }
 
-/**
- * ✅ كل اللي الرسائل محتاجاه من بيانات الطالب/ولي الأمر في مكان واحد
- * ✅ NEW: دلوقتي بيرجع كمان studentSalutation عشان القوالب البالغة
- *         (`evaluation_*_adult`) اللي بتستخدم {studentSalutation}
- */
 function buildRecipientContext(student, dbVars) {
   const lang = student.communicationPreferences?.preferredLanguage || 'ar';
   const isAr = lang === 'ar';
@@ -204,13 +152,11 @@ function buildRecipientContext(student, dbVars) {
     ? student.guardianInfo?.nickname?.ar?.trim() || student.guardianInfo?.name?.split(' ')[0] || 'ولي الأمر'
     : student.guardianInfo?.nickname?.en?.trim() || student.guardianInfo?.name?.split(' ')[0] || 'Guardian';
 
-  // ✅ Guardian salutation
   const salutationFromDb = resolveVar(dbVars, 'guardianSalutation', lang, genderCtx);
   const guardianSalutation = salutationFromDb
     ? salutationFromDb.replace(/\{guardianName\}/g, guardianFirstName)
     : buildGuardianSalutation(guardianFirstName, isFather, lang);
 
-  // ✅ NEW: Student salutation (للبالغين)
   const salutationBaseAr =
     resolveVar(dbVars, 'salutation_ar', 'ar', genderCtx) ||
     (isMale ? 'عزيزي الطالب' : 'عزيزتي الطالبة');
@@ -288,9 +234,8 @@ async function getSessionBlogInfo(session) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ✅ Evaluation message
-// ✅ NEW: للطالب البالغ → يستخدم قوالب `_adult` + يبعت للطالب
-//         للطفل → يستخدم القوالب العادية + يبعت لولي الأمر
+// ✅ Evaluation message — الـ template والـ recipient من routeMessage
+//    Minor → قالب ولي الأمر + ولي الأمر | Adult → قالب _adult + الطالب
 // ═══════════════════════════════════════════════════════════════════════════
 async function buildEvaluationMessage(student, decision, session, extra = {}) {
   const dbVars = await loadDbVars();
@@ -298,8 +243,11 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
   const { lang, genderCtx } = ctx;
   const isAr = lang === 'ar';
 
-  // ✅ NEW: هل الطالب بالغ؟
-  const isAdult = student.studentType === 'adults';
+  const { isAdult, templateType, recipientType, recipientPhone } = routeMessage({
+    event: 'evaluation',
+    status: decision,
+    student,
+  });
 
   const decisionText =
     resolveVar(dbVars, 'evaluationDecision', lang, genderCtx) ||
@@ -331,11 +279,6 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
     ? await getCompletedSessionsCount(extra.groupId, student._id)
     : 0;
 
-  // ✅ NEW: اختيار القالب حسب نوع الطالب
-  const templateType = isAdult
-    ? EVALUATION_TEMPLATE_MAP_ADULT[decision]
-    : EVALUATION_TEMPLATE_MAP[decision];
-
   let template = extra.rawContent;
   let isFallback = false;
   if (!template) {
@@ -345,19 +288,16 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
   }
 
   const variables = {
-    // ✅ Student — دايمًا متاحة
     studentSalutation: ctx.studentSalutation,
     studentSalutation_ar: ctx.studentSalutationAr,
     studentSalutation_en: ctx.studentSalutationEn,
     studentName: ctx.studentFirstName,
 
-    // ✅ Guardian — فاضية للطالب البالغ
     guardianSalutation: isAdult ? '' : ctx.guardianSalutation,
     guardianName: isAdult ? '' : ctx.guardianFirstName,
     childTitle: isAdult ? '' : ctx.childTitle,
     salutation: isAdult ? ctx.studentSalutation : ctx.guardianSalutation,
 
-    // باقي المتغيرات
     sessionName: session?.title || '',
     sessionDate,
     sessionNumber: session?.sessionNumber || '',
@@ -379,21 +319,15 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
       extra.moduleDescription || resolveVar(dbVars, 'moduleDescription', lang, genderCtx) || '',
     supervisorName,
 
-    // ✅ flag مفيد للقوالب
     isAdult,
   };
-
-  // ✅ NEW: الـ recipient حسب نوع الطالب
-  const recipientPhone = isAdult
-    ? (student.personalInfo?.whatsappNumber || student.personalInfo?.phone || '')
-    : (student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone || '');
 
   return {
     rendered: renderTemplate(template, variables),
     lang,
     isFallback,
     recipientPhone,
-    recipientType: isAdult ? 'student' : 'guardian',
+    recipientType,
     isAdult,
     templateType,
   };
@@ -439,30 +373,17 @@ async function buildBlogMessage(student, session, blogInfo) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ✅ HOLD GUARD
+// ✅ HOLD — بيرجّع true لو السيشن دي مقفولة. بيستخدم الـ helper المشترك.
+//    GET/POST (المعاينة) بيرفضوا بـ 403. الـ PATCH مبيرفضش — بيمنع الرسائل بس.
 // ═══════════════════════════════════════════════════════════════════════════
-async function checkGroupHoldResponse(session) {
-  if (!session?.groupId?.hold?.isHeld) return null;
+async function isSessionOnHold(session) {
+  const group = session?.groupId;
+  if (!group?.hold?.isHeld) return false;
+  return resolveSessionLock(session, group);
+}
 
-  const groupId = session.groupId._id || session.groupId;
-  const allGroupSessions = await Session.find({ groupId, isDeleted: false })
-    .select('_id moduleIndex sessionNumber scheduledDate status')
-    .lean();
-
-  const locked = isSessionLockedByHold(
-    {
-      _id: session._id,
-      moduleIndex: session.moduleIndex,
-      sessionNumber: session.sessionNumber,
-      status: session.status,
-    },
-    session.groupId,
-    allGroupSessions,
-  );
-
-  if (!locked) return null;
-
-  return json(
+const holdBlockedResponse = () =>
+  json(
     {
       success: false,
       error: 'السيشن دي مقفولة بسبب الـ Hold — التقييم مش متاح',
@@ -470,7 +391,6 @@ async function checkGroupHoldResponse(session) {
     },
     403,
   );
-}
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
 export async function GET(req, { params }) {
@@ -490,8 +410,9 @@ export async function GET(req, { params }) {
     const ownershipError = checkGroupOwnership(user, session.groupId);
     if (ownershipError) return ownershipError;
 
-    const holdResponse = await checkGroupHoldResponse(session);
-    if (holdResponse) return holdResponse;
+    // ✅ الـ Hold مبيمنعش فتح صفحة التقييم (عشان إكمال السيشن وحساب المدرس)
+    //    — بيمنع الرسائل بس، والصفحة بتعرض تنبيه من messagesSuppressed
+    const messagesSuppressed = await isSessionOnHold(session);
 
     if (!session.attendanceTaken) {
       return json({ success: false, message: 'سجّل الحضور أولاً قبل التقييم' }, 400);
@@ -499,7 +420,6 @@ export async function GET(req, { params }) {
 
     const allStudentIds = (session.groupId?.students || []).map((s) => s.studentId || s);
 
-    // ✅ NEW: ضفنا studentType عشان الفرونت/الباك يعرفوا نوع الطالب
     const students = await Student.find({ _id: { $in: allStudentIds }, isDeleted: false })
       .select(
         '_id personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem studentType',
@@ -540,14 +460,12 @@ export async function GET(req, { params }) {
       })
       .map((s) => {
         const sid = s._id.toString();
-        // ✅ NEW: isAdult flag
         const isAdult = s.studentType === 'adults';
         return {
           _id: s._id,
           name: s.personalInfo?.fullName || 'بدون اسم',
           enrollmentNumber: s.enrollmentNumber || '',
           credits: s.creditSystem?.currentPackage?.remainingHours ?? 0,
-          // ✅ NEW: بيانات ولي الأمر للـ kids، بيانات الطالب للـ adults
           studentType: s.studentType || 'kids',
           isAdult,
           studentPhone: s.personalInfo?.whatsappNumber || s.personalInfo?.phone || '',
@@ -581,6 +499,9 @@ export async function GET(req, { params }) {
           deliveryMode,
           isOffline,
           isComplimentary: session.isComplimentary === true,
+          messagesSuppressed,
+          // ✅ الصفحة تستخدمه لعرض زرار "إكمال الجلسة" لما كل الطلاب غايبين/معذورين
+          allStudentsExcluded: studentsForEval.length === 0 && students.length > 0,
           group: {
             _id: session.groupId?._id,
             name: session.groupId?.name,
@@ -631,11 +552,8 @@ export async function POST(req, { params }) {
     }
 
     const [student, session] = await Promise.all([
-      // ✅ NEW: studentType لازم يكون موجود
       Student.findById(studentId)
-        .select(
-          'personalInfo guardianInfo communicationPreferences enrollmentNumber studentType',
-        )
+        .select('personalInfo guardianInfo communicationPreferences enrollmentNumber studentType')
         .lean(),
       Session.findById(id)
         .populate({ path: 'groupId', select: GROUP_POPULATE_SELECT })
@@ -652,8 +570,7 @@ export async function POST(req, { params }) {
       return json({ success: false, error: 'الطالب ده مش في جروب السيشن' }, 403);
     }
 
-    const holdResponse = await checkGroupHoldResponse(session);
-    if (holdResponse) return holdResponse;
+    if (await isSessionOnHold(session)) return holdBlockedResponse();
 
     const groupId = session.groupId?._id;
     const { moduleTitle, moduleDescription } = groupId
@@ -662,24 +579,17 @@ export async function POST(req, { params }) {
 
     const blogInfo = await getSessionBlogInfo(session);
 
-    const {
-      rendered,
-      lang,
-      isFallback,
-      recipientPhone,
-      recipientType,
-      isAdult,
-    } = await buildEvaluationMessage(student, decision, session, {
-      rawContent: customContent || null,
-      ratings: ratings || {},
-      comment: comment || '',
-      attendanceStatus: attendanceStatus || null,
-      groupId,
-      moduleTitle,
-      moduleDescription,
-    });
+    const { rendered, lang, isFallback, recipientPhone, recipientType, isAdult } =
+      await buildEvaluationMessage(student, decision, session, {
+        rawContent: customContent || null,
+        ratings: ratings || {},
+        comment: comment || '',
+        attendanceStatus: attendanceStatus || null,
+        groupId,
+        moduleTitle,
+        moduleDescription,
+      });
 
-    // ✅ blog + recording للـ kids بس
     const blogMessage = !isAdult
       ? await buildBlogMessage(student, session, blogInfo)
       : null;
@@ -691,13 +601,10 @@ export async function POST(req, { params }) {
         blogContent: blogMessage?.rendered || null,
         lang,
         isFallback,
-
-        // ✅ NEW: الـ recipient الصح حسب نوع الطالب
         recipientPhone,
         recipientType, // 'student' أو 'guardian'
         isAdult,
-
-        // ✅ حقول legacy للتوافق مع أي كود قديم
+        // legacy
         guardianPhone: recipientType === 'guardian' ? recipientPhone : '',
         guardianName: isAdult ? '' : (student.guardianInfo?.name || ''),
         studentName: student.personalInfo?.fullName || '',
@@ -726,9 +633,9 @@ export async function PATCH(req, { params }) {
       return json({ success: false, error: 'Invalid JSON' }, 400);
     }
 
-    const { evaluations, actualStartTime, actualEndTime } = body;
-    if (!Array.isArray(evaluations) || evaluations.length === 0) {
-      return json({ success: false, error: 'evaluations array required' }, 400);
+    const { evaluations = [], actualStartTime, actualEndTime, resend = false } = body;
+    if (!Array.isArray(evaluations)) {
+      return json({ success: false, error: 'evaluations must be an array' }, 400);
     }
 
     const session = await Session.findById(id)
@@ -739,15 +646,25 @@ export async function PATCH(req, { params }) {
     const ownershipError = checkGroupOwnership(user, session.groupId);
     if (ownershipError) return ownershipError;
 
-    const holdResponse = await checkGroupHoldResponse(session);
-    if (holdResponse) return holdResponse;
+    // ✅ كل الطلاب غايبين/معذورين → evaluations فاضية مسموحة، والسيشن بتكمل
+    //    والمدرس بيتحاسب (حساب المدرس مبيعتمدش على وجود تقييمات).
+    //    ⚠️ لازم يكون فيه سجل حضور فعلي — مصفوفة فاضية مش معناها "الكل غايب".
+    if (evaluations.length === 0) {
+      const attendance = session.attendance || [];
+      const allExcluded =
+        session.attendanceTaken &&
+        attendance.length > 0 &&
+        attendance.every((a) => EXCLUDED_FROM_EVALUATION_STATUSES.includes(a.status));
+      if (!allExcluded) {
+        return json({ success: false, error: 'evaluations array required' }, 400);
+      }
+    }
+
+    // ✅ الـ Hold بيمنع الرسائل بس — التقييم وإكمال السيشن وحساب المدرس بيكملوا
+    const messagesSuppressed = await isSessionOnHold(session);
 
     const wasAlreadyCompleted = session.status === 'completed';
-
-    // ✅ الحصة التعويضية: الرسايل بتتبعت حتى لو رصيد الطالب صفر
     const isComplimentary = session.isComplimentary === true;
-
-    // ✅ السيشن الـ Offline معندهاش لينك تسجيل أصلاً
     const sessionIsOffline = resolveDeliveryMode(session) === 'offline';
 
     const groupId = session.groupId?._id;
@@ -794,7 +711,6 @@ export async function PATCH(req, { params }) {
         continue;
       }
 
-      // ✅ NEW: studentType لازم يكون موجود
       const student = await Student.findById(studentId)
         .select(
           'personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem studentType',
@@ -804,21 +720,16 @@ export async function PATCH(req, { params }) {
 
       const lang = student.communicationPreferences?.preferredLanguage || 'ar';
 
-      const {
-        rendered,
-        recipientPhone,
-        recipientType,
-        isAdult,
-        isFallback,
-      } = await buildEvaluationMessage(student, decision, session, {
-        rawContent: null,
-        ratings: ratings || {},
-        comment: comment || notes || '',
-        attendanceStatus,
-        groupId,
-        moduleTitle,
-        moduleDescription,
-      });
+      const { rendered, recipientPhone, recipientType, isAdult, isFallback } =
+        await buildEvaluationMessage(student, decision, session, {
+          rawContent: null,
+          ratings: ratings || {},
+          comment: comment || notes || '',
+          attendanceStatus,
+          groupId,
+          moduleTitle,
+          moduleDescription,
+        });
 
       const attendanceScore = { present: 5, late: 3 }[attendanceStatus] ?? 1;
       const perfScore = { pass: 4, review: 3, repeat: 2 }[decision];
@@ -829,6 +740,7 @@ export async function PATCH(req, { params }) {
         participation: ratings?.participation ?? perfScore,
       };
 
+      // ✅ التقييم بيتحفظ دايمًا (حتى مع الـ Hold)
       await StudentEvaluation.findOneAndUpdate(
         { groupId, studentId, sessionId: session._id },
         {
@@ -847,6 +759,12 @@ export async function PATCH(req, { params }) {
         { upsert: true, new: true },
       );
 
+      // ✅ Hold → مفيش أي رسالة
+      if (messagesSuppressed) {
+        results.push(skippedResult(studentId, decision, attendanceStatus, 'session_on_hold'));
+        continue;
+      }
+
       // ✅ فحص الرصيد الصفري (مش بيتطبق على الحصة التعويضية)
       const remainingHours = student.creditSystem?.currentPackage?.remainingHours ?? 0;
       if (!isComplimentary && remainingHours <= 0) {
@@ -857,34 +775,46 @@ export async function PATCH(req, { params }) {
       let messageSent = false;
       let recordingLinkSent = false;
       let blogSent = false;
+      let duplicate = false;
 
-      // ✅ نتأكد إن فيه recipientPhone (سواء الطالب أو ولي الأمر)
       if (recipientPhone && rendered) {
         try {
           const { wapilotService } = await import('../../../../../services/wapilot-service');
 
+          // ✅ dedupe: نفس الحدث مايتبعتش مرتين (إلا لو resend صريح)
+          const dedupe = resend !== true;
+
           const baseMeta = {
             sessionId: id,
             sessionTitle: session.title,
-            recipientType, // 'student' أو 'guardian'
+            recipientType,
             remainingHours,
             isComplimentary,
             isAdult,
+            dedupe,
           };
 
+          // ✅ dedupeTypes: أي رسالة تقييم اتبعتت لنفس السيشن (أياً كان القرار) تمنع التكرار
           const evalResult = await wapilotService.sendAndLogEvalMessage({
             studentId,
             phoneNumber: recipientPhone,
             messageContent: rendered,
             messageType: `evaluation_${decision}${isAdult ? '_adult' : ''}`,
             language: lang,
-            metadata: { ...baseMeta, decision, attendanceStatus, isFallback, moduleTitle },
+            metadata: {
+              ...baseMeta,
+              decision,
+              attendanceStatus,
+              isFallback,
+              moduleTitle,
+              dedupeTypes: EVAL_MESSAGE_TYPES,
+            },
           });
           messageSent = evalResult?.success || false;
+          duplicate = evalResult?.duplicate === true;
 
-          // ✅ للـ kids بس: ابعت recording link + session blog
-          //    للبالغين: بنتخطاهم تمامًا (القوالب دي موجهة لولي الأمر)
-          if (!isAdult) {
+          // للـ kids بس: recording + blog (وبرضه dedupe)
+          if (!isAdult && !duplicate) {
             if (recordingLink?.trim() && !sessionIsOffline) {
               const { rendered: recRendered } = await buildRecordingMessage(
                 student,
@@ -918,10 +848,6 @@ export async function PATCH(req, { params }) {
                 console.error('❌ BLOG SEND ERROR:', blogErr);
               }
             }
-          } else {
-            console.log(
-              `   ⏭️ [ADULT] Skipping recording + blog messages for ${student.personalInfo?.fullName}`,
-            );
           }
         } catch (err) {
           console.error('❌ SEND ERROR:', err);
@@ -932,23 +858,28 @@ export async function PATCH(req, { params }) {
         studentId,
         decision,
         attendanceStatus,
-        recipientType, // ✅ NEW: نرجّع نوع المستلم في الـ result
-        isAdult,       // ✅ NEW
+        recipientType,
+        isAdult,
         messageSent,
         recordingLinkSent,
         blogSent,
+        ...(duplicate ? { duplicate: true } : {}),
       });
     }
 
-    // ── إكمال السيشن + ساعات المدرس + المرتب ────────────────────────────────
-    let payrollResult = null;
-
+    // ── إكمال السيشن (مرة واحدة بس) ───────────────────────────────────────
     if (!wasAlreadyCompleted) {
       session.status = 'completed';
       if (actualStartTime) session.actualStartTime = actualStartTime;
       if (actualEndTime) session.actualEndTime = actualEndTime;
       await session.save();
+    }
 
+    // ── المرتب — بيتحاول في كل مرة طالما مش processed ─────────────────────
+    // ✅ processSessionPayroll idempotent، فلو المدرس مالوش سعر وقت الإكمال
+    //    الأول، والأدمن ظبط السعر وفتح التقييم تاني، بيتحاسب هنا.
+    let payrollResult = null;
+    if (!session.payroll?.processed) {
       try {
         const { processSessionPayroll } = await import('@/lib/payroll');
         payrollResult = await processSessionPayroll({
@@ -962,15 +893,22 @@ export async function PATCH(req, { params }) {
         console.error('⚠️ Payroll processing failed:', payrollError.message);
         payrollResult = { success: false, error: payrollError.message };
       }
+    } else {
+      console.log('⏭️ Session payroll already processed — skipping');
+    }
 
+    // ── ساعات المدرس — مرة واحدة بس، عند الإكمال الأول ─────────────────────
+    if (!wasAlreadyCompleted) {
       try {
         const group = await Group.findById(groupId || session.groupId);
-        if (group) await group.addInstructorHours(payrollResult?.durationMinutes || 0);
+        if (group) {
+          await group.addInstructorHours(
+            payrollResult?.durationMinutes || session.payroll?.durationMinutes || 0,
+          );
+        }
       } catch (err) {
         console.error('⚠️ addInstructorHours failed:', err.message);
       }
-    } else {
-      console.log('⏭️ Session already completed — skipping status, hours and payroll');
     }
 
     return json({
@@ -981,12 +919,15 @@ export async function PATCH(req, { params }) {
         sessionCompleted: true,
         alreadyWasCompleted: wasAlreadyCompleted,
         isComplimentary,
+        messagesSuppressedByHold: messagesSuppressed,
         payroll: payrollResult
           ? {
-              processed: !!payrollResult.success,
+              processed: !!payrollResult.fullyProcessed,
+              skipped: payrollResult.skipped || [],
               durationMinutes: payrollResult.durationMinutes || 0,
               entriesCount: payrollResult.createdCount || 0,
               deliveryMode: payrollResult.deliveryMode || null,
+              error: payrollResult.error || null,
             }
           : null,
         summary: {
@@ -995,6 +936,7 @@ export async function PATCH(req, { params }) {
           linkSent: results.filter((r) => r.recordingLinkSent).length,
           blogSent: results.filter((r) => r.blogSent).length,
           skipped: results.filter((r) => r.skipped).length,
+          duplicates: results.filter((r) => r.duplicate).length,
         },
       },
     });

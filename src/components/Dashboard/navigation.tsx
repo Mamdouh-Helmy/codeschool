@@ -34,11 +34,10 @@ export const NavLink = ({
     href={item.href}
     onClick={onNavigate}
     aria-current={active ? "page" : undefined}
-    className={`group flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-      active
+    className={`group flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${active
         ? "bg-primary/10 text-primary"
         : "text-SlateBlueText hover:bg-slate-100 hover:text-primary dark:text-darktext dark:hover:bg-darkmode"
-    }`}
+      }`}
   >
     <span className="flex min-w-0 items-center gap-3">
       <Icon icon={item.icon} className="h-5 w-5 shrink-0" />
@@ -114,6 +113,7 @@ export const useAdminNavigation = () => {
         items: [
           item("dashboard.suspensionAlerts", "Pending Suspension Alerts", "/admin/billing-alerts", "ion:alert-circle-outline"),
           item("dashboard.contacts", "Contacts", "/admin/ContactsPage", "ion:chatbubble-ellipses-outline"),
+          item("dashboard.interviews", "Interviews", "/admin/interviews", "ion:calendar-number-outline"),
           item("dashboard.whatsappTemplates", "WhatsApp Templates", "/admin/whatsapp-templates", "ion:logo-whatsapp"),
           item("dashboard.portfolioBroadcast", "Portfolio Broadcast", "/admin/portfolio-broadcast", "ion:megaphone-outline"),
           item("dashboard.portfolioInactivity", "Portfolio Reminders", "/admin/portfolio-inactivity", "ion:notifications-outline"),
@@ -137,7 +137,7 @@ export const useAdminNavigation = () => {
         label: tr("dashboard.catFinance", "Finance & Billing"),
         icon: "ion:wallet-outline",
         items: [
-         
+
           item("nav.subscriptions", "Subscriptions", "/admin/subscriptions", "ion:card-outline"),
           item("nav.pricing", "Pricing", "/admin/pricing", "ion:cash-outline"),
           item("dashboard.packagePlans", "Hour Packages", "/admin/package-plans", "ion:pricetags-outline"),

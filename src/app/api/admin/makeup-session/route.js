@@ -3,8 +3,8 @@
 // ✅ ADMIN — إنشاء حصة تعويضية (Make-up Session)
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// GET                       → جيب قائمة الطلاب (أول 50 طالب)
-// GET  ?search=xxx          → ابحث عن طالب
+// GET                       → جيب قائمة الطلاب المؤهلين (رصيد > 0)
+// GET  ?search=xxx          → ابحث عن طالب مؤهل
 // GET  ?studentId=xxx       → جيب جروبات الطالب + المدرسين بتوعهم
 // GET  ?groupId=xxx         → جيب سيشنز الجروب ده بحالاتها
 // GET  ?action=available-links  → جيب اللينكات المتاحة للجدول الجديد
@@ -24,6 +24,11 @@
 // ✅ Kids/Adults:
 //   - للطالب البالغ (studentType === "adults") → مفيش رسالة لولي الأمر
 //   - للطفل → رسالة ولي الأمر بتتبعت زي ما هي
+//
+// ✅ فلتر الرصيد (GET + POST):
+//   - قائمة الطلاب في GET بقت بترجّع بس الطلاب اللي عنده رصيد > 0
+//   - الطالب اللي معندهوش باكدج أو رصيده صفر مش هيظهر في القائمة
+//   - POST بيرفض الإضافة لو الطالب مش مؤهل (رصيد صفر أو مفيش باكدج)
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
@@ -196,14 +201,21 @@ export async function GET(req) {
 
     // ═══════════════════════════════════════════════════════════════════
     // 1. قايمة الطلاب (بحث + قايمة افتراضية)
-    // ✅ NEW: بنرجّع studentType + isAdult عشان الفرونت يعرف يخفي رسالة
-    //         ولي الأمر للطالب البالغ
+    // ✅ فلتر الرصيد: بنرجّع بس الطلاب اللي عندهم remainingHours > 0
+    // ✅ بنرجّع studentType + isAdult عشان الفرونت يعرف يخفي رسالة
+    //    ولي الأمر للطالب البالغ
+    // ✅ بنرجّع remainingHours + packageName للعرض
     // ═══════════════════════════════════════════════════════════════════
     if (!studentId && !groupId) {
       const q = (searchQuery || "").trim();
 
       const filter = {
         isDeleted: false,
+
+        // ✅ فلتر الرصيد — الطالب لازم يكون عنده باكدج فيها ساعات متبقية
+        //    المفتاح ده بيتحقق تلقائيًا من إن currentPackage موجود (مش null)
+        //    + إن remainingHours > 0
+        "creditSystem.currentPackage.remainingHours": { $gt: 0 },
       };
 
       if (q.length >= 2) {
@@ -222,8 +234,10 @@ export async function GET(req) {
 
       const students = await Student.find(filter)
         .select(
-          // ✅ ضفنا studentType للـ select
-          "_id enrollmentNumber personalInfo.fullName personalInfo.phone personalInfo.whatsappNumber personalInfo.gender personalInfo.nickname createdAt studentType",
+          // ✅ ضفنا creditSystem.currentPackage عشان نرجّع الرصيد للفرونت
+          "_id enrollmentNumber personalInfo.fullName personalInfo.phone " +
+            "personalInfo.whatsappNumber personalInfo.gender personalInfo.nickname " +
+            "createdAt studentType creditSystem.currentPackage",
         )
         .sort(sortBy)
         .limit(limit)
@@ -233,6 +247,8 @@ export async function GET(req) {
         success: true,
         data: students.map((s) => {
           const studentType = s.studentType || "kids";
+          const pkg = s.creditSystem?.currentPackage;
+
           return {
             _id: s._id,
             name: s.personalInfo?.fullName || "",
@@ -241,15 +257,24 @@ export async function GET(req) {
             whatsappNumber: s.personalInfo?.whatsappNumber || "",
             gender: s.personalInfo?.gender || "male",
             nickname: s.personalInfo?.nickname || null,
-            // ✅ NEW: نرجّع نوع الطالب + isAdult
+            // ✅ نوع الطالب + isAdult
             studentType,
             isAdult: studentType === "adults",
+            // ✅ بيانات الرصيد للعرض
+            remainingHours: pkg?.remainingHours || 0,
+            packageName: pkg?.packageName || "",
+            packageType: pkg?.packageType || "",
           };
         }),
         meta: {
           count: students.length,
           mode: q.length >= 2 ? "search" : "list",
           query: q,
+          // ✅ توضيح الفلتر المطبق (يفيد في الـ debugging)
+          filterApplied: {
+            creditRequired: true,
+            minRemainingHours: 1,
+          },
         },
       });
     }
@@ -471,6 +496,26 @@ export async function POST(req) {
     }
 
     const isAdultStudent = student.studentType === "adults";
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ✅ فحص الرصيد — نرفض لو مفيش باكدج أو الرصيد صفر
+    // ═══════════════════════════════════════════════════════════════════
+    const pkg = student.creditSystem?.currentPackage;
+    const remainingHours = pkg?.remainingHours || 0;
+
+    if (!pkg || remainingHours <= 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: pkg
+            ? "رصيد الطالب صفر — مينفعش نضيفه لحصة تعويضية"
+            : "الطالب معندهوش باقة سارية — مينفعش نضيفه لحصة تعويضية",
+          reason: pkg ? "zero_balance" : "no_package",
+          remainingHours,
+        },
+        { status: 400 },
+      );
+    }
 
     // ─── 2. تحقق من وجود الجروب الأصلي ──────────────────────────────────
     const originalGroup = await Group.findById(groupId)

@@ -11,6 +11,7 @@ import {
   Clock,
   Save,
   MapPin,
+  BellRing,
 } from "lucide-react";
 import ModalShell from "./ModalShell";
 
@@ -69,8 +70,6 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // buildVariables
-// ✅ NEW: يدعم Offline (placeName, address, mapsLink, sessionLocationBlock)
-// ✅ NEW: لو الطالب adults → guardian variables تطلع ""
 // ─────────────────────────────────────────────────────────────────────────────
 function buildVariables(student, session, dbVars = {}, options = {}) {
   if (!student) return {};
@@ -84,7 +83,6 @@ function buildVariables(student, session, dbVars = {}, options = {}) {
   const isFather = relationship !== "mother";
   const genderCtx = { studentGender: gender, guardianType: relationship };
 
-  // ✅ هل الطالب بالغ؟
   const isAdult = student.studentType === "adults";
 
   const studentFirstName =
@@ -141,9 +139,6 @@ function buildVariables(student, session, dbVars = {}, options = {}) {
       )
     : "";
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // ✅ Offline Location — من الجروب أو من الـ session.group
-  // ═══════════════════════════════════════════════════════════════════════
   const loc =
     group?.locationDetails ||
     session?.group?.locationDetails ||
@@ -170,7 +165,6 @@ function buildVariables(student, session, dbVars = {}, options = {}) {
     }
   }
 
-  // ✅ Smart block (نفس اللي في الباك إند — عشان المعاينة تبقى مطابقة للرسالة الفعلية)
   const meetingLink = !isOffline ? (session?.meetingLink || "") : "";
 
   const sessionLocationBlock = isOffline
@@ -190,7 +184,6 @@ function buildVariables(student, session, dbVars = {}, options = {}) {
     studentSalutation_ar,
     studentSalutation_en,
 
-    // ✅ Guardian — فاضية للطالب البالغ
     guardianSalutation: isAdult ? "" : guardianSalutation,
     guardianSalutation_ar: isAdult ? "" : guardianSalutation_ar,
     guardianSalutation_en: isAdult ? "" : guardianSalutation_en,
@@ -215,7 +208,6 @@ function buildVariables(student, session, dbVars = {}, options = {}) {
     groupName: session?.group?.name || session?.groupId?.name || "",
     enrollmentNumber: student.enrollmentNumber || "",
 
-    // ✅ Offline — فاضية لو Online
     placeName: isOffline ? placeName : "",
     address: isOffline ? address : "",
     mapsLink: isOffline ? mapsLink : "",
@@ -322,23 +314,25 @@ export default function ReminderModal({
   const hintsRef = useRef({ student: null, guardian: null });
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ✅ NEW: Detect offline mode
-  //    نعتمد على session.deliveryMode (Source of Truth بعد ما الجروب بيحطه)
-  //    وبعدين session.group.deliveryMode كـ fallback
+  // ✅ Detect offline mode
   // ═══════════════════════════════════════════════════════════════════════
   const isOffline =
     session?.deliveryMode === "offline" ||
     session?.group?.deliveryMode === "offline";
 
-  // ✅ هل الطالب المختار بالغ؟
+  // ✅ هل reminderType هو Pre-Attendance Ping؟
+  const isPrePing = reminderType === "pre_attendance_ping";
+
   const isAdultStudent = selectedStudentForPreview?.studentType === "adults";
 
-  // ✅ الـ eventType اللي بنبعت بيه للـ templates API
-  //    Online 24h → reminder_24h
-  //    Online 1h  → reminder_1h  (الباك إند بيحولها لـ reminder_15min)
-  //    Offline 24h → reminder_24h_offline
-  //    Offline 1h  → reminder_30min_offline
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ templateEventType — بيتبعت للـ API عشان يرجع القالب الصح
+  // ═══════════════════════════════════════════════════════════════════════
   const templateEventType = useMemo(() => {
+    // ✅ Pre-Attendance Ping — Offline فقط (مشترك بين adult/kid على مستوى الطالب)
+    if (reminderType === "pre_attendance_ping") {
+      return "pre_attendance_ping";
+    }
     if (isOffline) {
       return reminderType === "24hours"
         ? "reminder_24h_offline"
@@ -347,14 +341,20 @@ export default function ReminderModal({
     return reminderType === "24hours" ? "reminder_24h" : "reminder_1h";
   }, [isOffline, reminderType]);
 
-  // ✅ نمط التذكير للعرض (24 ساعة / 30 دقيقة / 15 دقيقة)
-  const reminderLabel = isOffline
-    ? reminderType === "24hours"
-      ? isRTL ? "تذكير 24 ساعة (Offline)" : "24h Location Reminder"
-      : isRTL ? "تنبيه 30 دقيقة (Offline)" : "30min Drop-off Alert"
-    : reminderType === "24hours"
-      ? isRTL ? "تذكير قبل 24 ساعة" : "24-Hour Reminder"
-      : isRTL ? "تذكير قبل 15 دقيقة" : "15-Minute Reminder";
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ reminderLabel — عنوان المودال حسب النوع
+  // ═══════════════════════════════════════════════════════════════════════
+  const reminderLabel = isPrePing
+    ? isRTL
+      ? "تنبيه قبل بداية الحصة (Ping)"
+      : "Pre-Attendance Ping"
+    : isOffline
+      ? reminderType === "24hours"
+        ? isRTL ? "تذكير 24 ساعة (Offline)" : "24h Location Reminder"
+        : isRTL ? "تنبيه 30 دقيقة (Offline)" : "30min Drop-off Alert"
+      : reminderType === "24hours"
+        ? isRTL ? "تذكير قبل 24 ساعة" : "24-Hour Reminder"
+        : isRTL ? "تذكير قبل 15 دقيقة" : "15-Minute Reminder";
 
   // ── Load DB vars ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -391,9 +391,6 @@ export default function ReminderModal({
 
   // ═══════════════════════════════════════════════════════════════════════
   // ✅ Fetch all templates
-  //    - بيستخدم eventType الصح حسب Offline/Online
-  //    - بيتخطى guardian للطالب البالغ
-  //    - بيتخطى guardian للأوفلاين لو الطالب بالغ
   // ═══════════════════════════════════════════════════════════════════════
   useEffect(() => {
     const fetchAllTemplates = async () => {
@@ -410,8 +407,8 @@ export default function ReminderModal({
                 eventType: templateEventType,
                 studentId: student._id,
                 extraData: {
-                  meetingLink: session.meetingLink,
-                  isOffline, // ✅ نمرر الحالة كـ hint للـ backend
+                  meetingLink: isPrePing ? "" : session.meetingLink,
+                  isOffline,
                 },
               }),
             });
@@ -423,7 +420,6 @@ export default function ReminderModal({
                 studentId: student._id,
                 studentTemplate:
                   json.data.student?.rawContent || json.data.student?.content || "",
-                // ✅ للطالب البالغ: منستخدمش قالب ولي الأمر خالص
                 guardianTemplate: studentIsAdult
                   ? ""
                   : (json.data.guardian?.rawContent || json.data.guardian?.content || ""),
@@ -471,12 +467,11 @@ export default function ReminderModal({
     isRTL,
     templateEventType,
     isOffline,
+    isPrePing,
   ]);
 
   // ═══════════════════════════════════════════════════════════════════════
   // ✅ Preview effect
-  //    - للطالب البالغ: preview guardian يبقى فاضي
-  //    - للأوفلاين: المتغيرات بتشمل placeName/address/mapsLink
   // ═══════════════════════════════════════════════════════════════════════
   useEffect(() => {
     if (!selectedStudentForPreview) return;
@@ -528,29 +523,24 @@ export default function ReminderModal({
 
   // ═══════════════════════════════════════════════════════════════════════
   // ✅ saveTemplateToDatabase
-  //    - يختار الـ templateType الصح حسب:
-  //      · Online vs Offline
-  //      · kids vs adults (student)
-  //      · 24h vs 30min/15min
-  //    - بيمنع حفظ قالب guardian لو الطالب بالغ
   // ═══════════════════════════════════════════════════════════════════════
   const saveTemplateToDatabase = useCallback(
     async (type, content) => {
       if (!selectedStudentForPreview || !content?.trim()) return;
 
-      // ✅ حماية: مفيش guardian save للطالب البالغ
       if (isAdultStudent && type === "guardian") return;
 
       setSavingTemplate((prev) => ({ ...prev, [type]: true }));
 
       try {
-        // ✅ اختيار templateType + recipientType بالظبط زي ما الـ getTemplatesForEvent بيختار
         let templateType;
         let recipientType;
 
         if (type === "guardian") {
           recipientType = "guardian";
-          if (isOffline) {
+          if (isPrePing) {
+            templateType = "pre_attendance_ping_guardian";
+          } else if (isOffline) {
             templateType =
               reminderType === "24hours"
                 ? "reminder_24h_offline_guardian"
@@ -562,9 +552,11 @@ export default function ReminderModal({
                 : "reminder_15min_guardian";
           }
         } else {
-          // Student
           recipientType = "student";
-          if (isAdultStudent) {
+          if (isPrePing) {
+            // ✅ مشترك بين kids/adults — قالب واحد للطالب
+            templateType = "pre_attendance_ping_student";
+          } else if (isAdultStudent) {
             if (isOffline) {
               templateType =
                 reminderType === "24hours"
@@ -595,6 +587,9 @@ export default function ReminderModal({
           selectedStudentForPreview.communicationPreferences?.preferredLanguage || "ar";
 
         const templateName = (() => {
+          if (isPrePing) {
+            return `Pre-Attendance Ping - ${type === "student" ? "Student" : "Guardian"}`;
+          }
           const modeAr = isOffline ? "Offline " : "";
           const typeAr = type === "student" ? "Student" : "Guardian";
           const reminderAr = reminderType === "24hours" ? "24h" : (isOffline ? "30min" : "15min");
@@ -626,7 +621,6 @@ export default function ReminderModal({
           const json = await res.json();
           if (!json.success) throw new Error(json.error || "Update failed");
         } else {
-          // ✅ Variables بتشمل offline لو محتاجين
           const variablesList = [
             { key: "studentSalutation", label: "Student Salutation" },
             { key: "studentSalutation_ar", label: "Student Salutation AR" },
@@ -648,7 +642,9 @@ export default function ReminderModal({
             );
           }
 
-          if (isOffline) {
+          if (isPrePing) {
+            // ✅ الـ Pre-Ping مش محتاج Location ولا Meeting Link
+          } else if (isOffline) {
             variablesList.push(
               { key: "placeName", label: "Location Name" },
               { key: "address", label: "Address" },
@@ -659,11 +655,15 @@ export default function ReminderModal({
             variablesList.push({ key: "meetingLink", label: "Meeting Link" });
           }
 
+          const description = isPrePing
+            ? `Pre-attendance ping for ${recipientType}`
+            : `${reminderType === "24hours" ? "24 hours" : (isOffline ? "30 minutes" : "15 minutes")} ${isOffline ? "offline " : ""}reminder for ${recipientType}`;
+
           const newTemplate = {
             templateType,
             recipientType,
             name: templateName,
-            description: `${reminderType === "24hours" ? "24 hours" : (isOffline ? "30 minutes" : "15 minutes")} ${isOffline ? "offline " : ""}reminder for ${recipientType}`,
+            description,
             isDefault: true,
             isActive: true,
             contentAr: studentLang === "ar" ? content : " ",
@@ -703,14 +703,11 @@ export default function ReminderModal({
         setSavingTemplate((prev) => ({ ...prev, [type]: false }));
       }
     },
-    [reminderType, selectedStudentForPreview, isRTL, isAdultStudent, isOffline]
+    [reminderType, selectedStudentForPreview, isRTL, isAdultStudent, isOffline, isPrePing]
   );
 
   // ═══════════════════════════════════════════════════════════════════════
   // ✅ handleSend
-  //    - بيبني studentMessages / guardianMessages بمتغيرات offline صح
-  //    - بيتخطى guardian للطالب البالغ
-  //    - بيمرر isOffline في الـ metadata
   // ═══════════════════════════════════════════════════════════════════════
   const handleSend = useCallback(async () => {
     setSending(true);
@@ -746,7 +743,7 @@ export default function ReminderModal({
           metadata: {
             studentMessages,
             guardianMessages,
-            isOffline, // ✅ New flag للباك إند
+            isOffline,
           },
         }),
       });
@@ -754,15 +751,12 @@ export default function ReminderModal({
       const json = await res.json();
 
       if (json.success) {
-        toast.success(
-          isRTL
-            ? isOffline
-              ? "تم إرسال التذكيرات (Offline) ✅"
-              : "تم إرسال التذكيرات ✅"
-            : isOffline
-              ? "Offline reminders sent ✅"
-              : "Reminders sent ✅"
-        );
+        const successMsg = isPrePing
+          ? isRTL ? "تم إرسال التنبيه ✅" : "Pre-attendance ping sent ✅"
+          : isRTL
+            ? isOffline ? "تم إرسال التذكيرات (Offline) ✅" : "تم إرسال التذكيرات ✅"
+            : isOffline ? "Offline reminders sent ✅" : "Reminders sent ✅";
+        toast.success(successMsg);
         onClose();
         if (onRefresh) onRefresh();
       } else {
@@ -787,10 +781,11 @@ export default function ReminderModal({
     onClose,
     onRefresh,
     isOffline,
+    isPrePing,
   ]);
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ✅ getAvailableVariables — dynamic حسب isAdult + isOffline
+  // ✅ getAvailableVariables — dynamic حسب isAdult + isOffline + isPrePing
   // ═══════════════════════════════════════════════════════════════════════
   const getAvailableVariables = useCallback(
     (isAdult) => {
@@ -807,7 +802,6 @@ export default function ReminderModal({
         { key: "{enrollmentNumber}", label: isRTL ? "الرقم التعريفي" : "Enrollment No.", icon: "🔢" },
       ];
 
-      // ✅ Offline variables
       const offlineVars = [
         { key: "{placeName}", label: isRTL ? "اسم المكان" : "Location Name", icon: "📍" },
         { key: "{address}", label: isRTL ? "العنوان" : "Address", icon: "📌" },
@@ -815,12 +809,10 @@ export default function ReminderModal({
         { key: "{sessionLocationBlock}", label: isRTL ? "بلوك الموقع (تلقائي)" : "Location Block (auto)", icon: "🧩" },
       ];
 
-      // ✅ Online variables
       const onlineVars = [
         { key: "{meetingLink}", label: isRTL ? "رابط الاجتماع" : "Meeting Link", icon: "🔗" },
       ];
 
-      // ✅ Guardian vars (for kids only)
       const guardianVars = [
         { key: "{guardianSalutation}", label: isRTL ? "تحية ولي الأمر (حسب اللغة)" : "Guardian Salutation", icon: "👤" },
         { key: "{guardianSalutation_ar}", label: isRTL ? "تحية ولي الأمر - عربي" : "Guardian Salutation (AR)", icon: "👤" },
@@ -830,7 +822,8 @@ export default function ReminderModal({
         { key: "{childTitle}", label: isRTL ? "ابنك/ابنتك" : "Son/Daughter", icon: "👪" },
       ];
 
-      const locationVars = isOffline ? offlineVars : onlineVars;
+      // ✅ الـ Pre-Ping مش محتاج Location/Meeting — قائمة أساسية فقط
+      const locationVars = isPrePing ? [] : (isOffline ? offlineVars : onlineVars);
 
       if (isAdult) {
         return [...studentVars, ...locationVars];
@@ -838,7 +831,7 @@ export default function ReminderModal({
 
       return [...studentVars, ...guardianVars, ...locationVars];
     },
-    [isRTL, isOffline]
+    [isRTL, isOffline, isPrePing]
   );
 
   const insertVariable = useCallback(
@@ -963,7 +956,6 @@ export default function ReminderModal({
     [showHints, selectedHintIndex, getAvailableVariables, insertVariable, isAdultStudent]
   );
 
-  // ✅ Salutation preview — بيستخدم buildVariables مع isOffline
   const salutationPreview = useMemo(() => {
     if (!selectedStudentForPreview) return null;
     return buildVariables(selectedStudentForPreview, session, dbVars, {
@@ -1114,7 +1106,9 @@ export default function ReminderModal({
         ) : (
           <>
             <Send className="h-4 w-4" />
-            {isRTL ? "إرسال التذكيرات" : "Send Reminders"}
+            {isPrePing
+              ? isRTL ? "إرسال التنبيه" : "Send Ping"
+              : isRTL ? "إرسال التذكيرات" : "Send Reminders"}
           </>
         )}
       </button>
@@ -1135,31 +1129,53 @@ export default function ReminderModal({
       )} · ${session?.startTime}`}
       headerBadge={
         <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
-          {isOffline ? <MapPin className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-          {isOffline
-            ? reminderType === "24hours" ? "24h 📍" : "30m 🚗"
-            : reminderType === "24hours" ? "24h" : "15m"}
+          {isPrePing ? (
+            <>
+              <BellRing className="h-3 w-3" />
+              Ping
+            </>
+          ) : isOffline ? (
+            <>
+              <MapPin className="h-3 w-3" />
+              {reminderType === "24hours" ? "24h 📍" : "30m 🚗"}
+            </>
+          ) : (
+            <>
+              <Clock className="h-3 w-3" />
+              {reminderType === "24hours" ? "24h" : "15m"}
+            </>
+          )}
         </span>
       }
       footer={footer}
     >
       <div className="space-y-5">
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* ✅ Offline Banner */}
+        {/* ✅ Offline Banner (لكل الـ offline reminders بما فيها الـ Ping) */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         {isOffline && (
           <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-500/20 dark:bg-amber-500/10">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-500/20">
-              <MapPin className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              {isPrePing ? (
+                <BellRing className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              ) : (
+                <MapPin className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              )}
             </div>
             <div>
               <p className="text-sm font-bold text-amber-900 dark:text-amber-300">
-                📍 {isRTL ? "حصة Offline (حضورية)" : "Offline (On-site) Session"}
+                {isPrePing
+                  ? (isRTL ? "⏱️ تنبيه قبل الحصة (Offline)" : "⏱️ Pre-Attendance Ping (Offline)")
+                  : (isRTL ? "📍 حصة Offline (حضورية)" : "Offline (On-site) Session")}
               </p>
               <p className="mt-0.5 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
-                {isRTL
-                  ? "التذكير ده هيتبعت للطالب (وأولياء الأمور للأطفال) وفيه اسم المكان والعنوان ولينك الخريطة بدل رابط الميتنج."
-                  : "The reminder will include the location name, address, and maps link instead of a meeting link."}
+                {isPrePing
+                  ? isRTL
+                    ? "هيتابع للطالب (وأولياء الأمور للأطفال) عشان يتأكدوا إن الطالب موجود وجاهز لبداية الحصة."
+                    : "This ping will be sent to the student (and guardians for kids) to make sure they're ready for the session."
+                  : isRTL
+                    ? "التذكير ده هيتبعت للطالب (وأولياء الأمور للأطفال) وفيه اسم المكان والعنوان ولينك الخريطة بدل رابط الميتنج."
+                    : "The reminder will include the location name, address, and maps link instead of a meeting link."}
               </p>
             </div>
           </div>
@@ -1215,7 +1231,6 @@ export default function ReminderModal({
               <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.studentSalutation}</span>
             </div>
 
-            {/* Guardian rows — للـ kids بس */}
             {!isAdultStudent && (
               <>
                 <div className="flex items-center gap-2">
@@ -1251,8 +1266,8 @@ export default function ReminderModal({
               <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.sessionName}</span>
             </div>
 
-            {/* ✅ Offline location row */}
-            {isOffline && (salutationPreview.placeName || salutationPreview.address) && (
+            {/* Offline location — يظهر فقط للـ offline reminders (مش للـ Ping) */}
+            {isOffline && !isPrePing && (salutationPreview.placeName || salutationPreview.address) && (
               <div className="flex items-start gap-2 pt-1 border-t border-slate-100 dark:border-white/5">
                 <span className="w-28 shrink-0 font-medium text-orange-600 dark:text-orange-400">
                   📍 {isRTL ? "المكان:" : "Location:"}

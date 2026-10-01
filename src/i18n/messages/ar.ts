@@ -4980,6 +4980,7 @@ const ar = {
   "groups.groupType.kids": "أطفال",
   "groups.groupType.adults": "بالغون",
   "groups.groupType.mixed": "مختلطة",
+  "dashboard.interviews": "المقابلات الشخصية",
 };
 
 export default ar;

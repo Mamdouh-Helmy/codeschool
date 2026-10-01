@@ -6,6 +6,8 @@ import Session from "../models/Session";
 import User from "../models/User";
 import MessageTemplate from "../models/MessageTemplate";
 import { wapilotService } from "./wapilot-service";
+import { isSessionLockedByHold } from "./holdGuard";
+import { routeMessage } from "./messageRouting";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ HOLD GUARD — حماية من إرسال أي رسالة لجروب على Hold
@@ -39,44 +41,6 @@ export async function canGroupSendMessages(groupId) {
 // ✅ HOLD GUARD — على مستوى السيشن نفسها (مش الجروب كله)
 // ═══════════════════════════════════════════════════════════════════════════
 
-function sortSessionsForHoldCheck(sessions) {
-  return [...sessions].sort((a, b) => {
-    if (a.moduleIndex !== b.moduleIndex) return a.moduleIndex - b.moduleIndex;
-    if (a.sessionNumber !== b.sessionNumber) return a.sessionNumber - b.sessionNumber;
-    return new Date(a.scheduledDate) - new Date(b.scheduledDate);
-  });
-}
-
-function isSessionLockedByHoldCheck(session, group, allGroupSessions) {
-  if (!group?.hold?.isHeld) return false;
-  if (session?.status === "completed") return false;
-
-  const hold = group.hold;
-
-  if (hold.holdType === "indefinite" || hold.holdType === "duration") return true;
-  if (!Array.isArray(allGroupSessions) || allGroupSessions.length === 0) return true;
-
-  const sorted = sortSessionsForHoldCheck(allGroupSessions);
-  const myIndex = sorted.findIndex((s) => String(s._id) === String(session._id));
-  if (myIndex === -1) return false;
-
-  if (hold.holdType === "sessions") {
-    const consumed = hold.holdSessionsConsumed || 0;
-    if (consumed === 0) return true;
-    return myIndex < consumed;
-  }
-
-  if (hold.holdType === "until_session") {
-    const targetId = hold.holdUntilSessionId;
-    if (!targetId) return true;
-    const targetIndex = sorted.findIndex((s) => String(s._id) === String(targetId));
-    if (targetIndex === -1) return true;
-    return myIndex <= targetIndex;
-  }
-
-  return false;
-}
-
 /**
  * ✅ هل يُسمح بإرسال رسائل مرتبطة بسيشن معينة؟
  * - لو الجروب مش Active أو محذوف أو مش على Hold أصلاً → نفس فحص canGroupSendMessages
@@ -104,7 +68,10 @@ export async function canSessionSendMessages(sessionId) {
     if (!group.hold?.isHeld) return { ok: true, group };
 
     // duration / indefinite → كل حاجة في الجروب مقفولة، زي الأول بالظبط
-    if (group.hold.holdType === "duration" || group.hold.holdType === "indefinite") {
+    if (
+      group.hold.holdType === "duration" ||
+      group.hold.holdType === "indefinite"
+    ) {
       return { ok: false, reason: "group_on_hold", group };
     }
 
@@ -116,7 +83,7 @@ export async function canSessionSendMessages(sessionId) {
       .select("_id moduleIndex sessionNumber scheduledDate status")
       .lean();
 
-    const locked = isSessionLockedByHoldCheck(session, group, allGroupSessions);
+    const locked = isSessionLockedByHold(session, group, allGroupSessions);
     if (locked) {
       return { ok: false, reason: "session_on_hold", group };
     }
@@ -131,7 +98,8 @@ export async function canSessionSendMessages(sessionId) {
 // ── Fetch TemplateVariable map from DB ────────────────────────────────────
 async function fetchDbVars(genderContext = {}) {
   try {
-    const TemplateVariable = (await import("../models/TemplateVariable")).default;
+    const TemplateVariable = (await import("../models/TemplateVariable"))
+      .default;
     const vars = await TemplateVariable.find({ isActive: true }).lean();
     const map = {};
     vars.forEach((v) => {
@@ -165,19 +133,29 @@ export function extractSessionShortName(title) {
 /**
  * ✅ التحقق من صلاحية الطالب لاستقبال الرسائل
  */
-export async function canSendMessage(student) {
+export async function canSendMessage(student, { isComplimentary = false } = {}) {
   if (!student) return false;
-
-  if (!student.creditSystem?.currentPackage) return false;
-
-  const remainingHours = student.creditSystem.currentPackage.remainingHours || 0;
-  if (remainingHours <= 0) {
-    console.log(`🔕 Student ${student._id} has zero balance - notifications disabled`);
-    return false;
-  }
 
   const whatsappEnabled =
     student.communicationPreferences?.notificationChannels?.whatsapp;
+  const remainingHours =
+    student.creditSystem?.currentPackage?.remainingHours || 0;
+
+  // الحصة التعويضية مبتخصمش → الرصيد مش شرط.
+  // قناة الواتساب بتتقفل أوتوماتيك عند الصفر، فبنتجاهلها في الحالة دي بس.
+  if (isComplimentary) {
+    return remainingHours > 0 ? !!whatsappEnabled : true;
+  }
+
+  if (!student.creditSystem?.currentPackage) return false;
+
+  if (remainingHours <= 0) {
+    console.log(
+      `🔕 Student ${student._id} has zero balance - notifications disabled`,
+    );
+    return false;
+  }
+
   if (!whatsappEnabled) return false;
 
   return true;
@@ -193,7 +171,9 @@ async function filterEligibleStudents(students) {
     if (canSend) {
       eligibleStudents.push(student);
     } else {
-      console.log(`⏭️ Skipping student ${student._id} - not eligible for messages`);
+      console.log(
+        `⏭️ Skipping student ${student._id} - not eligible for messages`,
+      );
     }
   }
   return eligibleStudents;
@@ -239,10 +219,14 @@ export async function activateGroupSessionsCore(
 
     for (const session of existingSessions) {
       try {
-        const { releaseMeetingLink } = await import("../../utils/sessionGenerator");
+        const { releaseMeetingLink } =
+          await import("../../utils/sessionGenerator");
         await releaseMeetingLink(session._id);
       } catch (e) {
-        console.warn(`⚠️ releaseMeetingLink failed for ${session._id}:`, e.message);
+        console.warn(
+          `⚠️ releaseMeetingLink failed for ${session._id}:`,
+          e.message,
+        );
       }
     }
 
@@ -254,7 +238,8 @@ export async function activateGroupSessionsCore(
 
   // ✅ generateSessionsForGroup بيوزّع اللينكات وبيسجّل الحجز الفعلي
   // (persistLinkReservations) بالأيام الفعلية لكل لينك — فمفيش حجز تاني هنا.
-  const { generateSessionsForGroup } = await import("../../utils/sessionGenerator");
+  const { generateSessionsForGroup } =
+    await import("../../utils/sessionGenerator");
   const sessionsResult = await generateSessionsForGroup(
     groupId,
     group,
@@ -328,18 +313,29 @@ export async function onGroupActivated(
     console.log(`\n🎯 EVENT: Group Activated ==========`);
     console.log(`👥 Group: ${groupId}`);
     console.log(`👤 Activated by: ${userId}`);
-    console.log(`🔗 Selected Link IDs: ${selectedLinkIds.join(", ") || "none"}`);
-    console.log(`🔗 Link assignment mode: ${options.linkAssignmentMode || "first_available"}`);
+    console.log(
+      `🔗 Selected Link IDs: ${selectedLinkIds.join(", ") || "none"}`,
+    );
+    console.log(
+      `🔗 Link assignment mode: ${options.linkAssignmentMode || "first_available"}`,
+    );
 
     const { group, sessionsResult, existingSessionsCount } =
-      await activateGroupSessionsCore(groupId, userId, selectedLinkIds, options);
+      await activateGroupSessionsCore(
+        groupId,
+        userId,
+        selectedLinkIds,
+        options,
+      );
 
     console.log(`📊 Sessions Generation Result:`, sessionsResult.distribution);
 
     if (group.automation?.whatsappEnabled && group.instructors?.length > 0) {
       console.log("📱 Sending notifications to instructors...");
       for (const instructor of group.instructors) {
-        console.log(`📤 Notify instructor: ${instructor.name} (${instructor.email})`);
+        console.log(
+          `📤 Notify instructor: ${instructor.name} (${instructor.email})`,
+        );
       }
     }
 
@@ -384,7 +380,8 @@ export async function getMessageTemplate(
       }
 
       if (!content || content.trim() === "") {
-        content = validLanguage === "ar" ? template.contentEn : template.contentAr;
+        content =
+          validLanguage === "ar" ? template.contentEn : template.contentAr;
 
         if (!content || content.trim() === "") {
           const fallbackContent = getFallbackTemplate(
@@ -443,40 +440,21 @@ export async function getMessageTemplate(
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ✅ getAttendanceTemplates
-// ✅ NEW: للطالب البالغ → ترجع قالب _adult (student) بدل قالب ولي الأمر
-// ═══════════════════════════════════════════════════════════════════════════
 export async function getAttendanceTemplates(attendanceStatus, student) {
   try {
     const language =
       student.communicationPreferences?.preferredLanguage || "ar";
 
-    // ✅ هل الطالب بالغ؟
-    const isAdult = student.studentType === "adults";
+    // ✅ مصدر واحد: routeMessage
+    const { isAdult, templateType, recipientType } = routeMessage({
+      event: "attendance",
+      status: attendanceStatus,
+      student,
+    });
 
-    let templateType = "";
-    switch (attendanceStatus) {
-      case "absent":
-        templateType = isAdult
-          ? "absence_notification_adult"
-          : "absence_notification";
-        break;
-      case "late":
-        templateType = isAdult
-          ? "late_notification_adult"
-          : "late_notification";
-        break;
-      case "excused":
-        templateType = isAdult
-          ? "excused_notification_adult"
-          : "excused_notification";
-        break;
-      default:
-        throw new Error(`Unknown attendance status: ${attendanceStatus}`);
+    if (!templateType) {
+      throw new Error(`Unknown attendance status: ${attendanceStatus}`);
     }
-
-    const recipientType = isAdult ? "student" : "guardian";
 
     const template = await getMessageTemplate(
       templateType,
@@ -495,10 +473,8 @@ export async function getAttendanceTemplates(attendanceStatus, student) {
         language,
         gender: student.personalInfo?.gender || "male",
         relationship: student.guardianInfo?.relationship || "father",
-        studentName:
-          student.personalInfo?.fullName?.split(" ")[0] || "الطالب",
-        guardianName:
-          student.guardianInfo?.name?.split(" ")[0] || "ولي الأمر",
+        studentName: student.personalInfo?.fullName?.split(" ")[0] || "الطالب",
+        guardianName: student.guardianInfo?.name?.split(" ")[0] || "ولي الأمر",
         isAdult,
       },
     };
@@ -525,7 +501,7 @@ export async function getAttendanceTemplatesForFrontend(
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ إرسال إشعارات الغياب
-// ✅ NEW: 
+// ✅ NEW:
 //   - kids → إشعار لولي الأمر (زي ما كان)
 //   - adults → إشعار للطالب مباشرة باستخدام _adult templates
 // ═══════════════════════════════════════════════════════════════════════════
@@ -537,10 +513,13 @@ export async function sendAbsenceNotifications(
   try {
     console.log(`\n📤 Sending absence notifications for session ${sessionId}`);
 
-    const session = await Session.findById(sessionId).populate("groupId").lean();
+    const session = await Session.findById(sessionId)
+      .populate("groupId")
+      .lean();
     if (!session) throw new Error("Session not found");
 
     const group = session.groupId;
+    const isComplimentary = session.isComplimentary === true;
 
     const holdCheck = await canSessionSendMessages(sessionId);
     if (!holdCheck.ok) {
@@ -574,10 +553,8 @@ export async function sendAbsenceNotifications(
         continue;
       }
 
-      // ✅ هل الطالب بالغ؟
-      const isAdult = student.studentType === "adults";
-
-      const canSend = await canSendMessage(student);
+      // ✅ الحصة التعويضية: الرصيد الصفري مش بيمنع الرسالة
+      const canSend = await canSendMessage(student, { isComplimentary });
       if (!canSend) {
         skippedCount++;
         results.push({
@@ -588,28 +565,17 @@ export async function sendAbsenceNotifications(
         continue;
       }
 
-      // ✅ تحديد الـ recipient والـ template حسب النوع
-      let recipientPhone, templateType, recipientLabel;
+      // ✅ Minor → قالب ولي الأمر + ولي الأمر | Adult → قالب _adult + الطالب
+      const {
+        isAdult,
+        templateType,
+        recipientType: recipientLabel,
+        recipientPhone,
+      } = routeMessage({ event: "attendance", status: record.status, student });
 
-      if (isAdult) {
-        // ✅ adults → إشعار للطالب مباشرة بقوالب _adult
-        recipientPhone = student.personalInfo?.whatsappNumber;
-        templateType = {
-          absent: "absence_notification_adult",
-          late: "late_notification_adult",
-          excused: "excused_notification_adult",
-        }[record.status];
-        recipientLabel = "student";
-      } else {
-        // ✅ kids → إشعار لولي الأمر (زي ما كان)
-        recipientPhone =
-          student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
-        templateType = {
-          absent: "absence_notification",
-          late: "late_notification",
-          excused: "excused_notification",
-        }[record.status];
-        recipientLabel = "guardian";
+      if (!templateType) {
+        skippedCount++;
+        continue;
       }
 
       if (!recipientPhone) {
@@ -657,7 +623,9 @@ export async function sendAbsenceNotifications(
           attendanceStatus: record.status,
           recipientType: recipientLabel,
           isAdult,
+          isComplimentary,
           remainingHours: student.creditSystem?.currentPackage?.remainingHours,
+          dedupe: true, // ✅ single-send: نفس السيشن + نفس النوع + نفس الرقم مرة واحدة
         },
       });
 
@@ -672,14 +640,26 @@ export async function sendAbsenceNotifications(
         });
       } else {
         skippedCount++;
+        results.push({
+          studentId: student._id,
+          status: "skipped",
+          reason: sendResult.duplicate ? "duplicate" : "send_failed",
+        });
       }
     }
 
-    console.log(`✅ Notifications sent: ${sentCount}, skipped: ${skippedCount}`);
+    console.log(
+      `✅ Notifications sent: ${sentCount}, skipped: ${skippedCount}`,
+    );
     return { success: true, sentCount, skippedCount, results };
   } catch (error) {
     console.error("❌ Error sending absence notifications:", error);
-    return { success: false, error: error.message, sentCount: 0, skippedCount: 0 };
+    return {
+      success: false,
+      error: error.message,
+      sentCount: 0,
+      skippedCount: 0,
+    };
   }
 }
 /**
@@ -1490,7 +1470,9 @@ Session Report 📃✨
       .replace(/_guardian$/, "")
       .replace(/_student$/, "");
     templateKey =
-      recipientType === "student" ? `${baseKey}_student` : `${baseKey}_guardian`;
+      recipientType === "student"
+        ? `${baseKey}_student`
+        : `${baseKey}_guardian`;
   }
 
   const template = templates[templateKey];
@@ -1598,11 +1580,15 @@ export async function prepareStudentVariables(
   // لكن في القاموس النهائي هنطلعها فاضية
   const guardianSalutation = isAdult
     ? ""
-    : (language === "ar" ? guardianSalutation_ar : guardianSalutation_en);
+    : language === "ar"
+      ? guardianSalutation_ar
+      : guardianSalutation_en;
 
   const childTitle = isAdult
     ? ""
-    : (language === "ar" ? childTitleAr : childTitleEn);
+    : language === "ar"
+      ? childTitleAr
+      : childTitleEn;
 
   const sessionDate = session?.scheduledDate
     ? new Date(session.scheduledDate).toLocaleDateString(
@@ -1623,7 +1609,9 @@ export async function prepareStudentVariables(
   const instructorNames = buildInstructorsNames(group?.instructors, language);
   const firstMeetingLink = await getFirstSessionMeetingLink(group?._id);
 
-  const sessionShortName = session ? extractSessionShortName(session.title) : "";
+  const sessionShortName = session
+    ? extractSessionShortName(session.title)
+    : "";
 
   const isOffline =
     extra.isOffline === true || group?.deliveryMode === "offline";
@@ -1670,13 +1658,13 @@ export async function prepareStudentVariables(
           : "daughter",
 
     // ✅ Guardian — لو adult → فاضية
-    guardianSalutation:        isAdult ? "" : guardianSalutation,
-    guardianSalutation_ar:     isAdult ? "" : guardianSalutation_ar,
-    guardianSalutation_en:     isAdult ? "" : guardianSalutation_en,
-    salutation:                isAdult ? studentSalutation : guardianSalutation,
-    guardianName:              isAdult ? "" : guardianFirstName,
-    guardianFullName:          isAdult ? "" : (student.guardianInfo?.name || ""),
-    childTitle:                isAdult ? "" : childTitle,
+    guardianSalutation: isAdult ? "" : guardianSalutation,
+    guardianSalutation_ar: isAdult ? "" : guardianSalutation_ar,
+    guardianSalutation_en: isAdult ? "" : guardianSalutation_en,
+    salutation: isAdult ? studentSalutation : guardianSalutation,
+    guardianName: isAdult ? "" : guardianFirstName,
+    guardianFullName: isAdult ? "" : student.guardianInfo?.name || "",
+    childTitle: isAdult ? "" : childTitle,
 
     // Group / Course
     groupName: group?.name || "",
@@ -1690,10 +1678,10 @@ export async function prepareStudentVariables(
 
     // Location / Link
     firstMeetingLink: isOffline ? "" : firstMeetingLink || "",
-    meetingLink:      isOffline ? "" : firstMeetingLink || "",
-    placeName:        isOffline ? placeName : "",
-    address:          isOffline ? address : "",
-    mapsLink:         isOffline ? mapsLink : "",
+    meetingLink: isOffline ? "" : firstMeetingLink || "",
+    placeName: isOffline ? placeName : "",
+    address: isOffline ? address : "",
+    mapsLink: isOffline ? mapsLink : "",
     sessionLocationBlock: isOffline ? sessionLocationBlock : "",
     isOffline,
 
@@ -1758,7 +1746,11 @@ export async function prepareStudentVariables(
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ prepareInstructorVariables — EXPORTED (يستخدمها makeupAutomation كمان)
 // ═══════════════════════════════════════════════════════════════════════════
-export async function prepareInstructorVariables(instructor, group, session = null) {
+export async function prepareInstructorVariables(
+  instructor,
+  group,
+  session = null,
+) {
   const lang = instructor.language || "ar";
   const gender = instructor.gender || "male";
   const isMale = gender !== "female";
@@ -1801,7 +1793,9 @@ export async function prepareInstructorVariables(instructor, group, session = nu
       )
     : "";
 
-  const sessionShortName = session ? extractSessionShortName(session.title) : "";
+  const sessionShortName = session
+    ? extractSessionShortName(session.title)
+    : "";
 
   const variables = {
     instructorSalutation,
@@ -1848,10 +1842,12 @@ export async function sendInstructorSessionReminder(
     console.log(`\n🎯 Instructor Session Reminder ==========`);
     console.log(`📋 Session: ${sessionId} | Type: ${reminderType}`);
 
-    const session = await Session.findById(sessionId).populate("groupId").lean();
+    const session = await Session.findById(sessionId)
+      .populate("groupId")
+      .lean();
     if (!session) throw new Error("Session not found");
 
-       const holdCheck = await canSessionSendMessages(sessionId);
+    const holdCheck = await canSessionSendMessages(sessionId);
     if (!holdCheck.ok) {
       console.log(
         `⏭️ [HOLD GUARD] sendInstructorSessionReminder skipped — ${holdCheck.reason}`,
@@ -1937,7 +1933,8 @@ export async function sendInstructorSessionReminder(
 
         const finalMessage = replaceVariables(messageContent, variables);
 
-        const preparedPhone = wapilotService.preparePhoneNumber(instructorPhone);
+        const preparedPhone =
+          wapilotService.preparePhoneNumber(instructorPhone);
         if (!preparedPhone) throw new Error("Invalid phone number");
 
         const sendResult = await wapilotService.sendTextMessage(
@@ -1981,7 +1978,9 @@ export async function sendInstructorSessionReminder(
 // ═══════════════════════════════════════════════════════════════════════════
 export async function sendLowBalanceAlerts(students, sessionId = null) {
   try {
-    console.log(`\n📤 Sending low balance alerts to ${students.length} students`);
+    console.log(
+      `\n📤 Sending low balance alerts to ${students.length} students`,
+    );
 
     let sessionGroup = null;
     if (sessionId) {
@@ -2025,7 +2024,7 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
         // ✅ لو adult → نتخطى رقم ولي الأمر
         const guardianPhone = isAdult
           ? null
-          : (student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone);
+          : student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
 
         if (!studentPhone && !guardianPhone) {
           failCount++;
@@ -2108,7 +2107,10 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
               language,
               "guardian",
             );
-            const guardianMsg = replaceVariables(guardianTpl.content, variables);
+            const guardianMsg = replaceVariables(
+              guardianTpl.content,
+              variables,
+            );
 
             await wapilotService.sendAndLogMessage({
               studentId: student._id,
@@ -2133,7 +2135,9 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
             );
           }
         } else if (isAdult) {
-          console.log(`   ⏭️ [ADULT] Skipping guardian credit alert for ${student._id}`);
+          console.log(
+            `   ⏭️ [ADULT] Skipping guardian credit alert for ${student._id}`,
+          );
         }
 
         successCount++;
@@ -2162,7 +2166,12 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
       }
     }
 
-    return { success: successCount > 0, sentCount: successCount, failCount, results };
+    return {
+      success: successCount > 0,
+      sentCount: successCount,
+      failCount,
+      results,
+    };
   } catch (error) {
     console.error("❌ Error in sendLowBalanceAlerts:", error);
     return {
@@ -2192,7 +2201,10 @@ export async function canSendMessageForLowBalance(student) {
   return true;
 }
 
-export async function disableZeroBalanceNotifications(zeroBalanceStudents, sessionId = null) {
+export async function disableZeroBalanceNotifications(
+  zeroBalanceStudents,
+  sessionId = null,
+) {
   try {
     console.log(
       `\n🔕 Disabling notifications for ${zeroBalanceStudents.length} students with zero balance`,
@@ -2234,7 +2246,12 @@ export async function disableZeroBalanceNotifications(zeroBalanceStudents, sessi
       }
     }
 
-    return { success: successCount > 0, disabledCount: successCount, failCount, results };
+    return {
+      success: successCount > 0,
+      disabledCount: successCount,
+      failCount,
+      results,
+    };
   } catch (error) {
     console.error("❌ Error in disableZeroBalanceNotifications:", error);
     return {
@@ -2263,8 +2280,10 @@ export function replaceVariables(message, variables) {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ getTemplatesForEvent
-// ✅ NEW: بيرجع القوالب الصح حسب نوع الطالب (kids/adults)
-// ✅ NEW: بيدعم الـ Offline templates كمان (24h + 30min)
+// ✅ NEW:
+//   - Pre-Attendance Ping (Offline فقط) — مشترك بين kids/adults للطالب
+//   - Offline (24h + 30min) — separate for kids/adults
+//   - Online (24h + 15min) — separate for kids/adults
 // ═══════════════════════════════════════════════════════════════════════════
 export async function getTemplatesForEvent(eventType, student, extraData = {}) {
   try {
@@ -2302,14 +2321,12 @@ export async function getTemplatesForEvent(eventType, student, extraData = {}) {
         guardianTemplateType = isAdult ? null : "reminder_15min_guardian";
         break;
 
-      // ─── ✅ NEW: Offline Reminders ─────────────────────────────
+      // ─── Offline Reminders ─────────────────────────────────────
       case "reminder_24h_offline":
         studentTemplateType = isAdult
           ? "reminder_24h_offline_adult"
           : "reminder_24h_offline_student";
-        guardianTemplateType = isAdult
-          ? null
-          : "reminder_24h_offline_guardian";
+        guardianTemplateType = isAdult ? null : "reminder_24h_offline_guardian";
         break;
       case "reminder_30min_offline":
         studentTemplateType = isAdult
@@ -2319,7 +2336,14 @@ export async function getTemplatesForEvent(eventType, student, extraData = {}) {
           ? null
           : "reminder_30min_offline_guardian";
         break;
-      // ──────────────────────────────────────────────────────────
+
+      // ─── ✅ Pre-Attendance Ping (Offline فقط) ──────────────────
+      // الطالب: قالب واحد مشترك بين kids/adults
+      // ولي الأمر: للـ kids بس
+      case "pre_attendance_ping":
+        studentTemplateType = "pre_attendance_ping_student";
+        guardianTemplateType = isAdult ? null : "pre_attendance_ping_guardian";
+        break;
 
       case "student_welcome":
         studentTemplateType = "student_welcome";
@@ -2377,7 +2401,7 @@ export async function getTemplatesForEvent(eventType, student, extraData = {}) {
         studentName: student.personalInfo?.fullName?.split(" ")[0] || "الطالب",
         guardianName: isAdult
           ? null
-          : (student.guardianInfo?.name?.split(" ")[0] || "ولي الأمر"),
+          : student.guardianInfo?.name?.split(" ")[0] || "ولي الأمر",
       },
     };
   } catch (error) {
@@ -2386,7 +2410,11 @@ export async function getTemplatesForEvent(eventType, student, extraData = {}) {
   }
 }
 
-export async function getTemplatesForFrontend(eventType, studentId, extraData = {}) {
+export async function getTemplatesForFrontend(
+  eventType,
+  studentId,
+  extraData = {},
+) {
   try {
     const student = await Student.findById(studentId).lean();
     if (!student) throw new Error("Student not found");
@@ -2398,7 +2426,8 @@ export async function getTemplatesForFrontend(eventType, studentId, extraData = 
 }
 
 export function replaceInstructorVariables(message, instructor, group) {
-  const instructorName = instructor.name?.split(" ")[0] || instructor.name || "";
+  const instructorName =
+    instructor.name?.split(" ")[0] || instructor.name || "";
   const gender = instructor.gender || "male";
 
   let salutation = "";
@@ -2425,7 +2454,8 @@ export function replaceInstructorVariables(message, instructor, group) {
 
   const timeFrom = group.schedule?.timeFrom || "{timeFrom}";
   const timeTo = group.schedule?.timeTo || "{timeTo}";
-  const studentCount = group.currentStudentsCount || group.students?.length || 0;
+  const studentCount =
+    group.currentStudentsCount || group.students?.length || 0;
 
   return message
     .replace(/\{salutation\}/g, salutation)
@@ -2484,7 +2514,7 @@ export async function sendInstructorWelcomeMessages(
       };
     }
 
-       let successCount = 0;
+    let successCount = 0;
     let failCount = 0;
     const notificationResults = [];
 
@@ -2558,11 +2588,16 @@ export async function sendInstructorWelcomeMessages(
 مع أطيب التحيات،
 إدارة Code School 💻`;
 
-        messageContent = replaceInstructorVariables(defaultTemplate, instructor, group);
+        messageContent = replaceInstructorVariables(
+          defaultTemplate,
+          instructor,
+          group,
+        );
       }
 
       try {
-        const preparedPhone = wapilotService.preparePhoneNumber(instructorPhone);
+        const preparedPhone =
+          wapilotService.preparePhoneNumber(instructorPhone);
         if (!preparedPhone) {
           throw new Error(`Invalid phone number format: ${instructorPhone}`);
         }
@@ -2601,7 +2636,10 @@ export async function sendInstructorWelcomeMessages(
             },
           });
         } catch (updateError) {
-          console.warn(`⚠️ Could not update instructor metadata:`, updateError.message);
+          console.warn(
+            `⚠️ Could not update instructor metadata:`,
+            updateError.message,
+          );
         }
       } catch (error) {
         failCount++;
@@ -2707,7 +2745,10 @@ async function sendToStudentWithLogging({
       studentName: student.personalInfo?.fullName,
       isAdult,
       sentTo: { guardian: results.guardian, student: results.student },
-      errors: { guardian: results.guardianError, student: results.studentError },
+      errors: {
+        guardian: results.guardianError,
+        student: results.studentError,
+      },
     };
   } catch (error) {
     console.error(`❌ Critical error in sendToStudentWithLogging:`, error);
@@ -2740,7 +2781,9 @@ export async function onStudentAddedToGroup(
     if (!student || !group) throw new Error("Student or Group not found");
 
     if (group.hold?.isHeld) {
-      console.log(`⏭️ [HOLD GUARD] onStudentAddedToGroup skipped — group_on_hold`);
+      console.log(
+        `⏭️ [HOLD GUARD] onStudentAddedToGroup skipped — group_on_hold`,
+      );
       throw new Error("لا يمكن إضافة طالب لجروب على Hold حاليًا");
     }
 
@@ -2758,7 +2801,8 @@ export async function onStudentAddedToGroup(
 
     const isOffline = group.deliveryMode === "offline";
     const loc = group.locationDetails || {};
-    const placeName = moduleData.placeName || loc.placeName || group.location || "";
+    const placeName =
+      moduleData.placeName || loc.placeName || group.location || "";
     const address = moduleData.address || loc.address || loc.extraDetails || "";
 
     let mapsLink = moduleData.mapsLink || "";
@@ -2772,7 +2816,9 @@ export async function onStudentAddedToGroup(
       }
     }
 
-    const groupTemplateType = isOffline ? "group_welcome_offline" : "group_welcome";
+    const groupTemplateType = isOffline
+      ? "group_welcome_offline"
+      : "group_welcome";
 
     let groupTemplate = null;
     try {
@@ -2832,7 +2878,8 @@ export async function onStudentAddedToGroup(
           finalStudentMessage = customMessages.student;
         } else if (groupTemplate) {
           const isMale =
-            String(student.personalInfo?.gender || "male").toLowerCase() !== "female";
+            String(student.personalInfo?.gender || "male").toLowerCase() !==
+            "female";
 
           let slotContent = "";
           if (isMale) {
@@ -2856,8 +2903,15 @@ export async function onStudentAddedToGroup(
 
           finalStudentMessage = replaceVariables(slotContent || "", variables);
         } else {
-          const template = await getMessageTemplate("student_welcome", language, "student");
-          const studentVars = { ...variables, salutation: variables.studentSalutation };
+          const template = await getMessageTemplate(
+            "student_welcome",
+            language,
+            "student",
+          );
+          const studentVars = {
+            ...variables,
+            salutation: variables.studentSalutation,
+          };
           finalStudentMessage = replaceVariables(template.content, studentVars);
         }
 
@@ -2894,8 +2948,9 @@ export async function onStudentAddedToGroup(
           finalGuardianMessage = customMessages.guardian;
         } else if (groupTemplate) {
           const isFather =
-            String(student.guardianInfo?.relationship || "father").toLowerCase() !==
-            "mother";
+            String(
+              student.guardianInfo?.relationship || "father",
+            ).toLowerCase() !== "mother";
 
           let slotContent = "";
           if (isFather) {
@@ -2924,8 +2979,14 @@ export async function onStudentAddedToGroup(
             language,
             "guardian",
           );
-          const guardianVars = { ...variables, salutation: variables.guardianSalutation };
-          finalGuardianMessage = replaceVariables(template.content, guardianVars);
+          const guardianVars = {
+            ...variables,
+            salutation: variables.guardianSalutation,
+          };
+          finalGuardianMessage = replaceVariables(
+            template.content,
+            guardianVars,
+          );
         }
 
         try {
@@ -2987,7 +3048,9 @@ export async function onStudentAddedToGroup(
           }
         }
       } else if (isAdult && customMessages.moduleOverview) {
-        console.log(`   ⏭️ [ADULT] Skipping module overview (guardian-targeted)`);
+        console.log(
+          `   ⏭️ [ADULT] Skipping module overview (guardian-targeted)`,
+        );
       }
     }
 
@@ -3093,7 +3156,11 @@ export function replaceStudentVariables(
   const timeTo = group.schedule?.timeTo || "{timeTo}";
 
   let instructorName = "";
-  if (group.instructors && Array.isArray(group.instructors) && group.instructors.length > 0) {
+  if (
+    group.instructors &&
+    Array.isArray(group.instructors) &&
+    group.instructors.length > 0
+  ) {
     const instructor = group.instructors[0];
     instructorName =
       instructor.name ||
@@ -3125,7 +3192,9 @@ export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
   try {
     console.log(`\n🎯 EVENT: Attendance Submitted ==========`);
 
-    const session = await Session.findById(sessionId).populate("groupId").lean();
+    const session = await Session.findById(sessionId)
+      .populate("groupId")
+      .lean();
     if (!session) throw new Error("Session not found");
 
     const notificationResult = await sendAbsenceNotifications(
@@ -3142,7 +3211,12 @@ export async function onAttendanceSubmitted(sessionId, customMessages = {}) {
     };
   } catch (error) {
     console.error("❌ Error in onAttendanceSubmitted:", error);
-    return { success: false, error: error.message, successCount: 0, failCount: 0 };
+    return {
+      success: false,
+      error: error.message,
+      successCount: 0,
+      failCount: 0,
+    };
   }
 }
 
@@ -3158,13 +3232,15 @@ export async function sendLowBalanceAlert(student) {
     // ✅ NEW: هل الطالب بالغ؟
     const isAdult = student.studentType === "adults";
 
-    const language = student.communicationPreferences?.preferredLanguage || "ar";
+    const language =
+      student.communicationPreferences?.preferredLanguage || "ar";
     const studentPhone = student.personalInfo?.whatsappNumber;
     const guardianPhone = isAdult
       ? null
-      : (student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone);
+      : student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
 
-    const remainingHours = student.creditSystem?.currentPackage?.remainingHours || 0;
+    const remainingHours =
+      student.creditSystem?.currentPackage?.remainingHours || 0;
 
     const studentFirstName =
       language === "ar"
@@ -3219,7 +3295,8 @@ export async function sendLowBalanceAlert(student) {
           isAdult,
         },
       });
-      if (studentResult.success) results.push({ recipient: "student", success: true });
+      if (studentResult.success)
+        results.push({ recipient: "student", success: true });
     }
 
     // ── Guardian message — ✅ يتخطى للـ adults ──
@@ -3243,9 +3320,12 @@ export async function sendLowBalanceAlert(student) {
           guardianName: guardianFirstName,
         },
       });
-      if (guardianResult.success) results.push({ recipient: "guardian", success: true });
+      if (guardianResult.success)
+        results.push({ recipient: "guardian", success: true });
     } else if (isAdult) {
-      console.log(`   ⏭️ [ADULT] Skipping guardian credit alert for ${student._id}`);
+      console.log(
+        `   ⏭️ [ADULT] Skipping guardian credit alert for ${student._id}`,
+      );
     }
 
     return { success: results.length > 0, results, isAdult };
@@ -3271,12 +3351,14 @@ export async function onSessionStatusChanged(
       return { success: true, message: "No notifications needed" };
     }
 
-    const session = await Session.findById(sessionId).populate("groupId").lean();
+    const session = await Session.findById(sessionId)
+      .populate("groupId")
+      .lean();
     if (!session) return { success: false, error: "Session not found" };
 
-        const group = session.groupId;
+    const group = session.groupId;
 
-        const holdCheck = await canSessionSendMessages(sessionId);
+    const holdCheck = await canSessionSendMessages(sessionId);
     if (!holdCheck.ok) {
       console.log(
         `⏭️ [HOLD GUARD] onSessionStatusChanged skipped — ${holdCheck.reason}`,
@@ -3323,7 +3405,11 @@ export async function onSessionStatusChanged(
             newStatus === "cancelled"
               ? "session_cancelled_student"
               : "session_postponed_student";
-          const template = await getMessageTemplate(templateType, language, "student");
+          const template = await getMessageTemplate(
+            templateType,
+            language,
+            "student",
+          );
           finalStudentMessage = replaceVariables(template.content, variables);
         }
 
@@ -3340,7 +3426,11 @@ export async function onSessionStatusChanged(
             newStatus === "cancelled"
               ? "session_cancelled_guardian"
               : "session_postponed_guardian";
-          const template = await getMessageTemplate(templateType, language, "guardian");
+          const template = await getMessageTemplate(
+            templateType,
+            language,
+            "guardian",
+          );
           finalGuardianMessage = replaceVariables(template.content, variables);
         }
 
@@ -3350,7 +3440,9 @@ export async function onSessionStatusChanged(
           studentMessage: finalStudentMessage,
           guardianMessage: finalGuardianMessage,
           messageType:
-            newStatus === "cancelled" ? "session_cancelled" : "session_postponed",
+            newStatus === "cancelled"
+              ? "session_cancelled"
+              : "session_postponed",
           metadata: {
             sessionId,
             sessionTitle: session.title,
@@ -3395,13 +3487,10 @@ export async function onSessionStatusChanged(
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ sendManualSessionReminder
-// ✅ NEW (Kids/Adults):
-//   - kids → reminder_24h_student/guardian (زي ما كان)
-//   - adults → reminder_24h_adult (للطالب فقط)
-// ✅ NEW (Online/Offline):
-//   - بيقبل metadata.isOffline: true → يستخدم قوالب الـ Offline
-//   - الـ Online guard بيتخطى لما isOffline = true
-//   - لو الجروب Offline + المودال مطلبش offline → نرفض
+// ✅ NEW:
+//   - kids   → reminder_24h_offline_student/guardian  (offline)
+//   - adults → reminder_24h_offline_adult            (offline)
+//   - pre_attendance_ping → pre_attendance_ping_student (+ _guardian للـ kids)
 // ═══════════════════════════════════════════════════════════════════════════
 export async function sendManualSessionReminder(
   sessionId,
@@ -3413,22 +3502,44 @@ export async function sendManualSessionReminder(
     console.log(`\n🎯 Manual Session Reminder ==========`);
     console.log(`📋 Session: ${sessionId} | Type: ${reminderType}`);
 
-    const session = await Session.findById(sessionId).populate("groupId").lean();
+    const session = await Session.findById(sessionId)
+      .populate("groupId")
+      .lean();
     if (!session) throw new Error("Session not found");
 
     const group = session.groupId;
 
     // ═══════════════════════════════════════════════════════════════
     // ✅ تحديد الـ delivery mode
-    //    Source of Truth: group.deliveryMode → ثم session.deliveryMode
-    //    + دعم force offline من المودال (metadata.isOffline)
     // ═══════════════════════════════════════════════════════════════
     const deliveryMode =
       group?.deliveryMode || session.deliveryMode || "online";
     const forceOffline = metadata?.isOffline === true;
 
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ Pre-Attendance Ping — Offline فقط
+    // ═══════════════════════════════════════════════════════════════
+    const isPrePing = reminderType === "pre_attendance_ping";
+    const isOfflineMode = deliveryMode === "offline" || forceOffline;
+
+    if (isPrePing && !isOfflineMode) {
+      console.warn(
+        `⏭️ [GUARD] sendManualSessionReminder — pre_attendance_ping is offline-only (${sessionId})`,
+      );
+      return {
+        success: false,
+        reason: "pre_ping_offline_only",
+        deliveryMode,
+        totalStudents: 0,
+        successCount: 0,
+        failCount: 0,
+        reminderType,
+        notificationResults: [],
+      };
+    }
+
     // ✅ لو الجروب Offline والمودال مطلبش offline → نرفض (حماية)
-    if (deliveryMode === "offline" && !forceOffline) {
+    if (deliveryMode === "offline" && !forceOffline && !isPrePing) {
       console.warn(
         `⏭️ [GUARD] sendManualSessionReminder skipped — session is OFFLINE (${sessionId}). Use offline reminder instead.`,
       );
@@ -3443,9 +3554,6 @@ export async function sendManualSessionReminder(
         notificationResults: [],
       };
     }
-
-    // ✅ الفعلي: offline لو الجروب أوفلاين أو المودال طلب
-    const isOfflineMode = deliveryMode === "offline" || forceOffline;
 
     // ── Hold Guard ──
     const holdCheck = await canSessionSendMessages(sessionId);
@@ -3480,7 +3588,6 @@ export async function sendManualSessionReminder(
 
     for (const student of students) {
       try {
-        // ✅ هل الطالب بالغ؟
         const isAdult = student.studentType === "adults";
 
         const { variables, language } = await prepareStudentVariables(
@@ -3489,13 +3596,10 @@ export async function sendManualSessionReminder(
           session,
           {
             isOffline: isOfflineMode,
-            // لو offline: مرر معلومات المكان
             ...(isOfflineMode
               ? {
                   placeName:
-                    group?.locationDetails?.placeName ||
-                    group?.location ||
-                    "",
+                    group?.locationDetails?.placeName || group?.location || "",
                   address:
                     group?.locationDetails?.address ||
                     group?.locationDetails?.extraDetails ||
@@ -3508,10 +3612,16 @@ export async function sendManualSessionReminder(
         const studentIdStr = student._id.toString();
 
         // ═════════════════════════════════════════════════════════
-        // ✅ تحديد templates حسب Offline/Online + Kids/Adults
+        // ✅ تحديد الـ templates
         // ═════════════════════════════════════════════════════════
         let studentTemplateType;
-        if (isOfflineMode) {
+        let guardianTemplateType;
+
+        if (isPrePing) {
+          // ✅ Pre-Ping — مشترك بين kids/adults (قالب واحد للطالب)
+          studentTemplateType = "pre_attendance_ping_student";
+          guardianTemplateType = "pre_attendance_ping_guardian"; // للـ kids فقط
+        } else if (isOfflineMode) {
           if (isAdult) {
             studentTemplateType = is24h
               ? "reminder_24h_offline_adult"
@@ -3521,6 +3631,9 @@ export async function sendManualSessionReminder(
               ? "reminder_24h_offline_student"
               : "reminder_30min_offline_student";
           }
+          guardianTemplateType = is24h
+            ? "reminder_24h_offline_guardian"
+            : "reminder_30min_offline_guardian";
         } else {
           if (isAdult) {
             studentTemplateType = is24h
@@ -3531,15 +3644,10 @@ export async function sendManualSessionReminder(
               ? "reminder_24h_student"
               : "reminder_15min_student";
           }
-        }
-
-        const guardianTemplateType = isOfflineMode
-          ? is24h
-            ? "reminder_24h_offline_guardian"
-            : "reminder_30min_offline_guardian"
-          : is24h
+          guardianTemplateType = is24h
             ? "reminder_24h_guardian"
             : "reminder_15min_guardian";
+        }
 
         // ── Student message ──────────────────────────────────────
         let finalStudentMessage = "";
@@ -3607,11 +3715,13 @@ export async function sendManualSessionReminder(
               language,
               "guardian",
             );
-            finalGuardianMessage = replaceVariables(template.content, variables);
+            finalGuardianMessage = replaceVariables(
+              template.content,
+              variables,
+            );
           }
         }
 
-        // ✅ للـ adults → guardianMessage: null عشان sendToStudentWithLogging تتخطاه
         const result = await sendToStudentWithLogging({
           studentId: student._id,
           student,
@@ -3625,6 +3735,7 @@ export async function sendManualSessionReminder(
             reminderType,
             isAdult,
             isOffline: isOfflineMode,
+            isPrePing,
           },
         });
 
@@ -3635,6 +3746,7 @@ export async function sendManualSessionReminder(
             language,
             isAdult,
             isOffline: isOfflineMode,
+            isPrePing,
           });
         } else {
           failCount++;
@@ -3650,8 +3762,15 @@ export async function sendManualSessionReminder(
       try {
         let updateField = {};
 
-        if (isOfflineMode) {
-          // ✅ Offline flags
+        if (isPrePing) {
+          updateField = {
+            "automationEvents.preAttendancePingSent": true,
+            "automationEvents.preAttendancePingSentAt": new Date(),
+            "automationEvents.preAttendancePingStudentsNotified": successCount,
+            "automationEvents.reminderStatsOffline.totalPingSent": successCount,
+            "automationEvents.reminderStatsOffline.totalPingFailed": failCount,
+          };
+        } else if (isOfflineMode) {
           if (is24h) {
             updateField = {
               "automationEvents.reminder24hOfflineSent": true,
@@ -3660,8 +3779,7 @@ export async function sendManualSessionReminder(
                 successCount,
               "automationEvents.reminderStatsOffline.total24hSent":
                 successCount,
-              "automationEvents.reminderStatsOffline.total24hFailed":
-                failCount,
+              "automationEvents.reminderStatsOffline.total24hFailed": failCount,
             };
           } else {
             updateField = {
@@ -3676,7 +3794,6 @@ export async function sendManualSessionReminder(
             };
           }
         } else {
-          // ✅ Online flags (زي ما كان)
           if (is24h) {
             updateField = {
               "automationEvents.reminder24hSent": true,
@@ -3719,6 +3836,7 @@ export async function sendManualSessionReminder(
       failCount,
       reminderType,
       isOffline: isOfflineMode,
+      isPrePing,
       notificationResults,
     };
   } catch (error) {
@@ -3748,7 +3866,11 @@ export async function onGroupCompleted(
 
     if (group.hold?.isHeld) {
       console.log(`⏭️ [HOLD GUARD] onGroupCompleted skipped — group_on_hold`);
-      return { success: false, error: "Group is on hold", reason: "group_on_hold" };
+      return {
+        success: false,
+        error: "Group is on hold",
+        reason: "group_on_hold",
+      };
     }
 
     // ✅ FIX: ضفنا "studentType" في الـ select عشان الـ Kids/Adults يشتغل
@@ -3819,7 +3941,11 @@ export async function onGroupCompleted(
           feedbackLink: feedbackLink || "",
         };
 
-        const certificates = await getStudentCertificates(student, group, group.courseId);
+        const certificates = await getStudentCertificates(
+          student,
+          group,
+          group.courseId,
+        );
 
         let certificateLine = "";
         if (certificates.length > 0) {
@@ -3828,13 +3954,17 @@ export async function onGroupCompleted(
               certificates.length === 1
                 ? `\n\n🏆 شهادتك جاهزة!\n${certificates[0].moduleTitle}: ${certificates[0].imageUrl}`
                 : `\n\n🏆 شهاداتك جاهزة (${certificates.length}):\n` +
-                  certificates.map((c) => `• ${c.moduleTitle}: ${c.imageUrl}`).join("\n");
+                  certificates
+                    .map((c) => `• ${c.moduleTitle}: ${c.imageUrl}`)
+                    .join("\n");
           } else {
             certificateLine =
               certificates.length === 1
                 ? `\n\n🏆 Your certificate is ready!\n${certificates[0].moduleTitle}: ${certificates[0].imageUrl}`
                 : `\n\n🏆 Your certificates are ready (${certificates.length}):\n` +
-                  certificates.map((c) => `• ${c.moduleTitle}: ${c.imageUrl}`).join("\n");
+                  certificates
+                    .map((c) => `• ${c.moduleTitle}: ${c.imageUrl}`)
+                    .join("\n");
           }
         }
 
@@ -3853,7 +3983,10 @@ export async function onGroupCompleted(
             language,
             "student",
           );
-          finalStudentMessage = replaceVariables(template.content, enhancedVars);
+          finalStudentMessage = replaceVariables(
+            template.content,
+            enhancedVars,
+          );
         }
 
         // ── Guardian message ────────────────────────────────────────
@@ -3863,14 +3996,20 @@ export async function onGroupCompleted(
           if (perStudentMsgs?.guardian?.trim()) {
             finalGuardianMessage = perStudentMsgs.guardian;
           } else if (customMessage) {
-            finalGuardianMessage = replaceVariables(customMessage, enhancedVars);
+            finalGuardianMessage = replaceVariables(
+              customMessage,
+              enhancedVars,
+            );
           } else {
             const template = await getMessageTemplate(
               "group_completion_guardian",
               language,
               "guardian",
             );
-            finalGuardianMessage = replaceVariables(template.content, enhancedVars);
+            finalGuardianMessage = replaceVariables(
+              template.content,
+              enhancedVars,
+            );
           }
         } else {
           console.log(
@@ -3883,7 +4022,11 @@ export async function onGroupCompleted(
           if (!finalStudentMessage.includes("🏆")) {
             finalStudentMessage += certificateLine;
           }
-          if (!isAdult && finalGuardianMessage && !finalGuardianMessage.includes("🏆")) {
+          if (
+            !isAdult &&
+            finalGuardianMessage &&
+            !finalGuardianMessage.includes("🏆")
+          ) {
             finalGuardianMessage += certificateLine;
           }
         }
@@ -3898,7 +4041,11 @@ export async function onGroupCompleted(
           if (!finalStudentMessage.includes(feedbackLink)) {
             finalStudentMessage += feedbackSuffix;
           }
-          if (!isAdult && finalGuardianMessage && !finalGuardianMessage.includes(feedbackLink)) {
+          if (
+            !isAdult &&
+            finalGuardianMessage &&
+            !finalGuardianMessage.includes(feedbackLink)
+          ) {
             finalGuardianMessage += feedbackSuffix;
           }
         }
@@ -3965,7 +4112,8 @@ export function processCustomMessage(message, student, session, group, status) {
   const variables = {
     guardianName,
     studentName,
-    sessionName: extractSessionShortName(session.title) || session.title || "Session",
+    sessionName:
+      extractSessionShortName(session.title) || session.title || "Session",
     sessionNumber: `Session ${session.sessionNumber || "N/A"}`,
     date: session.scheduledDate
       ? new Date(session.scheduledDate).toLocaleDateString("en-US", {
@@ -3989,7 +4137,12 @@ export function processCustomMessage(message, student, session, group, status) {
   return processedMessage;
 }
 
-export function processCompletionMessage(message, student, group, feedbackLink) {
+export function processCompletionMessage(
+  message,
+  student,
+  group,
+  feedbackLink,
+) {
   const studentName = student.personalInfo?.fullName || "Student";
   const courseName =
     group.courseId?.title || group.courseSnapshot?.title || "Course";
@@ -4010,7 +4163,12 @@ export function processCompletionMessage(message, student, group, feedbackLink) 
   return processedMessage;
 }
 
-export function prepareCompletionMessage(studentName, group, feedbackLink, language = "ar") {
+export function prepareCompletionMessage(
+  studentName,
+  group,
+  feedbackLink,
+  language = "ar",
+) {
   const courseName =
     group.courseId?.title || group.courseSnapshot?.title || "Course";
 
@@ -4356,7 +4514,13 @@ ${session.meetingLink ? `🔗 رابط الدخول: ${session.meetingLink}` : "
   return { guardianMessage, studentMessage };
 }
 
-export function prepareReminderMessage(studentName, session, group, reminderType, language = "ar") {
+export function prepareReminderMessage(
+  studentName,
+  session,
+  group,
+  reminderType,
+  language = "ar",
+) {
   const messages = prepareReminderMessages(
     studentName,
     session,
@@ -4454,7 +4618,9 @@ Code School Team`;
 function buildInstructorsNames(instructors, language = "ar") {
   if (!instructors || instructors.length === 0) return "";
 
-  const names = instructors.map((i) => i.userId?.name || i.name).filter(Boolean);
+  const names = instructors
+    .map((i) => i.userId?.name || i.name)
+    .filter(Boolean);
 
   if (names.length === 0) return "";
   if (names.length === 1) return names[0];
@@ -4498,14 +4664,20 @@ async function getCompletedModuleIndexes(groupId) {
   const completed = [];
   Object.entries(byModule).forEach(([idx, moduleSessions]) => {
     const allDone =
-      moduleSessions.length > 0 && moduleSessions.every((s) => s.status === "completed");
+      moduleSessions.length > 0 &&
+      moduleSessions.every((s) => s.status === "completed");
     if (allDone) completed.push(Number(idx));
   });
 
   return completed.sort((a, b) => a - b);
 }
 
-async function sendModuleOverviewMessage(student, group, moduleData, moduleIdx) {
+async function sendModuleOverviewMessage(
+  student,
+  group,
+  moduleData,
+  moduleIdx,
+) {
   const language = student.communicationPreferences?.preferredLanguage || "ar";
   const gender = student.personalInfo?.gender || "male";
   const relationship = student.guardianInfo?.relationship || "father";
@@ -4519,7 +4691,11 @@ async function sendModuleOverviewMessage(student, group, moduleData, moduleIdx) 
   if (!guardianPhone)
     return { success: false, skipped: true, reason: "no_guardian_phone" };
 
-  const template = await getMessageTemplate("module_overview", language, "guardian");
+  const template = await getMessageTemplate(
+    "module_overview",
+    language,
+    "guardian",
+  );
 
   const guardianSalutation = await wapilotService.getGuardianSalutation(
     guardianName,
@@ -4527,7 +4703,10 @@ async function sendModuleOverviewMessage(student, group, moduleData, moduleIdx) 
     guardianNickname,
     language,
   );
-  const childTitle = await wapilotService.getStudentChildTitle(gender, language);
+  const childTitle = await wapilotService.getStudentChildTitle(
+    gender,
+    language,
+  );
   const supervisorName =
     (await wapilotService.getDbVariable("supervisorName", language)) || "";
 
@@ -4569,7 +4748,13 @@ async function sendModuleOverviewMessage(student, group, moduleData, moduleIdx) 
   });
 }
 
-async function claimModuleOverviewSlot(studentId, groupId, courseId, moduleIdx, moduleTitle) {
+async function claimModuleOverviewSlot(
+  studentId,
+  groupId,
+  courseId,
+  moduleIdx,
+  moduleTitle,
+) {
   try {
     const updated = await Student.findOneAndUpdate(
       {
@@ -4632,7 +4817,11 @@ async function releaseModuleOverviewClaim(studentId, groupId, moduleIdx) {
       },
       {
         $pull: {
-          moduleOverviewsSent: { groupId, moduleIndex: moduleIdx, status: "sending" },
+          moduleOverviewsSent: {
+            groupId,
+            moduleIndex: moduleIdx,
+            status: "sending",
+          },
         },
       },
     );
@@ -4690,7 +4879,11 @@ export async function checkAndSendModuleOverviewNotifications() {
           continue;
         }
 
-        for (let moduleIdx = 1; moduleIdx <= highestCompleted + 1; moduleIdx++) {
+        for (
+          let moduleIdx = 1;
+          moduleIdx <= highestCompleted + 1;
+          moduleIdx++
+        ) {
           if (moduleIdx >= curriculum.length) continue;
 
           const eligible = await canSendMessage(student);
@@ -4719,7 +4912,12 @@ export async function checkAndSendModuleOverviewNotifications() {
 
           let sendResult;
           try {
-            sendResult = await sendModuleOverviewMessage(student, group, moduleData, moduleIdx);
+            sendResult = await sendModuleOverviewMessage(
+              student,
+              group,
+              moduleData,
+              moduleIdx,
+            );
           } catch (sendErr) {
             console.error(
               `❌ sendModuleOverviewMessage threw [student=${student._id}, module=${moduleIdx}]:`,
@@ -4846,7 +5044,12 @@ export async function checkAndSendGroupCompletionNotifications() {
 
       const feedbackLink = group.metadata?.feedbackLink || null;
 
-      const sendResult = await onGroupCompleted(group._id, null, feedbackLink, {});
+      const sendResult = await onGroupCompleted(
+        group._id,
+        null,
+        feedbackLink,
+        {},
+      );
 
       await Group.findByIdAndUpdate(group._id, {
         $set: {
@@ -4872,7 +5075,10 @@ export async function checkAndSendGroupCompletionNotifications() {
         failCount: sendResult.failCount || 0,
       });
     } catch (groupErr) {
-      console.error(`❌ Error processing group ${group._id}:`, groupErr.message);
+      console.error(
+        `❌ Error processing group ${group._id}:`,
+        groupErr.message,
+      );
       results.push({
         groupId: group._id,
         groupName: group.name,
@@ -4910,7 +5116,11 @@ function buildMapsLink(group, session) {
   return "";
 }
 
-async function prepareOfflineLocationVariables(group, session, language = "ar") {
+async function prepareOfflineLocationVariables(
+  group,
+  session,
+  language = "ar",
+) {
   const loc = group?.locationDetails || {};
 
   const placeName =
@@ -4939,7 +5149,9 @@ export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
     console.log(`\n📍 OFFLINE 24h Reminder ==========`);
     console.log(`📋 Session: ${sessionId}`);
 
-    const session = await Session.findById(sessionId).populate("groupId").lean();
+    const session = await Session.findById(sessionId)
+      .populate("groupId")
+      .lean();
     if (!session) throw new Error("Session not found");
 
     const group = await Group.findById(session.groupId._id || session.groupId)
@@ -4984,23 +5196,45 @@ export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
         // ✅ هل الطالب بالغ؟
         const isAdult = student.studentType === "adults";
 
-        const { variables, language } = await prepareStudentVariables(student, group, session);
-        const locVars = await prepareOfflineLocationVariables(group, session, language);
+        const { variables, language } = await prepareStudentVariables(
+          student,
+          group,
+          session,
+        );
+        const locVars = await prepareOfflineLocationVariables(
+          group,
+          session,
+          language,
+        );
         Object.assign(variables, locVars);
 
         // ✅ تحديد student template حسب النوع
         const studentTemplateType = isAdult
           ? "reminder_24h_offline_adult"
           : "reminder_24h_offline_student";
-        const studentTpl = await getMessageTemplate(studentTemplateType, language, "student");
-        const finalStudentMessage = replaceVariables(studentTpl.content, variables);
+        const studentTpl = await getMessageTemplate(
+          studentTemplateType,
+          language,
+          "student",
+        );
+        const finalStudentMessage = replaceVariables(
+          studentTpl.content,
+          variables,
+        );
 
         // ✅ للـ adults → مش هنبعت رسالة لولي أمر خالص
         let finalGuardianMessage = null;
         if (!isAdult) {
           const guardianTemplateType = "reminder_24h_offline_guardian";
-          const guardianTpl = await getMessageTemplate(guardianTemplateType, language, "guardian");
-          finalGuardianMessage = replaceVariables(guardianTpl.content, variables);
+          const guardianTpl = await getMessageTemplate(
+            guardianTemplateType,
+            language,
+            "guardian",
+          );
+          finalGuardianMessage = replaceVariables(
+            guardianTpl.content,
+            variables,
+          );
         }
 
         const result = await sendToStudentWithLogging({
@@ -5054,7 +5288,9 @@ export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
 export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
   try {
     console.log(`\n🚗 OFFLINE 30min Drop-off Alert ==========`);
-    const session = await Session.findById(sessionId).populate("groupId").lean();
+    const session = await Session.findById(sessionId)
+      .populate("groupId")
+      .lean();
     if (!session) throw new Error("Session not found");
 
     const group = await Group.findById(session.groupId._id || session.groupId)
@@ -5095,23 +5331,45 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
         // ✅ هل الطالب بالغ؟
         const isAdult = student.studentType === "adults";
 
-        const { variables, language } = await prepareStudentVariables(student, group, session);
-        const locVars = await prepareOfflineLocationVariables(group, session, language);
+        const { variables, language } = await prepareStudentVariables(
+          student,
+          group,
+          session,
+        );
+        const locVars = await prepareOfflineLocationVariables(
+          group,
+          session,
+          language,
+        );
         Object.assign(variables, locVars);
 
         // ✅ تحديد student template حسب النوع
         const studentTemplateType = isAdult
           ? "reminder_30min_offline_adult"
           : "reminder_30min_offline_student";
-        const studentTpl = await getMessageTemplate(studentTemplateType, language, "student");
-        const finalStudentMessage = replaceVariables(studentTpl.content, variables);
+        const studentTpl = await getMessageTemplate(
+          studentTemplateType,
+          language,
+          "student",
+        );
+        const finalStudentMessage = replaceVariables(
+          studentTpl.content,
+          variables,
+        );
 
         // ✅ للـ adults → مش هنبعت رسالة لولي أمر خالص
         let finalGuardianMessage = null;
         if (!isAdult) {
           const guardianTemplateType = "reminder_30min_offline_guardian";
-          const guardianTpl = await getMessageTemplate(guardianTemplateType, language, "guardian");
-          finalGuardianMessage = replaceVariables(guardianTpl.content, variables);
+          const guardianTpl = await getMessageTemplate(
+            guardianTemplateType,
+            language,
+            "guardian",
+          );
+          finalGuardianMessage = replaceVariables(
+            guardianTpl.content,
+            variables,
+          );
         }
 
         const result = await sendToStudentWithLogging({
@@ -5159,7 +5417,9 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
 export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
   try {
     console.log(`\n✅ OFFLINE Pre-Attendance Ping ==========`);
-    const session = await Session.findById(sessionId).populate("groupId").lean();
+    const session = await Session.findById(sessionId)
+      .populate("groupId")
+      .lean();
     if (!session) throw new Error("Session not found");
 
     const group = await Group.findById(session.groupId._id || session.groupId)
@@ -5167,7 +5427,7 @@ export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
       .lean();
     if (!group) throw new Error("Group not found");
 
-       const holdCheck = await canSessionSendMessages(sessionId);
+    const holdCheck = await canSessionSendMessages(sessionId);
     if (!holdCheck.ok) {
       console.log(
         `⏭️ [HOLD GUARD] sendOfflinePreAttendancePing skipped — ${holdCheck.reason}`,
@@ -5197,21 +5457,31 @@ export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
           continue;
         }
 
-        const { variables, language } = await prepareStudentVariables(student, group, session);
+        const { variables, language } = await prepareStudentVariables(
+          student,
+          group,
+          session,
+        );
 
         const studentTpl = await getMessageTemplate(
           "pre_attendance_ping_student",
           language,
           "student",
         );
-        const finalStudentMessage = replaceVariables(studentTpl.content, variables);
+        const finalStudentMessage = replaceVariables(
+          studentTpl.content,
+          variables,
+        );
 
         const guardianTpl = await getMessageTemplate(
           "pre_attendance_ping_guardian",
           language,
           "guardian",
         );
-        const finalGuardianMessage = replaceVariables(guardianTpl.content, variables);
+        const finalGuardianMessage = replaceVariables(
+          guardianTpl.content,
+          variables,
+        );
 
         const result = await sendToStudentWithLogging({
           studentId: student._id,
@@ -5252,11 +5522,17 @@ export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
   }
 }
 
-export async function sendInstructorOfflineReminder(sessionId, reminderType, metadata = {}) {
+export async function sendInstructorOfflineReminder(
+  sessionId,
+  reminderType,
+  metadata = {},
+) {
   try {
     console.log(`\n👨‍🏫 Instructor OFFLINE Reminder | Type: ${reminderType}`);
 
-    const session = await Session.findById(sessionId).populate("groupId").lean();
+    const session = await Session.findById(sessionId)
+      .populate("groupId")
+      .lean();
     if (!session) throw new Error("Session not found");
 
     const group = await Group.findById(session.groupId._id || session.groupId)
@@ -5264,7 +5540,7 @@ export async function sendInstructorOfflineReminder(sessionId, reminderType, met
       .lean();
     if (!group) throw new Error("Group not found");
 
-        const holdCheck = await canSessionSendMessages(sessionId);
+    const holdCheck = await canSessionSendMessages(sessionId);
     if (!holdCheck.ok) {
       console.log(
         `⏭️ [HOLD GUARD] sendInstructorOfflineReminder skipped — ${holdCheck.reason}`,
@@ -5288,7 +5564,7 @@ export async function sendInstructorOfflineReminder(sessionId, reminderType, met
     const dbTemplateTypeMap = {
       "24hours_offline": "reminder_24h_offline",
       "30min_offline": "reminder_30min_offline",
-      "pre_attendance_ping": "pre_attendance_ping",
+      pre_attendance_ping: "pre_attendance_ping",
     };
 
     const dbTemplateType = dbTemplateTypeMap[reminderType] || reminderType;
@@ -5325,7 +5601,11 @@ export async function sendInstructorOfflineReminder(sessionId, reminderType, met
           group,
           session,
         );
-        const locVars = await prepareOfflineLocationVariables(group, session, language);
+        const locVars = await prepareOfflineLocationVariables(
+          group,
+          session,
+          language,
+        );
         Object.assign(variables, locVars);
 
         let messageContent = "";
@@ -5355,10 +5635,14 @@ export async function sendInstructorOfflineReminder(sessionId, reminderType, met
         }
 
         const finalMessage = replaceVariables(messageContent, variables);
-        const preparedPhone = wapilotService.preparePhoneNumber(instructorPhone);
+        const preparedPhone =
+          wapilotService.preparePhoneNumber(instructorPhone);
         if (!preparedPhone) throw new Error("Invalid phone number");
 
-        const sendResult = await wapilotService.sendTextMessage(preparedPhone, finalMessage);
+        const sendResult = await wapilotService.sendTextMessage(
+          preparedPhone,
+          finalMessage,
+        );
 
         if (sendResult?.success) {
           successCount++;

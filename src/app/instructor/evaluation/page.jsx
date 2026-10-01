@@ -122,6 +122,22 @@ function AnimatedCounter({ value, duration = 800 }) {
   return <span>{count}</span>;
 }
 
+// ─── Hold Notice (الرسائل متوقفة بسبب الـ Hold) ───────────────────────────────
+function HoldNotice({ isAr }) {
+  const t = (ar, en) => isAr ? ar : en;
+  return (
+    <div className="flex items-center gap-3 p-4 rounded-2xl bg-[#ff6437]/10 dark:bg-[#ff6437]/5 border border-[#ff6437]/30 dark:border-[#ff6437]/20">
+      <AlertCircle className="w-5 h-5 text-[#ff6437] flex-shrink-0" />
+      <p className="text-xs font-bold text-[#ff6437] leading-relaxed">
+        {t(
+          "الجروب على Hold — التقييم وإكمال الجلسة شغالين، لكن الرسائل مش هتتبعت.",
+          "Group is on hold — evaluation and completion work, but messages won't be sent."
+        )}
+      </p>
+    </div>
+  );
+}
+
 // ─── Comment Editor Modal ─────────────────────────────────────────────────────
 function CommentEditorModal({ student, decision, initialValue, isAr, onClose, onSave }) {
   const [value, setValue] = useState(initialValue || "");
@@ -406,8 +422,8 @@ function Skeleton() {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
-export default function InstructorEvaluationPage() {
+// ─── Session Evaluation Page ──────────────────────────────────────────────────
+function SessionEvaluationPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const sessionId = searchParams.get("session");
@@ -442,6 +458,12 @@ export default function InstructorEvaluationPage() {
 
   // ✅ هل هي حصة تعويضية؟
   const isComplimentary = sessionData?.isComplimentary === true;
+
+  // ✅ الجروب على Hold → الرسائل متوقفة (التقييم والإكمال شغالين)
+  const messagesSuppressed = sessionData?.messagesSuppressed === true;
+
+  // ✅ كل الطلاب غايبين/معذورين → مفيش تقييمات، بس المدرس يقدر يكمّل الجلسة
+  const allStudentsExcluded = sessionData?.allStudentsExcluded === true;
 
   const fetchData = useCallback(async () => {
     if (!sessionId) { setError(t("لم يتم تحديد جلسة", "No session specified")); setLoading(false); return; }
@@ -516,7 +538,8 @@ export default function InstructorEvaluationPage() {
 
   const handleSubmit = async () => {
     const filled = Object.keys(decisions);
-    if (filled.length === 0) return;
+    // ✅ لو كل الطلاب غايبين/معذورين، الإرسال بـ evaluations فاضية مسموح (الباك بيقبلها في الحالة دي بس)
+    if (filled.length === 0 && !allStudentsExcluded) return;
     try {
       setSubmitting(true);
       setSubmitError("");
@@ -807,6 +830,9 @@ export default function InstructorEvaluationPage() {
               </div>
             </div>
 
+            {/* ✅ تنبيه الـ Hold */}
+            {messagesSuppressed && <HoldNotice isAr={isAr} />}
+
             {/* ✅ Recording Link — للأونلاين بس (الـ Offline مفيش تسجيل) */}
             {!isOfflineSession && (
               <GlobalRecordingLinkCard
@@ -858,12 +884,41 @@ export default function InstructorEvaluationPage() {
           </>
         )}
 
+        {/* ✅ مفيش طلاب للتقييم — يا كل الطلاب غايبين/معذورين (يقدر يكمّل الجلسة) يا الجروب فاضي */}
         {!loading && !error && students.length === 0 && (
-          <div className="text-center py-16 bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#30363d] shadow-sm">
-            <div className="w-24 h-24 mx-auto bg-gray-100 dark:bg-[#21262d] rounded-full flex items-center justify-center mb-4">
-              <Users className="w-12 h-12 text-gray-300 dark:text-[#6e7681]" />
+          <div className="space-y-4">
+            {messagesSuppressed && <HoldNotice isAr={isAr} />}
+
+            <div className="text-center py-16 bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#30363d] shadow-sm">
+              <div className="w-24 h-24 mx-auto bg-gray-100 dark:bg-[#21262d] rounded-full flex items-center justify-center mb-4">
+                <Users className="w-12 h-12 text-gray-300 dark:text-[#6e7681]" />
+              </div>
+              <p className="text-gray-500 dark:text-[#8b949e] font-medium mb-4 px-4">
+                {allStudentsExcluded
+                  ? t("كل الطلاب غايبين أو معذورين — مفيش تقييمات", "All students absent/excused — nothing to evaluate")
+                  : t("لا يوجد طلاب في هذا الجروب", "No students in this group")}
+              </p>
+
+              {allStudentsExcluded && (
+                <>
+                  {submitError && (
+                    <div className="flex items-center justify-center gap-2 mx-auto mb-4 max-w-sm p-2.5 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800/40">
+                      <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                      <p className="text-xs font-bold text-red-600 dark:text-red-400">{submitError}</p>
+                    </div>
+                  )}
+                  <button
+                    onClick={handleSubmit}
+                    disabled={submitting}
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-black text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                    style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
+                    {submitting
+                      ? <><Loader2 className="w-4 h-4 animate-spin" />{t("جاري الإكمال...", "Completing...")}</>
+                      : <><CheckCheck className="w-4 h-4" />{t("إكمال الجلسة", "Complete Session")}</>}
+                  </button>
+                </>
+              )}
             </div>
-            <p className="text-gray-500 dark:text-[#8b949e] font-medium">{t("لا يوجد طلاب في هذا الجروب", "No students in this group")}</p>
           </div>
         )}
       </div>
@@ -949,4 +1004,148 @@ export default function InstructorEvaluationPage() {
       `}</style>
     </div>
   );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ Interview Evaluation — مفيش حضور، تقييم على طول
+//    طفل → الرسالة لولي الأمر | بالغ → الرسالة للطالب نفسه
+// ═══════════════════════════════════════════════════════════════════════════
+function InterviewEvaluation({ interviewId }) {
+  const router = useRouter();
+  const { locale } = useLocale();
+  const isAr = locale === "ar";
+  const t = (ar, en) => (isAr ? ar : en);
+  const url = `/api/instructor/interviews/${interviewId}/evaluation`;
+
+  const call = (method, body) =>
+    fetch(url, {
+      method,
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    }).then((r) => r.json());
+
+  const [info, setInfo] = useState(null);
+  const [decision, setDecision] = useState(null);
+  const [comment, setComment] = useState("");
+  const [preview, setPreview] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    call("GET").then((d) => {
+      if (!d.success) return setErr(d.message || d.error || "Error");
+      setInfo(d.data);
+      if (d.data.evaluation) {
+        setDecision(d.data.evaluation.decision);
+        setComment(d.data.evaluation.instructorComment || "");
+      }
+    }).catch(() => setErr(t("خطأ في الاتصال", "Connection error")));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interviewId]);
+
+  useEffect(() => {
+    if (!decision || !info?.canEvaluate) { setPreview(""); return; }
+    const id = setTimeout(() => {
+      call("POST", { decision, instructorComment: comment })
+        .then((d) => setPreview(d.success ? d.data.content : ""))
+        .catch(() => setPreview(""));
+    }, 400);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decision, comment, info]);
+
+  const submit = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      const d = await call("PATCH", { decision, instructorComment: comment });
+      if (d.success) router.push("/instructor/sessions");
+      else setErr(d.error || d.message || t("فشل الحفظ", "Failed to save"));
+    } catch {
+      setErr(t("خطأ في الاتصال", "Connection error"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!info) {
+    return (
+      <div className="p-8 text-center text-sm" dir={isAr ? "rtl" : "ltr"}>
+        {err || <Loader2 className="w-5 h-5 animate-spin mx-auto" />}
+      </div>
+    );
+  }
+
+  const who = info.student.isAdult
+    ? t("الطالب", "the student")
+    : t("ولي الأمر", "the guardian");
+
+  return (
+    <div className="min-h-screen bg-[#f8f9fb] dark:bg-[#0a0f17]" dir={isAr ? "rtl" : "ltr"}>
+      <div className="max-w-2xl mx-auto p-4 space-y-4">
+        <button onClick={() => router.push("/instructor/sessions")}
+          className="text-xs font-bold text-gray-500 hover:text-[#ff6700]">
+          {t("← رجوع", "← Back")}
+        </button>
+
+        <h1 className="font-black text-lg text-gray-900 dark:text-[#e6edf3]">
+          {info.interview.title} — {info.student.name}
+        </h1>
+        <p className="text-xs text-gray-500 dark:text-[#8b949e]">
+          {t(
+            `المقابلة من غير حضور — الرسالة هتروح لـ${who}`,
+            `No attendance for interviews — the message goes to ${who}`
+          )}
+        </p>
+
+        {!info.canEvaluate && (
+          <p className="text-xs font-bold text-red-600">
+            {t("المقابلة دي مش متاحة للتقييم حاليًا", "This interview can't be evaluated now")}
+          </p>
+        )}
+
+        <div className="grid grid-cols-3 gap-2">
+          {["pass", "review", "repeat"].map((k) => (
+            <button key={k} onClick={() => setDecision(k)}
+              className={`py-3 rounded-xl text-xs font-black border ${decision === k ? "text-white border-transparent" : "bg-white dark:bg-[#161b22] text-gray-700 dark:text-[#c9d1d9]"}`}
+              style={decision === k ? { background: "linear-gradient(135deg,#004d59,#ff6700)" } : {}}>
+              {isAr ? DECISIONS[k].ar : DECISIONS[k].en}
+            </button>
+          ))}
+        </div>
+
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value.slice(0, MAX_COMMENT_LENGTH))}
+          rows={5}
+          className="w-full rounded-xl border p-3 text-sm bg-white dark:bg-[#161b22] text-gray-800 dark:text-[#e6edf3]"
+          placeholder={t("تعليق المُقابِل", "Interviewer comment")}
+        />
+
+        {preview && (
+          <pre className="whitespace-pre-wrap text-xs p-3 rounded-xl bg-gray-50 dark:bg-[#21262d] text-gray-700 dark:text-[#c9d1d9]">
+            {preview}
+          </pre>
+        )}
+
+        {err && <p className="text-xs font-bold text-red-600">{err}</p>}
+
+        <button disabled={!decision || busy || !info.canEvaluate} onClick={submit}
+          className="w-full py-3 rounded-xl text-white font-black disabled:opacity-50"
+          style={{ background: "linear-gradient(135deg,#004d59,#ff6700)" }}>
+          {busy ? t("جاري الحفظ...", "Saving...") : t("حفظ التقييم وإرسال", "Save & Send")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Entry: بيفرّق بين تقييم مقابلة وتقييم جلسة ──────────────────────────────
+export default function InstructorEvaluationPage() {
+  const sp = useSearchParams();
+  const interviewId = sp.get("interview");
+  return interviewId
+    ? <InterviewEvaluation interviewId={interviewId} />
+    : <SessionEvaluationPage />;
 }

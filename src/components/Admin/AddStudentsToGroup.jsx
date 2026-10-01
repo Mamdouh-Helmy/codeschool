@@ -341,9 +341,9 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
 
       const startDate = group?.schedule?.startDate
         ? new Date(group.schedule.startDate).toLocaleDateString(
-            lang === "ar" ? "ar-EG" : "en-US",
-            { weekday: "long", year: "numeric", month: "long", day: "numeric" }
-          )
+          lang === "ar" ? "ar-EG" : "en-US",
+          { weekday: "long", year: "numeric", month: "long", day: "numeric" }
+        )
         : "";
 
       const instructorNames = buildInstructorsNames(group?.instructors, lang);
@@ -368,10 +368,10 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       // Smart block
       const sessionLocationBlock = isOffline
         ? [
-            placeName && `📍 ${lang === "ar" ? "المكان" : "Location"}: ${placeName}`,
-            address && `📌 ${lang === "ar" ? "العنوان" : "Address"}: ${address}`,
-            mapsLink && `🗺️ ${lang === "ar" ? "اللوكيشن" : "Maps"}: ${mapsLink}`,
-          ].filter(Boolean).join("\n")
+          placeName && `📍 ${lang === "ar" ? "المكان" : "Location"}: ${placeName}`,
+          address && `📌 ${lang === "ar" ? "العنوان" : "Address"}: ${address}`,
+          mapsLink && `🗺️ ${lang === "ar" ? "اللوكيشن" : "Maps"}: ${mapsLink}`,
+        ].filter(Boolean).join("\n")
         : meetingLink
           ? `🔗 ${lang === "ar" ? "رابط الجلسة" : "Meeting Link"}: ${meetingLink}`
           : "";
@@ -587,7 +587,8 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       try {
         const [groupRes, studentsRes, templateOnlineRes, templateOfflineRes, moduleOverviewRes] = await Promise.all([
           fetch(`/api/groups/${groupId}`),
-          fetch("/api/allStudents?status=Active&limit=1000"),
+          // ✅ NEW: بنستخدم الـ endpoint بتاعنا اللي بيفلتر الرصيد + يستثني الموجودين
+          fetch(`/api/groups/${groupId}/add-student?limit=500`),
           fetch(`/api/whatsapp/group-templates?type=group_welcome`),
           fetch(`/api/whatsapp/group-templates?type=group_welcome_offline`),
           fetch(`/api/whatsapp/message-templates?type=module_overview&default=true`),
@@ -635,10 +636,10 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
         }
 
         // ── Students ──────────────────────────────────────────────────
+        // ✅ NEW: السيرفر بيفلتر (رصيد + مش في الجروب) — بناخد الرد زي ما هو
         const studentsData = await studentsRes.json();
         if (studentsData.success) {
-          const groupStudentIds = (groupData.data?.students || []).map(s => String(s._id || s.id || s));
-          setStudents(studentsData.data.filter(s => !groupStudentIds.includes(String(s._id || s.id))));
+          setStudents(studentsData.data || []);
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -1081,11 +1082,10 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
       {/* ── Group Card ── */}
       <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
         <div className="p-4 flex items-start gap-3.5">
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ring-2 ring-white dark:ring-gray-900 ${
-            isOffline
-              ? "bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/40 dark:to-emerald-900/20 text-emerald-600 dark:text-emerald-400"
-              : "bg-gradient-to-br from-violet-100 to-violet-50 dark:from-violet-900/40 dark:to-violet-900/20 text-violet-600 dark:text-violet-400"
-          }`}>
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ring-2 ring-white dark:ring-gray-900 ${isOffline
+            ? "bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/40 dark:to-emerald-900/20 text-emerald-600 dark:text-emerald-400"
+            : "bg-gradient-to-br from-violet-100 to-violet-50 dark:from-violet-900/40 dark:to-violet-900/20 text-violet-600 dark:text-violet-400"
+            }`}>
             {isOffline ? <Icon.MapPin /> : <Icon.Users />}
           </div>
           <div className="flex-1 min-w-0">
@@ -1100,11 +1100,10 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
             <div className="flex flex-wrap gap-1.5">
               {/* ✅ بادج نوع الجروب (Kids / Adults) */}
               {groupType !== "mixed" && (
-                <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium ${
-                  groupType === "kids"
-                    ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300"
-                    : "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
-                }`}>
+                <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium ${groupType === "kids"
+                  ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300"
+                  : "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+                  }`}>
                   {groupType === "kids" ? "🧒 " : "🧑 "}
                   {locale === "ar"
                     ? groupType === "kids" ? "جروب أطفال" : "جروب بالغين"
@@ -1273,6 +1272,17 @@ export default function AddStudentsToGroup({ groupId, onClose, onStudentAdded })
                             : "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300"}`}>
                           {sType === "adults" ? "🧑 Adults" : "🧒 Kids"}
                         </span>
+                        {/* ✅ NEW: بادج الرصيد */}
+                        {typeof student.remainingHours === "number" && (
+                          <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium
+    ${student.remainingHours <= 2
+                              ? "bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-300"
+                              : student.remainingHours <= 5
+                                ? "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-300"
+                                : "bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-300"}`}>
+                            🔋 {student.remainingHours} {locale === "ar" ? "ساعة" : "h"}
+                          </span>
+                        )}
                         <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium
                           ${sLang === "ar"
                             ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300"

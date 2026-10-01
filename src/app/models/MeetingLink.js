@@ -1,4 +1,4 @@
-// → app/models/MeetingLink.js  (استبدل الملف القديم بالكامل بده)
+// → app/models/MeetingLink.js
 //
 // ✅ التغيير الجوهري: currentReservation (object واحد) بقى reservations
 // (array). السبب: object واحد يقدر يمثّل حجز جروب واحد بس في كل لحظة —
@@ -6,6 +6,12 @@
 // بيكتب فوق حجز الجروب الأول ويمسحه بالكامل، وده اللي كان بيسمح بتضارب
 // حقيقي بين الجروبات (لينك محجوز الأحد 1-3 يتحط تاني في نفس المعاد لجروب
 // تاني، لأن الفحص كان بيقارن بس مع آخر حجز اتكتب، مش كل الحجوزات الفعلية).
+//
+// ✅ NEW: reservationType — بيميّز بين:
+//   - "group"     : حجز من سيشن جروب عادي (default)
+//   - "interview" : حجز من مقابلة شخصية
+// ده بيسمح للأدمن إنه يفك حجز الانترفيو لوحده من غير ما يلمس حجوزات
+// الجروبات الشغالة على نفس اللينك في نفس الوقت.
 import mongoose from "mongoose";
 
 const reservationSchema = new mongoose.Schema(
@@ -14,6 +20,15 @@ const reservationSchema = new mongoose.Schema(
     // sessionId تمثيلي (آخر سيشن اتحدّث بيه الحجز ده) — مش المصدر الوحيد
     // للحقيقة؛ الفحص الفعلي بيعتمد على daysOfWeek/timeFrom/timeTo
     sessionId: { type: mongoose.Schema.Types.ObjectId, ref: "Session" },
+
+    // ✅ NEW: نوع الحجز — group (افتراضي) أو interview
+    //    في حالة interview، الـ groupId و sessionId بيبقوا مرجعين للـ interview._id
+    reservationType: {
+      type: String,
+      enum: ["group", "interview"],
+      default: "group",
+    },
+
     daysOfWeek: [
       {
         type: String,
@@ -112,6 +127,7 @@ meetingLinkSchema.index({ isDeleted: 1 });
 meetingLinkSchema.index({ "reservations.sessionId": 1 });
 meetingLinkSchema.index({ "reservations.groupId": 1 });
 meetingLinkSchema.index({ "reservations.endTime": 1 });
+meetingLinkSchema.index({ "reservations.reservationType": 1 });
 
 // ==================== HELPERS ====================
 /**
@@ -203,13 +219,23 @@ meetingLinkSchema.statics.getAllActive = async function () {
 // ==================== INSTANCE METHODS ====================
 
 /**
- * ✅ Reserve this link for a group's session(s).
+ * ✅ Reserve this link for a group's session(s) OR an interview.
  * scheduleInfo = { daysOfWeek: [...], timeFrom: "HH:MM", timeTo: "HH:MM" }
  *
- * لو الجروب ده أصلاً عنده entry على اللينك (بيستخدمه بالفعل)، الـ entry
- * بتتحدّث (union للأيام + توسيع نطاق التاريخ) بدل ما يتعمل entry جديد.
- * لو مفيش entry، بيتفحص تعارض مع أي entry تاني (لجروبات مختلفة) بس —
- * حجز نفس الجروب على نفس اللينك مش تعارض أبدًا.
+ * لو الجروب/الانترفيو ده أصلاً عنده entry على اللينك (بيستخدمه بالفعل)،
+ * الـ entry بتتحدّث (union للأيام + توسيع نطاق التاريخ) بدل ما يتعمل
+ * entry جديد.
+ *
+ * لو مفيش entry، بيتفحص تعارض مع أي entry تاني (لجروبات/انترفيوهات
+ * مختلفة) بس — حجز نفس الجروب/الانترفيو على نفس اللينك مش تعارض أبدًا.
+ *
+ * @param {ObjectId} sessionId  - session._id للجروب، أو interview._id للانترفيو
+ * @param {ObjectId} groupId    - group._id للجروب، أو interview._id للانترفيو
+ * @param {Date}     startTime
+ * @param {Date}     endTime
+ * @param {ObjectId} userId
+ * @param {Object}   scheduleInfo
+ * @param {String}   reservationType - "group" (default) أو "interview"
  */
 meetingLinkSchema.methods.reserveForSession = async function (
   sessionId,
@@ -217,10 +243,13 @@ meetingLinkSchema.methods.reserveForSession = async function (
   startTime,
   endTime,
   userId,
-  scheduleInfo = null
+  scheduleInfo = null,
+  reservationType = "group"
 ) {
   try {
-    console.log(`🔒 Reserving link ${this.name} for group ${groupId} (session ${sessionId})`);
+    console.log(
+      `🔒 Reserving link ${this.name} for ${reservationType} ${groupId} (session ${sessionId})`
+    );
 
     if (this.status === "maintenance" || this.status === "inactive") {
       throw new Error(`Link is not available (status: ${this.status})`);
@@ -237,15 +266,19 @@ meetingLinkSchema.methods.reserveForSession = async function (
     );
 
     if (existingIndex === -1) {
-      // جروب جديد على اللينك ده — لازم يتأكد إنه مش هيتعارض مع جروب تاني
+      // جروب/انترفيو جديد على اللينك ده — لازم يتأكد إنه مش هيتعارض مع
+      // جروب/انترفيو تاني
       const conflict = findConflictingReservation(this.reservations, scheduleInfo, null);
       if (conflict) {
-        throw new Error("Link is currently reserved for another group at an overlapping time");
+        throw new Error(
+          "Link is currently reserved for another group or interview at an overlapping time"
+        );
       }
 
       this.reservations.push({
         groupId,
         sessionId,
+        reservationType,
         startTime,
         endTime,
         daysOfWeek: scheduleInfo?.daysOfWeek || [],
@@ -255,8 +288,8 @@ meetingLinkSchema.methods.reserveForSession = async function (
         reservedBy: userId,
       });
     } else {
-      // الجروب ده أصلاً بيستخدم اللينك — نحدّث entry بتاعه (union للأيام،
-      // توسيع نطاق التاريخ) من غير فحص تعارض مع نفسه
+      // الجروب/الانترفيو ده أصلاً بيستخدم اللينك — نحدّث entry بتاعه
+      // (union للأيام، توسيع نطاق التاريخ) من غير فحص تعارض مع نفسه
       const existing = this.reservations[existingIndex];
       existing.daysOfWeek = Array.from(
         new Set([...(existing.daysOfWeek || []), ...(scheduleInfo?.daysOfWeek || [])]),
@@ -264,6 +297,7 @@ meetingLinkSchema.methods.reserveForSession = async function (
       existing.timeFrom = scheduleInfo?.timeFrom || existing.timeFrom;
       existing.timeTo = scheduleInfo?.timeTo || existing.timeTo;
       existing.sessionId = sessionId;
+      existing.reservationType = reservationType;
       if (!existing.startTime || startTime < existing.startTime) existing.startTime = startTime;
       if (!existing.endTime || endTime > existing.endTime) existing.endTime = endTime;
       existing.reservedAt = new Date();
@@ -275,6 +309,7 @@ meetingLinkSchema.methods.reserveForSession = async function (
     await this.save();
 
     console.log(`✅ Link reserved successfully`);
+
     return {
       success: true,
       link: this.link,
@@ -292,19 +327,36 @@ meetingLinkSchema.methods.reserveForSession = async function (
 };
 
 /**
- * ✅ يفك حجز جروب معيّن بس من على اللينك — من غير ما يلمس حجوزات
- * جروبات تانية شغالة على نفس اللينك في نفس الوقت.
+ * ✅ يفك حجز جروب/انترفيو معيّن بس من على اللينك — من غير ما يلمس حجوزات
+ * جروبات/انترفيوهات تانية شغالة على نفس اللينك في نفس الوقت.
+ *
+ * @param {ObjectId} groupId       - group._id للجروب، أو interview._id للانترفيو
+ * @param {Number}   actualDuration - اختياري
+ * @param {String}   expectedType  - "group" | "interview" | null
+ *                                    لو محدد، بيدور بس على حجز من النوع ده
  */
-meetingLinkSchema.methods.releaseReservation = async function (groupId, actualDuration = null) {
+meetingLinkSchema.methods.releaseReservation = async function (
+  groupId,
+  actualDuration = null,
+  expectedType = null,
+) {
   try {
-    console.log(`🔓 Releasing link ${this.name} for group ${groupId}`);
-
-    const index = (this.reservations || []).findIndex(
-      (r) => r.groupId?.toString() === groupId.toString(),
+    console.log(
+      `🔓 Releasing link ${this.name} for ${expectedType || "any"} ${groupId}`
     );
 
+    const index = (this.reservations || []).findIndex((r) => {
+      if (r.groupId?.toString() !== groupId.toString()) return false;
+      if (expectedType && r.reservationType !== expectedType) return false;
+      return true;
+    });
+
     if (index === -1) {
-      return { success: true, message: "No active reservation for this group", status: this.status };
+      return {
+        success: true,
+        message: "No active reservation for this group/interview",
+        status: this.status,
+      };
     }
 
     const reservation = this.reservations[index];
@@ -317,7 +369,9 @@ meetingLinkSchema.methods.releaseReservation = async function (groupId, actualDu
       duration:
         actualDuration ||
         (reservation.startTime && reservation.endTime
-          ? Math.round((new Date(reservation.endTime) - new Date(reservation.startTime)) / 60000)
+          ? Math.round(
+              (new Date(reservation.endTime) - new Date(reservation.startTime)) / 60000,
+            )
           : 0),
       usedAt: reservation.reservedAt,
     });
@@ -327,7 +381,9 @@ meetingLinkSchema.methods.releaseReservation = async function (groupId, actualDu
     if (actualDuration) {
       this.stats.totalHours += actualDuration / 60;
       const totalMinutes = this.stats.totalHours * 60;
-      this.stats.averageUsageDuration = Math.round(totalMinutes / this.stats.totalUses);
+      this.stats.averageUsageDuration = Math.round(
+        totalMinutes / this.stats.totalUses,
+      );
     }
 
     this.reservations.splice(index, 1);
@@ -335,7 +391,10 @@ meetingLinkSchema.methods.releaseReservation = async function (groupId, actualDu
     this.metadata.updatedAt = new Date();
     await this.save();
 
-    console.log(`✅ Reservation released for group ${groupId}. Remaining active reservations: ${this.reservations.length}`);
+    console.log(
+      `✅ Reservation released for ${reservation.reservationType || "group"} ${groupId}. Remaining active reservations: ${this.reservations.length}`,
+    );
+
     return {
       success: true,
       message: "Reservation released successfully",
@@ -350,8 +409,8 @@ meetingLinkSchema.methods.releaseReservation = async function (groupId, actualDu
 
 /**
  * ✅ يفك كل حجوزات اللينك دفعة واحدة (override إداري صريح — بيقفل كل
- * الجروبات المرتبطة باللينك ده، مش بس واحد). بيتستخدم في مسارات زي
- * "إلغاء حجز اللينكات المتاحة" في شاشة تفعيل الجروب.
+ * الجروبات/الانترفيوهات المرتبطة باللينك ده، مش بس واحد). بيتستخدم في
+ * مسارات زي "إلغاء حجز اللينكات المتاحة" في شاشة تفعيل الجروب.
  * ⚠️ لو فيه جروبات تانية شغالة فعليًا على اللينك، حجزها هيتفك برضو —
  * استخدمها بس لما تكون متأكد إن ده المطلوب فعلاً.
  */
@@ -368,7 +427,9 @@ meetingLinkSchema.methods.releaseAllReservations = async function () {
         endTime: reservation.endTime,
         duration:
           reservation.startTime && reservation.endTime
-            ? Math.round((new Date(reservation.endTime) - new Date(reservation.startTime)) / 60000)
+            ? Math.round(
+                (new Date(reservation.endTime) - new Date(reservation.startTime)) / 60000,
+              )
             : 0,
         usedAt: reservation.reservedAt,
       });

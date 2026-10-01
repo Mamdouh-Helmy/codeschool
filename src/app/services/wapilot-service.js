@@ -295,11 +295,7 @@ class WapilotService {
     }
   }
 
-  // ============================================================
-  // ✅ sendAndLogMessage — Instance الرئيسي (للتذكيرات والرسائل العادية)
-  // ============================================================
-
-  async sendAndLogMessage({
+    async sendAndLogMessage({
     studentId,
     phoneNumber,
     messageContent,
@@ -310,6 +306,20 @@ class WapilotService {
     try {
       const preparedNumber = this.preparePhoneNumber(phoneNumber);
       if (!preparedNumber) throw new Error("Invalid phone number format");
+
+      if (
+        metadata.dedupe &&
+        studentId &&
+        metadata.sessionId &&
+        (await this.alreadySent(
+          studentId,
+          preparedNumber,
+          metadata.dedupeTypes || messageType,
+          metadata.sessionId,
+        ))
+      ) {
+        return { success: false, duplicate: true };
+      }
 
       let sendResult;
       if (this.mode === "production") {
@@ -348,10 +358,6 @@ class WapilotService {
     }
   }
 
-  // ============================================================
-  // ✅ sendAndLogEvalMessage — Instance التقييم (instance3806)
-  // ============================================================
-
   async sendAndLogEvalMessage({
     studentId,
     phoneNumber,
@@ -363,6 +369,19 @@ class WapilotService {
     try {
       const preparedNumber = this.preparePhoneNumber(phoneNumber);
       if (!preparedNumber) throw new Error("Invalid phone number format");
+      if (
+        metadata.dedupe &&
+        studentId &&
+        metadata.sessionId &&
+        (await this.alreadySent(
+          studentId,
+          preparedNumber,
+          metadata.dedupeTypes || messageType,
+          metadata.sessionId,
+        ))
+      ) {
+        return { success: false, duplicate: true };
+      }
 
       let sendResult;
       if (this.mode === "production") {
@@ -402,6 +421,22 @@ class WapilotService {
       console.error(`❌ Error in sendAndLogEvalMessage:`, error.message);
       throw error;
     }
+  }
+
+    async alreadySent(studentId, phoneNumber, messageTypes, sessionId) {
+    await connectDB();
+    const types = Array.isArray(messageTypes) ? messageTypes : [messageTypes];
+    return !!(await Student.exists({
+      _id: studentId,
+      whatsappMessages: {
+        $elemMatch: {
+          messageType: { $in: types },
+          recipientNumber: phoneNumber,
+          status: "sent",
+          "metadata.sessionId": sessionId,
+        },
+      },
+    }));
   }
 
   // ============================================================

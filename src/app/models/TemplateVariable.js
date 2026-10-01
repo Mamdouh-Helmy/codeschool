@@ -167,6 +167,30 @@ export function getDefaultVariables() {
       hasGender: false,
       group: "session",
     },
+    // ══════════════════════════════════════════════════════════
+    // 🎯 INTERVIEW VARIABLES
+    // ══════════════════════════════════════════════════════════
+    {
+      key: "interviewDate",
+      labelAr: "تاريخ المقابلة",
+      labelEn: "Interview Date",
+      icon: "📆",
+      valueAr: "30/12/2025",
+      valueEn: "12/30/2025",
+      hasGender: false,
+      group: "evaluation",
+    },
+    {
+      key: "interviewNumber",
+      labelAr: "رقم المقابلة",
+      labelEn: "Interview Number",
+      icon: "📑",
+      valueAr: "1",
+      valueEn: "1",
+      hasGender: false,
+      group: "evaluation",
+    },
+    
     {
       key: "sessionDescription",
       labelAr: "وصف الحصة",

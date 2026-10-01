@@ -4,7 +4,10 @@ import { connectDB } from "@/lib/mongodb";
 import { getUserFromRequest } from "@/lib/auth";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
+import Interview from "../../../models/Interview";
 import MeetingLink from "../../../models/MeetingLink";
+import { isSessionLockedByHold } from "../../../services/holdGuard";
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ HOLD HELPERS
@@ -18,43 +21,163 @@ function sortSessionsForHold(sessions) {
   });
 }
 
-function isSessionLockedByHold(session, group, allGroupSessions) {
-  if (!group?.hold?.isHeld) return false;
-  if (session?.status === "completed") return false;
 
-  const hold = group.hold;
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ INTERVIEWS
+// ─────────────────────────────────────────────────────────────────────────
+// المقابلات مفيهاش تسجيل حضور — المدرس بيروح للتقييم على طول.
+//   - طفل  → التقييم بيروح لولي الأمر (recipientType: "guardian")
+//   - بالغ → التقييم بيروح للطالب نفسه (recipientType: "student")
+// ═══════════════════════════════════════════════════════════════════════════
 
-  // indefinite / duration → كل الجلسات مقفولة
-  if (hold.holdType === "indefinite" || hold.holdType === "duration") {
-    return true;
-  }
+async function loadInterviewItems(user, statusFilter) {
+  const query = { instructorId: user.id };
+  if (statusFilter && statusFilter !== "all") query.status = statusFilter;
 
-  if (!Array.isArray(allGroupSessions) || allGroupSessions.length === 0) {
-    return true;
-  }
+  // isDeleted:false بيتضاف تلقائي من الـ pre("find") hook في الموديل
+  const interviews = await Interview.find(query)
+    .populate({
+      path: "studentId",
+      select:
+        "personalInfo.fullName personalInfo.nickname enrollmentNumber studentType",
+    })
+    .populate({ path: "meetingLinkId", select: "credentials platform name" })
+    .sort({ scheduledDate: 1, startTime: 1 })
+    .lean();
 
-  const sorted = sortSessionsForHold(allGroupSessions);
-  const myId = String(session._id);
-  const myIndex = sorted.findIndex((s) => String(s._id) === myId);
-  if (myIndex === -1) return false;
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(now);
+  todayEnd.setHours(23, 59, 59, 999);
 
-  // sessions: N سيشنات الأولى
-  if (hold.holdType === "sessions") {
-    const consumed = hold.holdSessionsConsumed || 0;
-    if (consumed === 0) return true;
-    return myIndex < consumed;
-  }
+  return interviews.map((iv) => {
+    const student =
+      iv.studentId && typeof iv.studentId === "object" && iv.studentId._id
+        ? iv.studentId
+        : null;
 
-  // until_session: من أول الترتيب لحد السيشن المستهدفة (شاملة)
-  if (hold.holdType === "until_session") {
-    const targetId = hold.holdUntilSessionId;
-    if (!targetId) return true;
-    const targetIndex = sorted.findIndex((s) => String(s._id) === String(targetId));
-    if (targetIndex === -1) return true;
-    return myIndex <= targetIndex;
-  }
+    const isAdult = student?.studentType === "adults";
+    const isOffline = iv.deliveryMode === "offline";
 
-  return false;
+    const date = new Date(iv.scheduledDate);
+    const isToday = date >= todayStart && date <= todayEnd;
+    const isScheduled = iv.status === "scheduled";
+
+    // ✅ التقييم متاح لو المقابلة scheduled ومعادها النهارده أو عدّى (مفيش حضور)
+    const canEvaluate = isScheduled && date <= todayEnd;
+    const evaluationCompleted = iv.status === "completed" && !!iv.evaluation?.decision;
+
+    const canViewDetails = isScheduled && isToday;
+    const showJoinButton = canViewDetails && !isOffline && !!iv.meetingLink;
+
+    // Location (offline)
+    let locationInfo = null;
+    if (isOffline) {
+      const loc = iv.locationDetails || {};
+      const placeName = loc.placeName || iv.location || "";
+      const address = loc.address || loc.extraDetails || "";
+
+      let mapsLink = "";
+      if (loc.lat != null && loc.lng != null) {
+        mapsLink = `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
+      } else if (address) {
+        mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+      } else if (placeName) {
+        mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeName)}`;
+      }
+
+      locationInfo = {
+        placeName,
+        address,
+        country: loc.country || "",
+        lat: loc.lat ?? null,
+        lng: loc.lng ?? null,
+        mapsLink,
+      };
+    }
+
+    // Sensitive data (online فقط وفي يوم المقابلة)
+    let meetingLink = null;
+    let meetingPlatform = null;
+    let meetingCredentials = null;
+    if (canViewDetails && !isOffline) {
+      meetingLink = iv.meetingLink || null;
+      meetingPlatform = iv.meetingPlatform || iv.meetingLinkId?.platform || null;
+      const rawCreds = iv.meetingLinkId?.credentials || null;
+      meetingCredentials = rawCreds
+        ? { username: rawCreds.username || null, password: rawCreds.password || null }
+        : null;
+    }
+
+    return {
+      _id: iv._id,
+      itemType: "interview",
+      isInterview: true,
+      title: iv.title,
+      status: iv.status,
+      scheduledDate: iv.scheduledDate,
+      startTime: iv.startTime,
+      endTime: iv.endTime,
+
+      student: student
+        ? {
+            _id: student._id,
+            name: student.personalInfo?.fullName || "بدون اسم",
+            enrollmentNumber: student.enrollmentNumber || "",
+            studentType: student.studentType || "kids",
+            isAdult,
+          }
+        : null,
+      isAdult,
+      // ✅ مين هيستلم رسالة التقييم
+      evaluationRecipient: isAdult ? "student" : "guardian",
+
+      deliveryMode: iv.deliveryMode || "online",
+      isOffline,
+      locationInfo,
+      meetingLink,
+      meetingPlatform,
+      meetingCredentials,
+
+      isToday,
+      canViewDetails,
+      showJoinButton,
+
+      // ✅ مفيش حضور للمقابلات
+      attendanceRequired: false,
+      showAttendanceButton: false,
+      attendanceTaken: false,
+
+      // ✅ التقييم على طول
+      canEvaluate,
+      showEvaluationButton: canEvaluate,
+      evaluationCompleted,
+      evaluation: evaluationCompleted
+        ? {
+            decision: iv.evaluation.decision,
+            instructorComment: iv.evaluation.instructorComment || "",
+            interviewNumber: iv.evaluation.interviewNumber || 1,
+            completedAt: iv.evaluation.completedAt || null,
+          }
+        : null,
+      evaluationSent: !!iv.automationEvents?.evaluationSent,
+      evaluationEndpoint: `/api/instructor/interviews/${iv._id}/evaluation`,
+
+      instructorNotes: iv.instructorNotes || null,
+    };
+  });
+}
+
+function buildInterviewStats(items) {
+  return {
+    total: items.length,
+    scheduled: items.filter((i) => i.status === "scheduled").length,
+    completed: items.filter((i) => i.status === "completed").length,
+    cancelled: items.filter((i) => i.status === "cancelled").length,
+    postponed: items.filter((i) => i.status === "postponed").length,
+    needsEvaluation: items.filter((i) => i.canEvaluate).length,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -84,6 +207,12 @@ export async function GET(req) {
 
     await connectDB();
 
+    // ✅ المقابلات بتتجاب مرة واحدة (لو فيه فلتر جروب معناها المدرس بيفلتر على جروب → مفيش مقابلات)
+    const interviews = groupIdFilter
+      ? []
+      : await loadInterviewItems(user, statusFilter);
+    const interviewStats = buildInterviewStats(interviews);
+
     // ✅ جيب كل الجروبات اللي المدرس ده مسؤول عنها
     const groups = await Group.find({
       "instructors.userId": user.id,
@@ -108,16 +237,13 @@ export async function GET(req) {
             total: 0, completed: 0, scheduled: 0,
             cancelled: 0, postponed: 0, needsAttendance: 0,
           },
+          interviews,
+          interviewStats,
         },
       });
     }
 
-    // ✅ FIX (SECURITY): كان بيستخدم groupIdFilter مباشرة في الـ query من غير
-    // ما يتأكد إنه من ضمن groupIds بتاعت المدرس ده. النتيجة كانت إن أي مدرس
-    // يقدر يبعت groupId لجروب مش بتاعه ويشوف تفاصيل سيشناته (بما فيها
-    // meetingCredentials لو كانت السيشن "اليوم")، وكمان حماية الـ Hold كانت
-    // بتتجاوز لأن groupMap مبني بس من groupIds الحقيقية بتاعته.
-    // الحل: لو فيه فلتر، لازم يكون عنصر موجود فعلاً في groupIds بتاعته.
+    // ✅ FIX (SECURITY): لو فيه فلتر، لازم يكون عنصر موجود فعلاً في groupIds بتاعت المدرس
     let targetGroupIds = groupIds;
     if (groupIdFilter) {
       const matchedGroupId = groupIds.find((gid) => gid.toString() === groupIdFilter);
@@ -160,8 +286,7 @@ export async function GET(req) {
     });
 
     // ✅ نجيب كل سيشنات الجروبات (للـ Hold logic + current module detection)
-    // ملحوظة: بنجيبها لكل groupIds (مش targetGroupIds) عشان الـ hold/module
-    // maps تفضل صح لأي جروب من جروبات المدرس، حتى لو الفلتر ضيّق النتيجة النهائية.
+    // بنجيبها لكل groupIds (مش targetGroupIds) عشان الـ hold/module maps تفضل صح
     const allGroupSessionsRaw = await Session.find({
       groupId: { $in: groupIds },
       isDeleted: false,
@@ -416,6 +541,8 @@ export async function GET(req) {
 
       return {
         _id: session._id,
+        itemType: "session",
+        isInterview: false,
         title: session.title,
         description: sessionDescription,
         status: session.status,
@@ -448,7 +575,7 @@ export async function GET(req) {
         groupIsOnHold,
         sessionIsLocked, // ✅ هل السيشن دي بالتحديد مقفولة؟
         groupHold: grp.hold || null,
-        // ✅ NEW: للفرونت يعرض بادج "حصة تعويضية" (بدون خصم رصيد)
+        // ✅ للفرونت يعرض بادج "حصة تعويضية" (بدون خصم رصيد)
         isComplimentary: session.isComplimentary === true,
         pendingReschedule: session.pendingReschedule
           ? {
@@ -486,7 +613,13 @@ export async function GET(req) {
 
     return NextResponse.json({
       success: true,
-      data: { sessions: processedSessions, stats },
+      data: {
+        sessions: processedSessions,
+        stats,
+        // ✅ NEW: مقابلات المدرس (من غير حضور — تقييم على طول)
+        interviews,
+        interviewStats,
+      },
     });
   } catch (error) {
     console.error("❌ [Instructor Sessions API] Error:", error);

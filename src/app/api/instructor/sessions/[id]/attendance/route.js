@@ -11,71 +11,7 @@ import {
 import Session from "../../../../../models/Session";
 import Student from "../../../../../models/Student";
 import Group from "../../../../../models/Group";
-
-// ═══════════════════════════════════════════════════════════════════════════
-// ✅ HOLD HELPERS
-// ═══════════════════════════════════════════════════════════════════════════
-
-function sortSessionsForHold(sessions) {
-  return [...sessions].sort((a, b) => {
-    if (a.moduleIndex !== b.moduleIndex) return a.moduleIndex - b.moduleIndex;
-    if (a.sessionNumber !== b.sessionNumber) return a.sessionNumber - b.sessionNumber;
-    return new Date(a.scheduledDate) - new Date(b.scheduledDate);
-  });
-}
-
-function isSessionLockedByHold(session, group, allGroupSessions) {
-  if (!group?.hold?.isHeld) return false;
-  if (session?.status === "completed") return false;
-
-  const hold = group.hold;
-
-  if (hold.holdType === "indefinite" || hold.holdType === "duration") return true;
-  if (!Array.isArray(allGroupSessions) || allGroupSessions.length === 0) return true;
-
-  const sorted = sortSessionsForHold(allGroupSessions);
-  const myIndex = sorted.findIndex((s) => String(s._id) === String(session._id));
-  if (myIndex === -1) return false;
-
-  if (hold.holdType === "sessions") {
-    const consumed = hold.holdSessionsConsumed || 0;
-    if (consumed === 0) return true;
-    return myIndex < consumed;
-  }
-
-  if (hold.holdType === "until_session") {
-    const targetId = hold.holdUntilSessionId;
-    if (!targetId) return true;
-    const targetIndex = sorted.findIndex((s) => String(s._id) === String(targetId));
-    if (targetIndex === -1) return true;
-    return myIndex <= targetIndex;
-  }
-
-  return false;
-}
-
-/** ✅ بيجيب سيشنات الجروب ويحدد هل السيشن دي مقفولة (مكان واحد بدل 3 نسخ) */
-async function resolveSessionLock(session, group) {
-  if (!group?.hold?.isHeld) return false;
-
-  const allGroupSessions = await Session.find({
-    groupId: group._id,
-    isDeleted: false,
-  })
-    .select("_id moduleIndex sessionNumber scheduledDate status")
-    .lean();
-
-  return isSessionLockedByHold(
-    {
-      _id: session._id,
-      moduleIndex: session.moduleIndex,
-      sessionNumber: session.sessionNumber,
-      status: session.status,
-    },
-    group,
-    allGroupSessions,
-  );
-}
+import { resolveSessionLock } from "../../../../../services/holdGuard";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ AUTH / OWNERSHIP HELPERS
@@ -452,7 +388,7 @@ export async function PATCH(req, { params }) {
       }
     }
 
-        const lowBalanceStudents = [];
+    const lowBalanceStudents = [];
     const zeroBalanceStudents = [];
 
     if (!isComplimentarySession) {
@@ -480,7 +416,7 @@ export async function PATCH(req, { params }) {
       console.log(`🎁 [Make-up] Skipping balance alerts for session ${id}`);
     }
 
-      if (lowBalanceStudents.length > 0) {
+    if (lowBalanceStudents.length > 0) {
       try {
         await sendLowBalanceAlerts(lowBalanceStudents, id);
       } catch (err) {

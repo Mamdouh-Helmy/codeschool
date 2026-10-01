@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Session from '../../../models/Session';
+import Interview from '../../../models/Interview';
 import {
   // ✅ ONLINE
   sendManualSessionReminder,
@@ -16,6 +17,9 @@ import {
   checkAndSendGroupCompletionNotifications,
 } from '../../../services/groupAutomation';
 
+// ✅ INTERVIEWS
+import { sendInterviewReminder } from '../../../services/interviewAutomation';
+
 const CRON_SECRET = process.env.CRON_SECRET || 'your-secret-key-change-this';
 
 // ============================================================
@@ -27,6 +31,14 @@ const WINDOWS = {
   reminder24hOffline:   { min: 23, max: 25, unit: 'hours' },
   reminder30minOffline: { min: 27, max: 33, unit: 'minutes' },
   preAttendancePing:    { min: 3,  max: 8,  unit: 'minutes' },
+};
+
+// ✅ INTERVIEW WINDOWS
+const INTERVIEW_WINDOWS = {
+  reminder24h:   { min: 23, max: 25, unit: 'hours',   type: '24h' },
+  reminder15min: { min: 12, max: 18, unit: 'minutes', type: '15min' },
+  reminder30min: { min: 27, max: 33, unit: 'minutes', type: '30min' },
+  prePing:       { min: 3,  max: 8,  unit: 'minutes', type: 'pre_ping' },
 };
 
 // ============================================================
@@ -91,6 +103,48 @@ async function unlockSessionFlag(sessionId, flagField) {
   } catch (err) {
     console.error(
       `⚠️ Failed to unlock ${flagField} for ${sessionId}:`,
+      err.message
+    );
+  }
+}
+
+// ============================================================
+// ✅ Helper: Atomic lock للـ Interview
+// ============================================================
+async function lockInterviewFlag(interviewId, flagField) {
+  const result = await Interview.findOneAndUpdate(
+    {
+      _id: interviewId,
+      isDeleted: false,
+      [flagField]: { $ne: true },
+    },
+    {
+      $set: {
+        [flagField]: true,
+        [`${flagField}At`]: new Date(),
+      },
+    },
+    { new: true },
+  );
+
+  return result;
+}
+
+// ============================================================
+// ✅ Helper: يفتح الـ lock للـ Interview
+// ============================================================
+async function unlockInterviewFlag(interviewId, flagField) {
+  try {
+    await Interview.updateOne(
+      { _id: interviewId },
+      {
+        $unset: { [flagField]: '' },
+        $set: { [`${flagField}At`]: null },
+      },
+    );
+  } catch (err) {
+    console.error(
+      `⚠️ Failed to unlock interview ${flagField} for ${interviewId}:`,
       err.message
     );
   }
@@ -200,6 +254,17 @@ export async function GET(req) {
         processed: 0,
         sent: 0,
         groups: [],
+      },
+
+      // 🎯 INTERVIEWS
+      interviews: {
+        total: 0,
+        sent24h: 0,
+        sent15min: 0,
+        sent30min: 0,
+        sentPing: 0,
+        sentWelcome: 0,
+        failed: 0,
       },
     };
 
@@ -477,6 +542,16 @@ export async function GET(req) {
       };
     }
 
+    // ============================================================
+    // 🎯 INTERVIEWS — Reminders cron
+    // ============================================================
+    await processInterviewReminders({
+      now,
+      dayStart,
+      dayEnd,
+      results,
+    });
+
     console.log(
       '\n📊 Cron Summary:',
       JSON.stringify(results, null, 2)
@@ -688,15 +763,135 @@ async function processReminder({
 }
 
 // ============================================================
+// 🎯 processInterviewReminders — دالة موحدة للـ interviews
+// ============================================================
+async function processInterviewReminders({ now, dayStart, dayEnd, results }) {
+  try {
+    const interviewCandidates = await Interview.find({
+      isDeleted: false,
+      status: { $in: ['scheduled', 'postponed'] },
+      scheduledDate: { $gte: dayStart, $lte: dayEnd },
+    }).lean();
+
+    results.interviews.total = interviewCandidates.length;
+
+    console.log(
+      `\n🎯 [INTERVIEWS] Candidates in window: ${interviewCandidates.length}`
+    );
+
+    for (const iv of interviewCandidates) {
+      const isOffline = iv.deliveryMode === 'offline';
+
+      // ── Calculate scheduled datetime (Cairo-aware) ──
+      const interviewDateTime = buildInterviewDateTime(iv);
+
+      // ── Determine which windows to check ──
+      const applicableWindows = [];
+
+      // Always check 24h
+      applicableWindows.push(INTERVIEW_WINDOWS.reminder24h);
+
+      if (isOffline) {
+        applicableWindows.push(INTERVIEW_WINDOWS.reminder30min);
+        applicableWindows.push(INTERVIEW_WINDOWS.prePing);
+      } else {
+        applicableWindows.push(INTERVIEW_WINDOWS.reminder15min);
+      }
+
+      for (const w of applicableWindows) {
+        try {
+          const flagField = getInterviewFlagField(w.type);
+
+          // Skip if already sent
+          const flagKey = flagField.split('.').pop();
+          if (iv.automationEvents?.[flagKey] === true) continue;
+
+          // Check window
+          const diff = computeDiff(interviewDateTime, now, w.unit);
+          if (diff < w.min || diff > w.max) continue;
+
+          // Atomic lock
+          const locked = await lockInterviewFlag(iv._id, flagField);
+          if (!locked) {
+            console.log(
+              `   🔒 [INTERVIEW ${w.type}] Already locked — skipping "${iv.title}"`
+            );
+            continue;
+          }
+
+          console.log(
+            `   🔒 [INTERVIEW ${w.type}] Locked: "${iv.title}" | diff: ${diff.toFixed(2)} ${w.unit} | mode: ${iv.deliveryMode}`
+          );
+
+          // Send
+          let sendResult = null;
+          try {
+            sendResult = await sendInterviewReminder(iv._id.toString(), w.type);
+          } catch (err) {
+            console.error(
+              `   ❌ [INTERVIEW ${w.type}] send error:`,
+              err.message
+            );
+            sendResult = { success: false, error: err.message };
+          }
+
+          if (sendResult?.success) {
+            if (w.type === '24h') results.interviews.sent24h++;
+            else if (w.type === '15min') results.interviews.sent15min++;
+            else if (w.type === '30min') results.interviews.sent30min++;
+            else if (w.type === 'pre_ping') results.interviews.sentPing++;
+
+            console.log(
+              `   ✅ [INTERVIEW ${w.type}] Sent for "${iv.title}" — students: ${sendResult.studentsNotified || 0} | instructors: ${sendResult.instructorsNotified || 0}`
+            );
+          } else {
+            results.interviews.failed++;
+            await unlockInterviewFlag(iv._id, flagField);
+            console.log(
+              `   ❌ [INTERVIEW ${w.type}] Failed for "${iv.title}" — unlocked for retry`
+            );
+          }
+        } catch (err) {
+          results.interviews.failed++;
+          console.error(
+            `   ❌ [INTERVIEW ${w.type}] error for ${iv._id}:`,
+            err.message
+          );
+          try {
+            await unlockInterviewFlag(iv._id, getInterviewFlagField(w.type));
+          } catch (_) {}
+        }
+      }
+    }
+  } catch (err) {
+    console.error('❌ processInterviewReminders error:', err.message);
+    results.interviews.error = err.message;
+  }
+}
+
+// ============================================================
+// ✅ getInterviewFlagField — بيرجّع الـ flag field حسب النوع
+// ============================================================
+function getInterviewFlagField(type) {
+  switch (type) {
+    case '24h':
+      return 'automationEvents.reminder24hSent';
+    case '15min':
+      return 'automationEvents.reminder15minSent';
+    case '30min':
+      return 'automationEvents.reminder30minOfflineSent';
+    case 'pre_ping':
+      return 'automationEvents.prePingOfflineSent';
+    default:
+      return 'automationEvents.reminder24hSent';
+  }
+}
+
+// ============================================================
 // ✅ computeDiff — بيحسب الفرق بوحدات (hours/minutes)
 // ============================================================
-function computeDiff(
-  sessionDateTime,
-  now,
-  unit
-) {
-  const diffMs =
-    sessionDateTime - now;
+function computeDiff(sessionDateTime, now, unit) {
+  const diffMs = sessionDateTime - now;
 
   if (unit === 'hours') {
     return diffMs / (1000 * 60 * 60);
@@ -710,58 +905,77 @@ function computeDiff(
 // ============================================================
 function buildSessionDateTime(session) {
   try {
-    const date =
-      new Date(session.scheduledDate);
+    const date = new Date(session.scheduledDate);
 
     if (!session.startTime) {
       return date;
     }
 
-    const [hours, minutes] =
-      session.startTime
-        .split(':')
-        .map(Number);
+    const [hours, minutes] = session.startTime.split(':').map(Number);
 
-    const cairoDateStr =
-      date.toLocaleDateString('en-CA', {
-        timeZone: 'Africa/Cairo',
-      });
+    const cairoDateStr = date.toLocaleDateString('en-CA', {
+      timeZone: 'Africa/Cairo',
+    });
 
-    const cairoOffset =
-      getCairoUTCOffset();
+    const cairoOffset = getCairoUTCOffset();
 
-    const sign =
-      cairoOffset >= 0 ? '+' : '-';
+    const sign = cairoOffset >= 0 ? '+' : '-';
 
-    const absOffset =
-      Math.abs(cairoOffset);
+    const absOffset = Math.abs(cairoOffset);
 
-    const offsetStr =
-      `${sign}${String(absOffset).padStart(
-        2,
-        '0'
-      )}:00`;
+    const offsetStr = `${sign}${String(absOffset).padStart(2, '0')}:00`;
 
-    const isoString =
-      `${cairoDateStr}T${String(hours).padStart(
-        2,
-        '0'
-      )}:${String(minutes).padStart(
-        2,
-        '0'
-      )}:00${offsetStr}`;
+    const isoString = `${cairoDateStr}T${String(hours).padStart(
+      2,
+      '0'
+    )}:${String(minutes).padStart(2, '0')}:00${offsetStr}`;
 
     return new Date(isoString);
 
   } catch (err) {
-    console.error(
-      '❌ buildSessionDateTime error:',
-      err.message
-    );
+    console.error('❌ buildSessionDateTime error:', err.message);
 
-    return new Date(
-      session.scheduledDate
-    );
+    return new Date(session.scheduledDate);
+  }
+}
+
+// ============================================================
+// ✅ buildInterviewDateTime — نفس منطق buildSessionDateTime
+//    بس للـ Interview
+// ============================================================
+function buildInterviewDateTime(interview) {
+  try {
+    const date = new Date(interview.scheduledDate);
+
+    if (!interview.startTime) {
+      return date;
+    }
+
+    const [hours, minutes] = interview.startTime.split(':').map(Number);
+
+    const cairoDateStr = date.toLocaleDateString('en-CA', {
+      timeZone: 'Africa/Cairo',
+    });
+
+    const cairoOffset = getCairoUTCOffset();
+
+    const sign = cairoOffset >= 0 ? '+' : '-';
+
+    const absOffset = Math.abs(cairoOffset);
+
+    const offsetStr = `${sign}${String(absOffset).padStart(2, '0')}:00`;
+
+    const isoString = `${cairoDateStr}T${String(hours).padStart(
+      2,
+      '0'
+    )}:${String(minutes).padStart(2, '0')}:00${offsetStr}`;
+
+    return new Date(isoString);
+
+  } catch (err) {
+    console.error('❌ buildInterviewDateTime error:', err.message);
+
+    return new Date(interview.scheduledDate);
   }
 }
 
@@ -772,29 +986,21 @@ function getCairoUTCOffset() {
   try {
     const now = new Date();
 
-    const utcStr =
-      now.toLocaleString('en-US', {
-        timeZone: 'UTC',
-      });
+    const utcStr = now.toLocaleString('en-US', {
+      timeZone: 'UTC',
+    });
 
-    const cairoStr =
-      now.toLocaleString('en-US', {
-        timeZone: 'Africa/Cairo',
-      });
+    const cairoStr = now.toLocaleString('en-US', {
+      timeZone: 'Africa/Cairo',
+    });
 
-    const utcDate =
-      new Date(utcStr);
+    const utcDate = new Date(utcStr);
 
-    const cairoDate =
-      new Date(cairoStr);
+    const cairoDate = new Date(cairoStr);
 
-    const diffMs =
-      cairoDate - utcDate;
+    const diffMs = cairoDate - utcDate;
 
-    const diffHours =
-      Math.round(
-        diffMs / (1000 * 60 * 60)
-      );
+    const diffHours = Math.round(diffMs / (1000 * 60 * 60));
 
     return diffHours;
 

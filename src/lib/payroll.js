@@ -3,6 +3,7 @@
 import mongoose from "mongoose";
 import Session from "../app/models/Session";
 import Group from "../app/models/Group";
+import Interview from "../app/models/Interview";
 import InstructorRate from "../app/models/InstructorRate";
 import PayrollEntry from "../app/models/PayrollEntry";
 
@@ -43,10 +44,12 @@ function getDayRange(date) {
 
 /**
  * ✅ هل المدرس ده خد بدل مواصلات النهاردة بالفعل؟
- * القاعدة: بدل المواصلات لأول سيشن offline في اليوم بس.
- * بنستثني الـ entry بتاعة السيشن الحالية نفسها (لو بنعيد الحساب).
+ * القاعدة: بدل المواصلات لأول سيشن/مقابلة offline في اليوم بس.
+ * بنستثني الـ entry بتاعة السيشن/المقابلة الحالية نفسها (لو بنعيد الحساب).
+ *
+ * @param {Object} [exclude] { sessionId?, interviewId? }
  */
-async function hasTransportationToday(instructorId, sessionDate, excludeSessionId = null) {
+async function hasTransportationToday(instructorId, sessionDate, exclude = {}) {
   const { start, end } = getDayRange(sessionDate);
 
   const query = {
@@ -56,7 +59,8 @@ async function hasTransportationToday(instructorId, sessionDate, excludeSessionI
     transportationApplied: true,
     sessionDate: { $gte: start, $lte: end },
   };
-  if (excludeSessionId) query.sessionId = { $ne: excludeSessionId };
+  if (exclude.sessionId) query.sessionId = { $ne: exclude.sessionId };
+  if (exclude.interviewId) query.interviewId = { $ne: exclude.interviewId };
 
   const existing = await PayrollEntry.findOne(query).select("_id").lean();
   return !!existing;
@@ -101,7 +105,13 @@ export async function processSessionPayroll({
   }
 
   if (session.payroll?.processed && !force) {
-    return { success: true, skipped: true, reason: "already_processed", entries: [] };
+    return {
+      success: true,
+      skipped: true,
+      reason: "already_processed",
+      fullyProcessed: true,
+      entries: [],
+    };
   }
 
   const group = await Group.findById(session.groupId)
@@ -119,7 +129,13 @@ export async function processSessionPayroll({
     .filter(Boolean);
 
   if (instructors.length === 0) {
-    return { success: true, skipped: true, reason: "no_instructors", entries: [] };
+    return {
+      success: true,
+      skipped: true,
+      reason: "no_instructors",
+      fullyProcessed: false,
+      entries: [],
+    };
   }
 
   // ── نوع السيشن: snapshot السيشن أولًا، وإلا نوع الجروب، وإلا online ────
@@ -169,7 +185,7 @@ export async function processSessionPayroll({
       continue;
     }
 
-    // 3) بدل المواصلات — offline بس، وأول سيشن في اليوم بس
+    // 3) بدل المواصلات — offline بس، وأول سيشن/مقابلة في اليوم بس
     let transportationAllowance = 0;
     let transportationApplied = false;
     let transportationSkipReason = "";
@@ -179,11 +195,9 @@ export async function processSessionPayroll({
     } else if (!rate.transportationAllowance) {
       transportationSkipReason = "no_allowance_configured";
     } else {
-      const alreadyPaid = await hasTransportationToday(
-        instructorId,
-        sessionDate,
-        session._id,
-      );
+      const alreadyPaid = await hasTransportationToday(instructorId, sessionDate, {
+        sessionId: session._id,
+      });
       if (alreadyPaid) {
         transportationSkipReason = "already_paid_today";
       } else {
@@ -194,13 +208,14 @@ export async function processSessionPayroll({
 
     const sessionAmount = calculateSessionAmount(durationMinutes, rate.hourlyRate);
 
-    // ✅ FIX: الـ findOne فوق مش atomic — لو نفس السيشن اتعالجت مرتين في نفس
+    // ✅ الـ findOne فوق مش atomic — لو نفس السيشن اتعالجت مرتين في نفس
     // اللحظة (مثلاً complete من الأدمن + evaluation من المدرس)، ممكن الـ
     // create يرمي duplicate key error (unique index instructorId+sessionId).
     // بنمسك الحالة دي لوحدها لكل مدرس عشان error واحد مايوقفش باقي المدرسين
     // في نفس اللوب.
     try {
       const entry = await PayrollEntry.create({
+        sourceType: "session",
         instructorId,
         sessionId: session._id,
         groupId: session.groupId,
@@ -269,6 +284,163 @@ export async function processSessionPayroll({
   };
 }
 
+// =============================================
+// ✅ MAIN: تسجيل مرتب مقابلة
+// =============================================
+
+/**
+ * بيتنده أول ما تقييم المقابلة يتحفظ (من interviewAutomation.sendInterviewEvaluation).
+ * نفس منطق processSessionPayroll بالظبط (نفس الـ rates ونفس بدل المواصلات)،
+ * بس لمدرس واحد (interview.instructorId) وبدون group/course.
+ * idempotent: لو فيه entry للمقابلة دي → بتتخطى.
+ *
+ * @param {Object} opts
+ * @param {String} opts.interviewId
+ * @param {String} [opts.actedBy] user id
+ * @param {String} [opts.source] "interview_evaluation" | "manual"
+ * @param {Boolean} [opts.force] يتجاهل فلاج processed ويحاول تاني
+ */
+export async function processInterviewPayroll({
+  interviewId,
+  actedBy = null,
+  source = "interview_evaluation",
+  force = false,
+}) {
+  if (!interviewId || !mongoose.Types.ObjectId.isValid(interviewId)) {
+    throw new Error("Invalid interviewId");
+  }
+
+  const interview = await Interview.findOne({ _id: interviewId, isDeleted: false });
+  if (!interview) {
+    const error = new Error("Interview not found");
+    error.code = "INTERVIEW_NOT_FOUND";
+    throw error;
+  }
+
+  if (interview.payroll?.processed && !force) {
+    return {
+      success: true,
+      skipped: true,
+      reason: "already_processed",
+      fullyProcessed: true,
+      entries: [],
+    };
+  }
+
+  const instructorId = interview.instructorId;
+  if (!instructorId) {
+    return {
+      success: true,
+      skipped: true,
+      reason: "no_instructor",
+      fullyProcessed: false,
+      entries: [],
+    };
+  }
+
+  const deliveryMode = interview.deliveryMode || "online";
+  const startTime = interview.actualStartTime || interview.startTime || "";
+  const endTime = interview.actualEndTime || interview.endTime || "";
+  const usedActual = !!(interview.actualStartTime && interview.actualEndTime);
+  const durationMinutes = minutesBetween(startTime, endTime);
+
+  if (durationMinutes <= 0) {
+    const error = new Error("مدة المقابلة غير صالحة — راجع وقت البداية والنهاية");
+    error.code = "INVALID_DURATION";
+    throw error;
+  }
+
+  const sessionDate = new Date(interview.scheduledDate);
+  const entries = [];
+  const skipped = [];
+
+  const existing = await PayrollEntry.findOne({
+    instructorId,
+    interviewId: interview._id,
+    isDeleted: false,
+  }).select("_id").lean();
+
+  if (existing) {
+    skipped.push({ instructorId, reason: "entry_exists", entryId: existing._id });
+  } else {
+    const rate = await InstructorRate.getEffectiveRate(instructorId, sessionDate);
+    if (!rate || !rate.hourlyRate) {
+      skipped.push({ instructorId, reason: "no_rate_configured" });
+    } else {
+      let transportationAllowance = 0;
+      let transportationApplied = false;
+      let transportationSkipReason = "";
+
+      if (deliveryMode !== "offline") {
+        transportationSkipReason = "online_session";
+      } else if (!rate.transportationAllowance) {
+        transportationSkipReason = "no_allowance_configured";
+      } else if (
+        await hasTransportationToday(instructorId, sessionDate, {
+          interviewId: interview._id,
+        })
+      ) {
+        transportationSkipReason = "already_paid_today";
+      } else {
+        transportationAllowance = round2(rate.transportationAllowance);
+        transportationApplied = true;
+      }
+
+      const sessionAmount = calculateSessionAmount(durationMinutes, rate.hourlyRate);
+
+      try {
+        const entry = await PayrollEntry.create({
+          sourceType: "interview",
+          instructorId,
+          interviewId: interview._id,
+          sessionTitle: interview.title || "",
+          sessionDate,
+          deliveryMode,
+          actualStartTime: startTime,
+          actualEndTime: endTime,
+          durationMinutes,
+          durationSource: usedActual ? "actual" : "scheduled",
+          hourlyRateSnapshot: rate.hourlyRate,
+          rateHistoryId: rate.historyId,
+          sessionAmount,
+          transportationAllowance,
+          transportationApplied,
+          transportationSkipReason,
+          totalAmount: round2(sessionAmount + transportationAllowance),
+          currency: rate.currency,
+          status: "pending",
+          metadata: { createdBy: actedBy, source },
+        });
+        entries.push(entry);
+      } catch (err) {
+        if (err?.code === 11000) skipped.push({ instructorId, reason: "entry_exists" });
+        else throw err;
+      }
+    }
+  }
+
+  const allDone = skipped.every((s) => s.reason === "entry_exists");
+
+  interview.payroll = {
+    processed: allDone,
+    processedAt: new Date(),
+    durationMinutes,
+    lastError: allDone ? "" : "المدرس ليس له سعر ساعة مسجّل",
+  };
+  await interview.save();
+
+  return {
+    success: true,
+    interviewId: interview._id,
+    deliveryMode,
+    durationMinutes,
+    createdCount: entries.length,
+    entries,
+    skipped,
+    fullyProcessed: allDone,
+  };
+}
+
 /**
  * ✅ إلغاء سطور مرتب سيشن (لو الأدمن ألغى السيشن بعد ما اكتملت بالغلط).
  * مبنحذفش — بنعمل cancelled عشان الـ audit trail يفضل موجود.
@@ -289,6 +461,30 @@ export async function cancelSessionPayroll(sessionId, { actedBy, reason = "" } =
   await Session.updateOne(
     { _id: sessionId },
     { $set: { "payroll.processed": false, "payroll.entriesCount": 0 } },
+  );
+
+  return { cancelledCount: result.modifiedCount };
+}
+
+/**
+ * ✅ إلغاء سطور مرتب مقابلة — نفس فكرة cancelSessionPayroll.
+ */
+export async function cancelInterviewPayroll(interviewId, { actedBy, reason = "" } = {}) {
+  const result = await PayrollEntry.updateMany(
+    { interviewId, isDeleted: false, status: { $in: ["pending", "approved"] } },
+    {
+      $set: {
+        status: "cancelled",
+        notes: reason,
+        "metadata.lastModifiedBy": actedBy,
+        "metadata.updatedAt": new Date(),
+      },
+    },
+  );
+
+  await Interview.updateOne(
+    { _id: interviewId },
+    { $set: { "payroll.processed": false } },
   );
 
   return { cancelledCount: result.modifiedCount };

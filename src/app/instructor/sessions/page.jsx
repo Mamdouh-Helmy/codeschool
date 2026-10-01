@@ -24,6 +24,7 @@ import {
   Navigation,
   PauseCircle,
   Gift,
+  Briefcase,
 } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -466,7 +467,7 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
   );
 }
 
-// ─── ✅ Location Card (Offline sessions) ─────────────────────────────────────
+// ─── ✅ Location Card (Offline sessions / interviews) ────────────────────────
 function LocationCard({ session, isAr }) {
   const loc = session.locationInfo;
   if (!loc) return null;
@@ -483,9 +484,11 @@ function LocationCard({ session, isAr }) {
         </div>
         <div className="flex-1">
           <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">
-            {t("موقع الجلسة", "Session Location")}
+            {session.isInterview ? t("موقع المقابلة", "Interview Location") : t("موقع الجلسة", "Session Location")}
           </span>
-          <p className="text-[10px] text-[#ff6700] font-bold">Offline Session</p>
+          <p className="text-[10px] text-[#ff6700] font-bold">
+            {session.isInterview ? "Offline Interview" : "Offline Session"}
+          </p>
         </div>
         <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/15 text-[#ff6700] border border-[#ff6700]/30 font-black">
           📍 {t("حضوري", "On-site")}
@@ -554,7 +557,7 @@ function MeetingCredentials({ session, isAr }) {
         </div>
         <div>
           <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">
-            {t("بيانات الجلسة", "Session Access")}
+            {session.isInterview ? t("بيانات المقابلة", "Interview Access") : t("بيانات الجلسة", "Session Access")}
           </span>
           {session.meetingPlatform && (
             <p className="text-[10px] text-[#ff6700] font-bold capitalize">{session.meetingPlatform}</p>
@@ -635,7 +638,7 @@ function MeetingCredentials({ session, isAr }) {
           className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-black text-sm text-white bg-gradient-to-r from-[#ff6700] to-[#feaf00] shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200"
         >
           <Video className="w-4 h-4" />
-          {t("ابدأ الجلسة الآن", "Start Session Now")}
+          {session.isInterview ? t("ابدأ المقابلة الآن", "Start Interview Now") : t("ابدأ الجلسة الآن", "Start Session Now")}
           <ExternalLink className="w-3.5 h-3.5" />
         </a>
       </div>
@@ -1123,6 +1126,275 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
   );
 }
 
+// ─── ✅ Interview helpers ─────────────────────────────────────────────────────
+const INTERVIEW_DECISION_LABEL = {
+  pass:   { ar: "مقبول ✅",            en: "Accepted ✅" },
+  review: { ar: "يحتاج مراجعة ⚠️",     en: "Needs Review ⚠️" },
+  repeat: { ar: "يحتاج مقابلة إضافية 🔄", en: "Needs Another Interview 🔄" },
+};
+
+function interviewEvalHref(interview) {
+  return `/instructor/evaluation?interview=${interview._id}`;
+}
+
+// مين هيستلم رسالة التقييم
+function recipientLabel(interview, isAr) {
+  return interview.isAdult
+    ? (isAr ? "الطالب نفسه (بالغ)" : "The student (adult)")
+    : (isAr ? "ولي الأمر" : "The guardian");
+}
+
+// ─── ✅ Interview Detail Modal — مفيش حضور: تقييم على طول ───────────────────
+function InterviewModal({ interview, onClose, isAr }) {
+  const cfg = STATUS_CFG[interview.status] || STATUS_CFG.scheduled;
+  const t = (ar, en) => isAr ? ar : en;
+  const formatTime = isAr ? fmtTimeAr : fmtTime;
+  const decisionLabel = interview.evaluation?.decision
+    ? INTERVIEW_DECISION_LABEL[interview.evaluation.decision]
+    : null;
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" dir={isAr ? "rtl" : "ltr"}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={onClose} />
+
+      <div className="relative w-full sm:max-w-2xl max-h-[94vh] overflow-y-auto bg-white dark:bg-[#0d1117] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col border border-gray-100 dark:border-[#21262d]">
+
+        <div className="relative overflow-hidden flex-shrink-0" style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59cc 40%, #ff6700 100%)" }}>
+          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+          <div className="absolute -bottom-10 -right-10 w-48 h-48 rounded-full opacity-20" style={{ background: "#feaf00" }} />
+
+          <div className="relative z-10 p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-black px-3 py-1 rounded-full border border-white/25 flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${cfg.dot} animate-pulse`} />
+                  {isAr ? cfg.labelAr : cfg.labelEn}
+                </span>
+                <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-black px-2.5 py-1 rounded-full border border-white/25 flex items-center gap-1">
+                  <Briefcase className="w-3 h-3" />{t("مقابلة", "Interview")}
+                </span>
+                {interview.isToday && interview.status === "scheduled" && (
+                  <span className="bg-[#feaf00]/30 backdrop-blur-sm text-[#feaf00] text-xs font-black px-2.5 py-1 rounded-full border border-[#feaf00]/40">
+                    ✨ {t("اليوم", "Today")}
+                  </span>
+                )}
+                {interview.isOffline && (
+                  <span className="bg-[#feaf00]/30 backdrop-blur-sm text-[#feaf00] text-xs font-black px-2.5 py-1 rounded-full border border-[#feaf00]/40 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />{t("Offline", "Offline")}
+                  </span>
+                )}
+              </div>
+              <button onClick={onClose} className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-all border border-white/20">
+                <X className="w-4 h-4 text-white" />
+              </button>
+            </div>
+
+            <h2 className="text-xl font-black text-white mb-1 leading-snug">{interview.title}</h2>
+            <p className="text-white/60 text-sm font-medium mb-5">
+              {interview.student?.name || t("بدون اسم", "No name")} ·{" "}
+              {interview.isAdult ? t("بالغ", "Adult") : t("طفل", "Kid")}
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              {[
+                { icon: Calendar, text: fmtDateFull(interview.scheduledDate, isAr) },
+                { icon: Clock, text: `${formatTime(interview.startTime)} – ${formatTime(interview.endTime)}` },
+              ].map(({ icon: Icon, text }, i) => (
+                <span key={i} className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full border border-white/15">
+                  <Icon className="w-3 h-3" />{text}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4 bg-gray-50/50 dark:bg-[#0d1117]">
+
+          {/* ✅ مفيش حضور + مين هيستلم التقييم */}
+          <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#004d59]/5 dark:bg-[#004d59]/10 border border-[#004d59]/20 dark:border-[#004d59]/30">
+            <div className="w-9 h-9 rounded-xl bg-[#004d59]/10 dark:bg-[#004d59]/20 flex items-center justify-center flex-shrink-0 border border-[#004d59]/20">
+              <Info className="w-4 h-4 text-[#004d59] dark:text-teal-400" />
+            </div>
+            <div>
+              <p className="text-sm font-black text-[#004d59] dark:text-teal-400">
+                {t("المقابلة مفيهاش تسجيل حضور", "No attendance for interviews")}
+              </p>
+              <p className="text-xs text-[#004d59]/70 dark:text-teal-400/70 mt-0.5 leading-relaxed">
+                {t(
+                  `بعد المقابلة روح للتقييم على طول — رسالة التقييم هتروح لـ${recipientLabel(interview, true)}.`,
+                  `After the interview go straight to the evaluation — the result message goes to ${recipientLabel(interview, false).toLowerCase()}.`
+                )}
+              </p>
+            </div>
+          </div>
+
+          {/* Online → credentials | Offline → location */}
+          {interview.canViewDetails && !interview.isOffline && interview.meetingLink && (
+            <MeetingCredentials session={interview} isAr={isAr} />
+          )}
+          {interview.canViewDetails && interview.isOffline && interview.locationInfo && (
+            <LocationCard session={interview} isAr={isAr} />
+          )}
+
+          {/* ✅ زرار التقييم على طول */}
+          {interview.canEvaluate && (
+            <Link href={interviewEvalHref(interview)}
+              className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-[#004d59] to-[#ff6700] text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
+              <Star className="w-5 h-5" />
+              {t("تقييم المقابلة", "Evaluate Interview")}
+            </Link>
+          )}
+
+          {/* نتيجة التقييم */}
+          {interview.evaluationCompleted && interview.evaluation && (
+            <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/60 dark:bg-emerald-900/10 overflow-hidden">
+              <div className="flex items-center gap-2.5 px-4 py-3 border-b border-emerald-200/60 dark:border-emerald-800/30">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-md">
+                  <CheckCircle className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">
+                  {t("تم تقييم المقابلة", "Interview Evaluated")}
+                </span>
+                {decisionLabel && (
+                  <span className="mr-auto text-[11px] px-2.5 py-1 rounded-full bg-white/70 dark:bg-[#161b22] text-emerald-700 dark:text-emerald-400 font-black border border-emerald-200 dark:border-emerald-800/40">
+                    {isAr ? decisionLabel.ar : decisionLabel.en}
+                  </span>
+                )}
+              </div>
+              <div className="p-4 space-y-2">
+                {interview.evaluation.instructorComment && (
+                  <p className="text-sm text-gray-700 dark:text-[#c9d1d9] leading-relaxed">
+                    {interview.evaluation.instructorComment}
+                  </p>
+                )}
+                <p className="text-[11px] text-gray-500 dark:text-[#8b949e] flex items-center gap-1.5">
+                  <Send className="w-3 h-3" />
+                  {interview.evaluationSent
+                    ? t(`الرسالة اتبعتت لـ${recipientLabel(interview, true)}`, `Message sent to ${recipientLabel(interview, false).toLowerCase()}`)
+                    : t("الرسالة لسه ماتبعتتش", "Message not sent yet")}
+                </p>
+                <Link href={interviewEvalHref(interview)}
+                  className="inline-flex items-center gap-1.5 text-xs font-black text-[#004d59] dark:text-teal-400 hover:underline">
+                  <RefreshCw className="w-3 h-3" />{t("تعديل التقييم", "Edit evaluation")}
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {interview.instructorNotes && (
+            <div className="bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border border-[#feaf00]/30 dark:border-[#feaf00]/20 rounded-2xl p-4">
+              <h4 className="text-xs font-black text-[#f67d00] dark:text-[#feaf00] mb-2 flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5" />{t("ملاحظات", "Notes")}
+              </h4>
+              <p className="text-sm text-[#f67d00]/80 dark:text-[#feaf00]/70 leading-relaxed">{interview.instructorNotes}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ✅ Interview Row ─────────────────────────────────────────────────────────
+function InterviewRow({ interview, onOpen, isAr }) {
+  const cfg = STATUS_CFG[interview.status] || STATUS_CFG.scheduled;
+  const t = (ar, en) => isAr ? ar : en;
+  const formatTime = isAr ? fmtTimeAr : fmtTime;
+  const isCompleted = interview.status === "completed";
+  const isToday = interview.isToday && interview.status === "scheduled";
+
+  return (
+    <div
+      onClick={() => onOpen(interview)}
+      className={`group flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-2xl border bg-white dark:bg-[#161b22] cursor-pointer
+        transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg
+        ${isToday
+          ? "border-[#ff6700]/40 shadow-md shadow-[#ff6700]/10 ring-1 ring-[#ff6700]/20"
+          : isCompleted
+            ? "border-emerald-200/60 dark:border-emerald-800/30"
+            : "border-gray-100 dark:border-[#30363d] hover:border-[#004d59]/30 dark:hover:border-[#004d59]/40"}`}
+    >
+      <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md bg-gradient-to-br text-white
+        ${isCompleted ? "from-emerald-400 to-teal-500" : isToday ? "from-[#ff6700] to-[#feaf00]" : "from-[#004d59] to-[#004d59]/70"}`}>
+        {isCompleted ? <CheckCircle className="w-5 h-5" /> : <Briefcase className="w-5 h-5" />}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+          <span className="text-[10px] font-black text-[#004d59] dark:text-teal-400 flex items-center gap-1">
+            <Briefcase className="w-2.5 h-2.5" />{t("مقابلة", "Interview")}
+          </span>
+          {isToday && (
+            <span className="text-[10px] font-black text-[#ff6700] flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#ff6700] animate-pulse" />
+              {t("اليوم", "Today")}
+            </span>
+          )}
+          {interview.isOffline && (
+            <span className="text-[10px] font-black text-[#f67d00] dark:text-[#feaf00] flex items-center gap-1">
+              <MapPin className="w-2.5 h-2.5" />{t("Offline", "Offline")}
+            </span>
+          )}
+          <h3 className="font-black text-sm truncate text-gray-900 dark:text-[#e6edf3] group-hover:text-[#ff6700] transition-colors duration-200">
+            {interview.title}
+          </h3>
+        </div>
+        <div className="flex items-center gap-2.5 text-xs text-gray-400 dark:text-[#6e7681] flex-wrap">
+          <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{fmtDateShort(interview.scheduledDate, isAr)}</span>
+          <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatTime(interview.startTime)}</span>
+          {interview.student?.name && (
+            <span className="flex items-center gap-1"><User className="w-3 h-3" />{interview.student.name}</span>
+          )}
+          <span className="flex items-center gap-1 text-[#004d59] dark:text-teal-600 font-medium">
+            {interview.isAdult ? t("بالغ", "Adult") : t("طفل", "Kid")}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {/* ✅ تقييم على طول (مفيش حضور) */}
+        {interview.canEvaluate && (
+          <Link href={interviewEvalHref(interview)}
+            onClick={e => e.stopPropagation()}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
+            style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
+            <Star className="w-3.5 h-3.5" />{t("تقييم", "Evaluate")}
+          </Link>
+        )}
+
+        {interview.showJoinButton && !interview.isOffline && (
+          <a href={interview.meetingLink} target="_blank" rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
+            style={{ background: "linear-gradient(135deg, #ff6700, #feaf00)" }}>
+            <Video className="w-3.5 h-3.5" />{t("ابدأ", "Start")}
+          </a>
+        )}
+
+        {interview.evaluationCompleted && (
+          <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40">
+            <BadgeCheck className="w-3 h-3" />{t("تم التقييم", "Evaluated")}
+          </span>
+        )}
+
+        <span className={`text-[10px] px-2.5 py-1 rounded-full font-black hidden sm:flex items-center gap-1 ${cfg.badge}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+          {isAr ? cfg.labelAr : cfg.labelEn}
+        </span>
+
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors bg-gray-50 dark:bg-[#21262d] group-hover:bg-[#ff6700]/10">
+          <ChevronRight className="w-4 h-4 transition-colors text-gray-300 dark:text-[#6e7681] group-hover:text-[#ff6700]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Session Row ──────────────────────────────────────────────────────────────
 function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
   const cfg = STATUS_CFG[session.status] || STATUS_CFG.scheduled;
@@ -1331,7 +1603,7 @@ function DateHeader({ dateKey, sessions, isAr }) {
           {isToday && <span className="w-2 h-2 rounded-full bg-[#ff6700] animate-pulse" />}
         </div>
         <span className="text-xs text-gray-400 dark:text-[#6e7681]">
-          {d.toLocaleDateString(isAr ? "ar-EG" : "en-US", { month: "long", day: "numeric" })} · {sessions.length} {t("جلسة", sessions.length === 1 ? "session" : "sessions")}
+          {d.toLocaleDateString(isAr ? "ar-EG" : "en-US", { month: "long", day: "numeric" })} · {sessions.length} {t("موعد", sessions.length === 1 ? "item" : "items")}
         </span>
       </div>
       <div className="flex-1 h-px" style={{ background: "linear-gradient(to right, rgba(0,77,89,0.3), transparent)" }} />
@@ -1383,10 +1655,12 @@ export default function InstructorSessionsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [sessions, setSessions] = useState([]);
+  const [interviews, setInterviews] = useState([]);
   const [stats, setStats] = useState(null);
   const [user, setUser] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modal, setModal] = useState(null);
+  const [interviewModal, setInterviewModal] = useState(null);
   const [requestAccessSession, setRequestAccessSession] = useState(null);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -1404,6 +1678,8 @@ export default function InstructorSessionsPage() {
       ]);
       if (sessRes.success) {
         setSessions(sessRes.data.sessions || []);
+        // ✅ المقابلات (مفيهاش حضور — تقييم على طول)
+        setInterviews(sessRes.data.interviews || []);
         setStats(sessRes.data.stats || null);
         const groupMap = {};
         (sessRes.data.sessions || []).forEach(s => {
@@ -1437,7 +1713,12 @@ export default function InstructorSessionsPage() {
 
   const today = fmtDateKey(new Date());
 
-  const filtered = sessions.filter(s => {
+  // ✅ كل العناصر (جلسات + مقابلات) في قائمة واحدة
+  const allItems = [...sessions, ...interviews];
+  const hasInterviews = interviews.length > 0;
+
+  const filtered = allItems.filter(s => {
+    const isIv = !!s.isInterview;
     const sDate = fmtDateKey(s.scheduledDate);
     const filterMatch =
       filter === "all" ? true :
@@ -1445,9 +1726,16 @@ export default function InstructorSessionsPage() {
           filter === "upcoming" ? s.status === "scheduled" :
             filter === "today" ? sDate === today :
               filter === "cancelled" ? s.status === "cancelled" || s.status === "postponed" :
-                filter === "needs_att" ? s.status === "completed" && !s.attendanceTaken : true;
-    const groupMatch = selectedGroup === "all" || s.group?._id === selectedGroup;
-    const searchMatch = !search || s.title?.toLowerCase().includes(search.toLowerCase()) || s.group?.name?.toLowerCase().includes(search.toLowerCase());
+                filter === "needs_att" ? !isIv && s.status === "completed" && !s.attendanceTaken :
+                  filter === "interviews" ? isIv :
+                    filter === "needs_eval" ? isIv && !!s.canEvaluate : true;
+    // المقابلات مش تبع جروب — بتتخفي لو المدرس فلتر على جروب معين
+    const groupMatch = selectedGroup === "all" || (!isIv && s.group?._id === selectedGroup);
+    const q = search.toLowerCase();
+    const searchMatch = !search ||
+      s.title?.toLowerCase().includes(q) ||
+      s.group?.name?.toLowerCase().includes(q) ||
+      s.student?.name?.toLowerCase().includes(q);
     return filterMatch && groupMatch && searchMatch;
   });
 
@@ -1465,13 +1753,19 @@ export default function InstructorSessionsPage() {
   });
   const sortedDates = Object.keys(byDate).sort((a, b) => new Date(a) - new Date(b));
 
+  const interviewsNeedEval = interviews.filter(i => i.canEvaluate);
+
   const FILTERS = [
-    { id: "all", labelAr: "الكل", labelEn: "All", count: sessions.length },
-    { id: "upcoming", labelAr: "القادمة", labelEn: "Upcoming", count: sessions.filter(s => s.status === "scheduled").length },
-    { id: "completed", labelAr: "المكتملة", labelEn: "Completed", count: sessions.filter(s => s.status === "completed").length },
-    { id: "today", labelAr: "اليوم", labelEn: "Today", count: sessions.filter(s => fmtDateKey(s.scheduledDate) === today).length },
+    { id: "all", labelAr: "الكل", labelEn: "All", count: allItems.length },
+    { id: "upcoming", labelAr: "القادمة", labelEn: "Upcoming", count: allItems.filter(s => s.status === "scheduled").length },
+    { id: "completed", labelAr: "المكتملة", labelEn: "Completed", count: allItems.filter(s => s.status === "completed").length },
+    { id: "today", labelAr: "اليوم", labelEn: "Today", count: allItems.filter(s => fmtDateKey(s.scheduledDate) === today).length },
     { id: "needs_att", labelAr: "تحتاج حضور", labelEn: "Need Attendance", count: sessions.filter(s => s.status === "completed" && !s.attendanceTaken).length },
-    { id: "cancelled", labelAr: "ملغاة/مؤجلة", labelEn: "Cancelled", count: sessions.filter(s => s.status === "cancelled" || s.status === "postponed").length },
+    ...(hasInterviews ? [
+      { id: "interviews", labelAr: "المقابلات", labelEn: "Interviews", count: interviews.length },
+      { id: "needs_eval", labelAr: "تحتاج تقييم", labelEn: "Need Evaluation", count: interviewsNeedEval.length },
+    ] : []),
+    { id: "cancelled", labelAr: "ملغاة/مؤجلة", labelEn: "Cancelled", count: allItems.filter(s => s.status === "cancelled" || s.status === "postponed").length },
   ];
 
   // ✅ اليوم — بنستثني اللي مقفولة
@@ -1490,6 +1784,24 @@ export default function InstructorSessionsPage() {
   const handleRequestSubmitted = useCallback(() => {
     fetchData(true);
   }, [fetchData]);
+
+  const renderItem = (s) =>
+    s.isInterview ? (
+      <InterviewRow
+        key={`iv-${s._id}`}
+        interview={s}
+        onOpen={setInterviewModal}
+        isAr={isAr}
+      />
+    ) : (
+      <SessionRow
+        key={s._id}
+        session={s}
+        onOpen={setModal}
+        onRequestAccess={setRequestAccessSession}
+        isAr={isAr}
+      />
+    );
 
   return (
     <div className="min-h-screen bg-[#f8f9fb] dark:bg-[#0a0f17] flex" dir={isAr ? "rtl" : "ltr"}>
@@ -1536,6 +1848,7 @@ export default function InstructorSessionsPage() {
                   {!loading && stats && (
                     <p className="text-xs text-gray-400 dark:text-[#6e7681] mt-0.5">
                       {stats.completed} {t("مكتملة", "completed")} · {stats.scheduled} {t("مجدولة", "scheduled")} · {stats.total} {t("إجمالي", "total")}
+                      {hasInterviews && <> · {interviews.length} {t("مقابلة", interviews.length === 1 ? "interview" : "interviews")}</>}
                     </p>
                   )}
                 </div>
@@ -1618,6 +1931,41 @@ export default function InstructorSessionsPage() {
               lockedSessionsCount={lockedSessionsCount}
               totalActiveSessions={totalActiveSessions}
             />
+          )}
+
+          {/* ✅ Interviews Need Evaluation Banner — مفيش حضور، تقييم على طول */}
+          {!loading && interviewsNeedEval.length > 0 && filter === "all" && (
+            <div className="mb-5 rounded-2xl p-4 text-white relative overflow-hidden shadow-lg"
+              style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59dd 40%, #ff6700 100%)" }}>
+              <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
+              <div className="relative z-10 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0 border border-white/20">
+                  <Briefcase className="w-5 h-5 text-[#feaf00]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-white/60 font-bold">{t("مقابلات", "Interviews")}</p>
+                  <p className="font-black text-sm truncate">
+                    {interviewsNeedEval.length} {t("مقابلة جاهزة للتقييم", interviewsNeedEval.length === 1 ? "interview ready for evaluation" : "interviews ready for evaluation")}
+                  </p>
+                  <p className="text-[11px] text-white/70 truncate mt-0.5">
+                    {t("من غير حضور — روح للتقييم على طول", "No attendance — go straight to evaluation")}
+                  </p>
+                </div>
+                {interviewsNeedEval.length === 1 ? (
+                  <Link href={interviewEvalHref(interviewsNeedEval[0])}
+                    className="flex items-center gap-2 bg-white font-black text-xs px-4 py-2.5 rounded-xl hover:bg-orange-50 transition-all shadow-lg flex-shrink-0"
+                    style={{ color: "#ff6700" }}>
+                    <Star className="w-4 h-4" />{t("قيّم الآن", "Evaluate Now")}
+                  </Link>
+                ) : (
+                  <button onClick={() => setFilter("needs_eval")}
+                    className="flex items-center gap-2 bg-white font-black text-xs px-4 py-2.5 rounded-xl hover:bg-orange-50 transition-all shadow-lg flex-shrink-0"
+                    style={{ color: "#ff6700" }}>
+                    {t("عرضها", "Show them")}
+                  </button>
+                )}
+              </div>
+            </div>
           )}
 
           {/* Today's Session Banner */}
@@ -1720,30 +2068,14 @@ export default function InstructorSessionsPage() {
                   <div key={dk}>
                     <DateHeader dateKey={dk} sessions={byDate[dk]} isAr={isAr} />
                     <div className="space-y-2.5" style={{ [isAr ? "paddingRight" : "paddingLeft"]: "60px" }}>
-                      {byDate[dk].map(s => (
-                        <SessionRow
-                          key={s._id}
-                          session={s}
-                          onOpen={setModal}
-                          onRequestAccess={setRequestAccessSession}
-                          isAr={isAr}
-                        />
-                      ))}
+                      {byDate[dk].map(renderItem)}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="space-y-2.5">
-                {sorted.map(s => (
-                  <SessionRow
-                    key={s._id}
-                    session={s}
-                    onOpen={setModal}
-                    onRequestAccess={setRequestAccessSession}
-                    isAr={isAr}
-                  />
-                ))}
+                {sorted.map(renderItem)}
               </div>
             )
           )}
@@ -1755,6 +2087,13 @@ export default function InstructorSessionsPage() {
           session={modal}
           onClose={() => setModal(null)}
           onRequestAccess={handleRequestAccessFromModal}
+          isAr={isAr}
+        />
+      )}
+      {interviewModal && (
+        <InterviewModal
+          interview={interviewModal}
+          onClose={() => setInterviewModal(null)}
           isAr={isAr}
         />
       )}

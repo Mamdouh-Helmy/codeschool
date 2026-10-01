@@ -65,6 +65,45 @@ const MessageTemplateSchema = new mongoose.Schema(
         "evaluation_pass_adult",
         "evaluation_review_adult",
         "evaluation_repeat_adult",
+        // ═══════════════════════════════════════════════════════════
+        // 🎯 INTERVIEWS — Welcome (Online + Offline)
+        // ═══════════════════════════════════════════════════════════
+        "interview_welcome_child_online",
+        "interview_welcome_child_offline",
+        "interview_welcome_guardian_online",
+        "interview_welcome_guardian_offline",
+        "interview_welcome_adult_online",
+        "interview_welcome_adult_offline",
+        "interview_welcome_instructor_online",
+        "interview_welcome_instructor_offline",
+
+        // 🎯 INTERVIEWS — Online Reminders (24h + 15min)
+        "interview_reminder_24h_online_child",
+        "interview_reminder_24h_online_guardian",
+        "interview_reminder_15min_online_child",
+        "interview_reminder_15min_online_guardian",
+        "interview_reminder_24h_online_adult",
+        "interview_reminder_15min_online_adult",
+        "interview_reminder_24h_online_instructor",
+        "interview_reminder_15min_online_instructor",
+
+        // 🎯 INTERVIEWS — Offline Reminders (24h + 30min + Ping)
+        "interview_reminder_24h_offline_child",
+        "interview_reminder_30min_offline_child",
+        "interview_pre_ping_offline_child",
+        "interview_reminder_24h_offline_guardian",
+        "interview_reminder_30min_offline_guardian",
+        "interview_pre_ping_offline_guardian",
+        "interview_reminder_24h_offline_adult",
+        "interview_reminder_30min_offline_adult",
+        "interview_pre_ping_offline_adult",
+        "interview_reminder_24h_offline_instructor",
+        "interview_reminder_30min_offline_instructor",
+        "interview_pre_ping_offline_instructor",
+
+        // 🎯 INTERVIEWS — Evaluation
+        "interview_evaluation_guardian",
+        "interview_evaluation_adult",
       ],
     },
 
@@ -643,6 +682,58 @@ function getFallbackTemplates() {
     smartLocationVar,
   ];
 
+  // ═════════════════════════════════════════════════════════════
+  // 🎯 INTERVIEW — Variables
+  // ═════════════════════════════════════════════════════════════
+  const interviewCommonVariables = [
+    { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+    { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
+    {
+      key: "meetingLink",
+      label: "رابط المقابلة (Online)",
+      example: "https://meet.google.com/xxx",
+    },
+    {
+      key: "sessionName",
+      label: "عنوان المقابلة",
+      example: "Interview Session 1",
+    },
+    { key: "instructorName", label: "اسم المُقابِل / المدرب", example: "أحمد" },
+    {
+      key: "instructorSalutation",
+      label: "تحية المُقابِل",
+      example: "عزيزي الأستاذ أحمد",
+    },
+  ];
+
+  const interviewOfflineVars = [
+    ...offlineLocationVariables,
+    { key: "placeName", label: "اسم المكان", example: "Code School - المعادي" },
+  ];
+
+  const interviewEvalVariables = [
+    {
+      key: "guardianSalutation",
+      label: "تحية ولي الأمر",
+      example: "عزيزي الأستاذ محمد",
+    },
+    {
+      key: "studentSalutation",
+      label: "تحية الطالب (للبالغ)",
+      example: "عزيزي أحمد",
+    },
+    { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+    { key: "studentName", label: "اسم الطالب", example: "أحمد" },
+    { key: "interviewDate", label: "تاريخ المقابلة", example: "30/12/2025" },
+    { key: "interviewNumber", label: "رقم المقابلة", example: "1" },
+    {
+      key: "instructorComment",
+      label: "تعليق المُقابِل",
+      example: "أداء ممتاز",
+    }, // ✅
+    { key: "evaluationDecision", label: "النتيجة النهائية", example: "مقبول" },
+  ];
+
   return {
     // ── evaluation_pass ────────────────────────────────────────
     evaluation_pass: {
@@ -1178,6 +1269,484 @@ function getFallbackTemplates() {
       variables: makeupInstructorOfflineVariables,
       ar: `{instructorSalutation} 👋\n\nتم تحديد حصة تعويضية جديدة ليك (Offline):\n\n📘 الكورس: {courseName}\n👥 المجموعة: {groupName}\n👤 الطالب: {studentName}\n\n📅 التاريخ: {newDate}\n⏰ الوقت: {newTime}\n{sessionLocationBlock}\n\n🔄 الحصة الأصلية:\n📅 {originalDate}\n⏰ {originalTime}\n📚 {originalSessionTitle}\n\nملاحظة: الحصة دي تعويضية (مجانية على الطالب)، لكن المدرس بيتحاسب عليها عادي.\n\nفريق Code School 💻`,
       en: `{instructorSalutation} 👋\n\nA new make-up session has been scheduled for you (Offline):\n\n📘 Course: {courseName}\n👥 Group: {groupName}\n👤 Student: {studentName}\n\n📅 Date: {newDate}\n⏰ Time: {newTime}\n{sessionLocationBlock}\n\n🔄 Original Session:\n📅 {originalDate}\n⏰ {originalTime}\n📚 {originalSessionTitle}\n\nNote: This is a make-up session (free for the student), but the instructor is still paid for it.\n\nCode School Team 💻`,
+    },
+    // ═══════════════════════════════════════════════════════════
+    // 🎯 INTERVIEW — EVALUATION
+    // ═══════════════════════════════════════════════════════════
+    interview_evaluation_guardian: {
+      variables: interviewEvalVariables,
+      ar: `{guardianSalutation}،\n\nتقرير المقابلة 📋✨\n📆 التاريخ : {interviewDate}\n📑 رقم المقابلة : {interviewNumber}\n👤 الطالب : {studentName}\n\n📝 تعليق المُقابِل :\n{instructorComment}\n\n🏆 النتيجة : {evaluationDecision}\n\n🙏 نشكركم على ثقتكم في Code School\n📞 للتواصل : +2 011 40 474 129`,
+      en: `{guardianSalutation},\n\nInterview Report 📋✨\n📆 Date : {interviewDate}\n📑 Interview No. : {interviewNumber}\n👤 Student : {studentName}\n\n📝 Interviewer's Comment :\n{instructorComment}\n\n🏆 Result : {evaluationDecision}\n\n🙏 Thank you for trusting Code School\n📞 Contact : +2 011 40 474 129`,
+    },
+
+    interview_evaluation_adult: {
+      variables: interviewEvalVariables,
+      ar: `{studentSalutation}،\n\nتقرير المقابلة 📋✨\n📆 التاريخ : {interviewDate}\n📑 رقم المقابلة : {interviewNumber}\n\n📝 تعليق المُقابِل :\n{instructorComment}\n\n🏆 النتيجة : {evaluationDecision}\n\n🙏 نشكرك على ثقتك في Code School\n📞 للتواصل : +2 011 40 474 129`,
+      en: `{studentSalutation},\n\nInterview Report 📋✨\n📆 Date : {interviewDate}\n📑 Interview No. : {interviewNumber}\n\n📝 Interviewer's Comment :\n{instructorComment}\n\n🏆 Result : {evaluationDecision}\n\n🙏 Thank you for trusting Code School\n📞 Contact : +2 011 40 474 129`,
+    },
+        // ═══════════════════════════════════════════════════════════
+    // 🎯 INTERVIEW — Welcome (Online)
+    // ═══════════════════════════════════════════════════════════
+    interview_welcome_child_online: {
+      variables: [
+        { key: "salutation_ar", label: "تحية الطالب (عربي)", example: "عزيزي ممدوح" },
+        { key: "salutation_en", label: "تحية الطالب (إنجليزي)", example: "Dear Mamdouh" },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
+        { key: "meetingLink", label: "رابط المقابلة", example: "https://meet.google.com/xxx" },
+        { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
+      ],
+      ar: `{salutation_ar} 👋\n\nأهلاً بيك في Code School! 🎉\n\nبنسعد بإبلاغك إنه تم تحديد ميعاد المقابلة الشخصية بتاعتك (Online):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\n💡 ياريت تجهز قبل الميعاد بخمس دقايق، وتتأكد إن اللاب مشحون، النت مستقر، والكاميرا جاهزة 👍\n\nمتحمسين نشوفك! 💻🚀\nفريق Code School`,
+      en: `{salutation_en} 👋\n\nWelcome to Code School! 🎉\n\nWe're happy to confirm your interview has been scheduled (Online):\n\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n👨‍🏫 Interviewer: {instructorName}\n\n💡 Please be ready 5 minutes early, make sure your laptop is charged, internet is stable, and camera is ready 👍\n\nExcited to meet you! 💻🚀\nCode School Team`,
+    },
+    interview_welcome_child_offline: {
+      variables: [
+        { key: "salutation_ar", label: "تحية الطالب (عربي)", example: "عزيزي ممدوح" },
+        { key: "salutation_en", label: "تحية الطالب (إنجليزي)", example: "Dear Mamdouh" },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
+        { key: "placeName", label: "المكان", example: "Code School - المعادي" },
+        { key: "address", label: "العنوان", example: "شارع 9، المعادي" },
+        { key: "mapsLink", label: "اللوكيشن", example: "https://maps.google.com/..." },
+        { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
+      ],
+      ar: `{salutation_ar} 👋\n\nأهلاً بيك في Code School! 🎉\n\nبنسعد بإبلاغك إنه تم تحديد ميعاد المقابلة الشخصية بتاعتك (Offline):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\n💡 ياريت تكون في المكان قبل الميعاد بخمس دقايق 👍\n\nمتحمسين نشوفك! 💻🚀\nفريق Code School`,
+      en: `{salutation_en} 👋\n\nWelcome to Code School! 🎉\n\nWe're happy to confirm your interview has been scheduled (Offline):\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\n👨‍🏫 Interviewer: {instructorName}\n\n💡 Please be at the location 5 minutes early 👍\n\nExcited to meet you! 💻🚀\nCode School Team`,
+    },
+
+    interview_welcome_guardian_online: {
+      variables: [
+        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+        { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
+        { key: "meetingLink", label: "رابط المقابلة", example: "https://meet.google.com/xxx" },
+        { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
+      ],
+      ar: `{guardianSalutation} 👋\n\nيسرنا إبلاغكم بأنه تم تحديد ميعاد المقابلة الشخصية لـ{childTitle} **{studentName}** (Online):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\nنتمنى من حضرتكم تجهيز {childTitle} للمقابلة في الميعاد، والتأكد من استقرار النت وجاهزية الكاميرا 👍\n\nنتطلع للقائكم قريباً 🌟\nفريق Code School 💻`,
+      en: `{guardianSalutation} 👋\n\nWe are pleased to inform you that an interview has been scheduled for {childTitle} **{studentName}** (Online):\n\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n👨‍🏫 Interviewer: {instructorName}\n\nPlease ensure {childTitle} is ready on time, with a stable internet connection and a working camera 👍\n\nLooking forward to meeting you soon 🌟\nCode School Team 💻`,
+    },
+    interview_welcome_guardian_offline: {
+      variables: [
+        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+        { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
+        { key: "placeName", label: "المكان", example: "Code School - المعادي" },
+        { key: "address", label: "العنوان", example: "شارع 9، المعادي" },
+        { key: "mapsLink", label: "اللوكيشن", example: "https://maps.google.com/..." },
+        { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
+      ],
+      ar: `{guardianSalutation} 👋\n\nيسرنا إبلاغكم بأنه تم تحديد ميعاد المقابلة الشخصية لـ{childTitle} **{studentName}** (Offline):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\nنتمنى من حضرتكم تجهيز {childTitle} للوصول في الميعاد 👍\n\nنتطلع للقائكم قريباً 🌟\nفريق Code School 💻`,
+      en: `{guardianSalutation} 👋\n\nWe are pleased to inform you that an interview has been scheduled for {childTitle} **{studentName}** (Offline):\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\n👨‍🏫 Interviewer: {instructorName}\n\nPlease ensure {childTitle} arrives on time 👍\n\nLooking forward to meeting you soon 🌟\nCode School Team 💻`,
+    },
+
+    interview_welcome_adult_online: {
+      variables: [
+        { key: "studentSalutation", label: "تحية الطالب البالغ", example: "عزيزي أحمد" },
+        { key: "studentName", label: "اسم الطالب", example: "أحمد" },
+        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
+        { key: "meetingLink", label: "رابط المقابلة", example: "https://meet.google.com/xxx" },
+        { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
+      ],
+      ar: `{studentSalutation} 👋\n\nأهلاً بيك في Code School! 🎉\n\nتم تحديد ميعاد المقابلة الشخصية بتاعتك (Online):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\n💡 ياريت تجهز قبل الميعاد بخمس دقايق 👍\n\nمتحمسين نشوفك! 💻🚀\nفريق Code School`,
+      en: `{studentSalutation} 👋\n\nWelcome to Code School! 🎉\n\nYour interview has been scheduled (Online):\n\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n👨‍🏫 Interviewer: {instructorName}\n\n💡 Please be ready 5 minutes early 👍\n\nExcited to meet you! 💻🚀\nCode School Team`,
+    },
+    interview_welcome_adult_offline: {
+      variables: [
+        { key: "studentSalutation", label: "تحية الطالب البالغ", example: "عزيزي أحمد" },
+        { key: "studentName", label: "اسم الطالب", example: "أحمد" },
+        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
+        { key: "placeName", label: "المكان", example: "Code School - المعادي" },
+        { key: "address", label: "العنوان", example: "شارع 9، المعادي" },
+        { key: "mapsLink", label: "اللوكيشن", example: "https://maps.google.com/..." },
+        { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
+      ],
+      ar: `{studentSalutation} 👋\n\nأهلاً بيك في Code School! 🎉\n\nتم تحديد ميعاد المقابلة الشخصية بتاعتك (Offline):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\n💡 ياريت تكون في المكان قبل الميعاد بخمس دقايق 👍\n\nمتحمسين نشوفك! 💻🚀\nفريق Code School`,
+      en: `{studentSalutation} 👋\n\nWelcome to Code School! 🎉\n\nYour interview has been scheduled (Offline):\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\n👨‍🏫 Interviewer: {instructorName}\n\n💡 Please be at the location 5 minutes early 👍\n\nExcited to meet you! 💻🚀\nCode School Team`,
+    },
+
+    interview_welcome_instructor_online: {
+      variables: [
+        { key: "instructorSalutation", label: "تحية المُقابِل", example: "عزيزي الأستاذ أحمد" },
+        { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
+        { key: "meetingLink", label: "رابط المقابلة", example: "https://meet.google.com/xxx" },
+      ],
+      ar: `{instructorSalutation} 👋\n\nتم تحديد مقابلة شخصية جديدة ليك (Online):\n\n👤 الطالب: {studentName}\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\nياريت تكون جاهز قبل الميعاد بخمس دقايق، وتتأكد من استقرار النت والكاميرا 👍\n\nبالتوفيق! 💻🚀\nفريق Code School`,
+      en: `{instructorSalutation} 👋\n\nA new interview has been scheduled for you (Online):\n\n👤 Student: {studentName}\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\nPlease be ready 5 minutes early, with a stable internet connection and working camera 👍\n\nGood luck! 💻🚀\nCode School Team`,
+    },
+    interview_welcome_instructor_offline: {
+      variables: [
+        { key: "instructorSalutation", label: "تحية المُقابِل", example: "عزيزي الأستاذ أحمد" },
+        { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
+        { key: "placeName", label: "المكان", example: "Code School - المعادي" },
+        { key: "address", label: "العنوان", example: "شارع 9، المعادي" },
+        { key: "mapsLink", label: "اللوكيشن", example: "https://maps.google.com/..." },
+      ],
+      ar: `{instructorSalutation} 👋\n\nتم تحديد مقابلة شخصية جديدة ليك (Offline):\n\n👤 الطالب: {studentName}\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\nياريت تكون في المكان قبل الميعاد بخمس دقايق 👍\n\nبالتوفيق! 💻🚀\nفريق Code School`,
+      en: `{instructorSalutation} 👋\n\nA new interview has been scheduled for you (Offline):\n\n👤 Student: {studentName}\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\nPlease be at the location 5 minutes early 👍\n\nGood luck! 💻🚀\nCode School Team`,
+    },
+
+    // ═══════════════════════════════════════════════════════════
+    // 🎯 INTERVIEW — ONLINE REMINDERS
+    // ═══════════════════════════════════════════════════════════
+    interview_reminder_24h_online_child: {
+      variables: [
+        { key: "salutation_ar", label: "تحية الطالب", example: "عزيزي ممدوح" },
+        {
+          key: "salutation_en",
+          label: "Student Salutation (EN)",
+          example: "Dear Mamdouh",
+        },
+        { key: "date", label: "التاريخ", example: "غدًا" },
+        { key: "time", label: "الوقت", example: "07:00" },
+        {
+          key: "meetingLink",
+          label: "رابط المقابلة",
+          example: "https://meet.google.com/xxx",
+        },
+      ],
+      ar: `{salutation_ar} 👋\n\n⏰ تذكير: عندك مقابلة شخصية بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\n💡 ياريت تجهز قبل الميعاد، وتتأكد إن اللاب مشحون والنت مستقر 👍\n\nمستنيينك! 💻\nCode School`,
+      en: `{salutation_en} 👋\n\n⏰ Reminder: You have an interview tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n💡 Please prepare on time, and make sure your laptop is charged and internet is stable 👍\n\nWe're waiting for you! 💻\nCode School`,
+    },
+
+    interview_reminder_24h_online_guardian: {
+      variables: [
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
+        { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "date", label: "التاريخ", example: "غدًا" },
+        { key: "time", label: "الوقت", example: "07:00" },
+        {
+          key: "meetingLink",
+          label: "رابط المقابلة",
+          example: "https://meet.google.com/xxx",
+        },
+      ],
+      ar: `{guardianSalutation} 👋\n\n⏰ تذكير: مقابلة {childTitle} *{studentName}* بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\nياريت تجهز {childTitle} للمقابلة في الميعاد، وتتأكد من استقرار النت والكاميرا 🙏\nCode School 💻`,
+      en: `{guardianSalutation} 👋\n\n⏰ Reminder: {childTitle} *{studentName}*'s interview is tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\nPlease have {childTitle} ready on time, with stable internet and camera 🙏\nCode School 💻`,
+    },
+
+    interview_reminder_15min_online_child: {
+      variables: [
+        { key: "salutation_ar", label: "تحية الطالب", example: "عزيزي ممدوح" },
+        {
+          key: "salutation_en",
+          label: "Student Salutation (EN)",
+          example: "Dear Mamdouh",
+        },
+        {
+          key: "meetingLink",
+          label: "رابط المقابلة",
+          example: "https://meet.google.com/xxx",
+        },
+      ],
+      ar: `{salutation_ar} 👋\n\n⏳ فاضل 15 دقيقة على بداية المقابلة بتاعتك ⏰\n\n🔗 رابط المقابلة:\n{meetingLink}\n\nيلا استعد من دلوقتي 👍\nCode School 💻`,
+      en: `{salutation_en} 👋\n\n⏳ 15 minutes until your interview ⏰\n\n🔗 Meeting Link:\n{meetingLink}\n\nGet ready now 👍\nCode School 💻`,
+    },
+
+    interview_reminder_15min_online_guardian: {
+      variables: [
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
+        { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        {
+          key: "meetingLink",
+          label: "رابط المقابلة",
+          example: "https://meet.google.com/xxx",
+        },
+      ],
+      ar: `{guardianSalutation} 👋\n\n⏳ فاضل 15 دقيقة على بداية مقابلة {childTitle} *{studentName}* ⏰\n\n🔗 رابط المقابلة:\n{meetingLink}\n\nياريت تجهز {childTitle} في الميعاد 🙏\nCode School 💻`,
+      en: `{guardianSalutation} 👋\n\n⏳ 15 minutes until {childTitle} *{studentName}*'s interview ⏰\n\n🔗 Meeting Link:\n{meetingLink}\n\nPlease have {childTitle} ready on time 🙏\nCode School 💻`,
+    },
+
+    interview_reminder_24h_online_adult: {
+      variables: [
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب البالغ",
+          example: "عزيزي أحمد",
+        },
+        { key: "date", label: "التاريخ", example: "غدًا" },
+        { key: "time", label: "الوقت", example: "07:00" },
+        {
+          key: "meetingLink",
+          label: "رابط المقابلة",
+          example: "https://meet.google.com/xxx",
+        },
+      ],
+      ar: `{studentSalutation} 👋\n\n⏰ تذكير: عندك مقابلة شخصية بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\nمستنيينك! 💻\nCode School`,
+      en: `{studentSalutation} 👋\n\n⏰ Reminder: You have an interview tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\nWe're waiting for you! 💻\nCode School`,
+    },
+
+    interview_reminder_15min_online_adult: {
+      variables: [
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب البالغ",
+          example: "عزيزي أحمد",
+        },
+        {
+          key: "meetingLink",
+          label: "رابط المقابلة",
+          example: "https://meet.google.com/xxx",
+        },
+      ],
+      ar: `{studentSalutation} 👋\n\n⏳ فاضل 15 دقيقة على بداية المقابلة ⏰\n\n🔗 رابط المقابلة:\n{meetingLink}\n\nيلا استعد 👍\nCode School 💻`,
+      en: `{studentSalutation} 👋\n\n⏳ 15 minutes until the interview ⏰\n\n🔗 Meeting Link:\n{meetingLink}\n\nGet ready 👍\nCode School 💻`,
+    },
+
+    interview_reminder_24h_online_instructor: {
+      variables: [
+        {
+          key: "instructorSalutation",
+          label: "تحية المُقابِل",
+          example: "عزيزي الأستاذ أحمد",
+        },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "date", label: "التاريخ", example: "غدًا" },
+        { key: "time", label: "الوقت", example: "07:00" },
+        {
+          key: "meetingLink",
+          label: "رابط المقابلة",
+          example: "https://meet.google.com/xxx",
+        },
+      ],
+      ar: `{instructorSalutation} 👋\n\n⏰ تذكير: عندك مقابلة شخصية للطالب *{studentName}* بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\nبالتوفيق! 💻\nCode School`,
+      en: `{instructorSalutation} 👋\n\n⏰ Reminder: You have an interview for *{studentName}* tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\nGood luck! 💻\nCode School`,
+    },
+
+    interview_reminder_15min_online_instructor: {
+      variables: [
+        {
+          key: "instructorSalutation",
+          label: "تحية المُقابِل",
+          example: "عزيزي الأستاذ أحمد",
+        },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        {
+          key: "meetingLink",
+          label: "رابط المقابلة",
+          example: "https://meet.google.com/xxx",
+        },
+      ],
+      ar: `{instructorSalutation} 👋\n\n⏳ فاضل 15 دقيقة على بداية المقابلة مع *{studentName}* ⏰\n\n🔗 رابط المقابلة:\n{meetingLink}\n\nبالتوفيق! 💻\nCode School`,
+      en: `{instructorSalutation} 👋\n\n⏳ 15 minutes until the interview with *{studentName}* ⏰\n\n🔗 Meeting Link:\n{meetingLink}\n\nGood luck! 💻\nCode School`,
+    },
+
+    // ═══════════════════════════════════════════════════════════
+    // 🎯 INTERVIEW — OFFLINE REMINDERS
+    // ═══════════════════════════════════════════════════════════
+    interview_reminder_24h_offline_child: {
+      variables: [
+        { key: "salutation_ar", label: "تحية الطالب", example: "عزيزي ممدوح" },
+        {
+          key: "salutation_en",
+          label: "Student Salutation (EN)",
+          example: "Dear Mamdouh",
+        },
+        { key: "date", label: "التاريخ", example: "غدًا" },
+        { key: "time", label: "الوقت", example: "07:00" },
+        ...interviewOfflineVars,
+      ],
+      ar: `{salutation_ar} 👋\n\n⏰ تذكير: عندك مقابلة شخصية بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\nمستنيينك! 💻\nCode School`,
+      en: `{salutation_en} 👋\n\n⏰ Reminder: You have an interview tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\nWe're waiting for you! 💻\nCode School`,
+    },
+
+    interview_reminder_30min_offline_child: {
+      variables: [
+        { key: "salutation_ar", label: "تحية الطالب", example: "عزيزي ممدوح" },
+        {
+          key: "salutation_en",
+          label: "Student Salutation (EN)",
+          example: "Dear Mamdouh",
+        },
+        { key: "placeName", label: "المكان", example: "Code School - المعادي" },
+        {
+          key: "mapsLink",
+          label: "اللوكيشن",
+          example: "https://maps.google.com/...",
+        },
+      ],
+      ar: `{salutation_ar} 👋\n\n⏰ فاضل 30 دقيقة على بداية مقابلتك\n\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\nيلا استعد للنزول 👍\nCode School 💻`,
+      en: `{salutation_en} 👋\n\n⏰ 30 minutes until your interview\n\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\nGet ready to head out 👍\nCode School 💻`,
+    },
+
+    interview_pre_ping_offline_child: {
+      variables: [
+        { key: "salutation_ar", label: "تحية الطالب", example: "عزيزي ممدوح" },
+        {
+          key: "salutation_en",
+          label: "Student Salutation (EN)",
+          example: "Dear Mamdouh",
+        },
+      ],
+      ar: `{salutation_ar} 👋\n\nبنستعد نبدأ مقابلتك دلوقتي، ياريت نتأكد إنك موجود وجاهز ✨\nCode School 💻`,
+      en: `{salutation_en} 👋\n\nWe're about to start your interview now, please make sure you're ready ✨\nCode School 💻`,
+    },
+
+    interview_reminder_24h_offline_guardian: {
+      variables: [
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
+        { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "date", label: "التاريخ", example: "غدًا" },
+        { key: "time", label: "الوقت", example: "07:00" },
+        ...interviewOfflineVars,
+      ],
+      ar: `{guardianSalutation} 👋\n\n⏰ تذكير: مقابلة {childTitle} *{studentName}* بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\nياريت تجهز {childTitle} للوصول في الميعاد 🙏\nCode School 💻`,
+      en: `{guardianSalutation} 👋\n\n⏰ Reminder: {childTitle} *{studentName}*'s interview is tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\nPlease have {childTitle} arrive on time 🙏\nCode School 💻`,
+    },
+
+    interview_reminder_30min_offline_guardian: {
+      variables: [
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
+        { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "placeName", label: "المكان", example: "Code School - المعادي" },
+        {
+          key: "mapsLink",
+          label: "اللوكيشن",
+          example: "https://maps.google.com/...",
+        },
+      ],
+      ar: `{guardianSalutation} 👋\n\n🚗 تنبيه: مقابلة {childTitle} *{studentName}* هتبدأ بعد 30 دقيقة\n\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\nياريت تجهز {childTitle} للنزول في الميعاد 🙏\nCode School 💻`,
+      en: `{guardianSalutation} 👋\n\n🚗 Heads-up: {childTitle} *{studentName}*'s interview starts in 30 minutes\n\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\nPlease have {childTitle} head out on time 🙏\nCode School 💻`,
+    },
+
+    interview_pre_ping_offline_guardian: {
+      variables: [
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
+        { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+      ],
+      ar: `{guardianSalutation} 👋\n\nبنستعد نبدأ مقابلة {childTitle} *{studentName}* دلوقتي، ياريت نتأكد إنه موجود وجاهز ✨\nCode School 💻`,
+      en: `{guardianSalutation} 👋\n\nWe're about to start {childTitle} *{studentName}*'s interview now, please make sure they're ready ✨\nCode School 💻`,
+    },
+
+    interview_reminder_24h_offline_adult: {
+      variables: [
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب البالغ",
+          example: "عزيزي أحمد",
+        },
+        { key: "date", label: "التاريخ", example: "غدًا" },
+        { key: "time", label: "الوقت", example: "07:00" },
+        ...interviewOfflineVars,
+      ],
+      ar: `{studentSalutation} 👋\n\n⏰ تذكير: عندك مقابلة شخصية بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\nمستنيينك! 💻\nCode School`,
+      en: `{studentSalutation} 👋\n\n⏰ Reminder: You have an interview tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\nWe're waiting for you! 💻\nCode School`,
+    },
+
+    interview_reminder_30min_offline_adult: {
+      variables: [
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب البالغ",
+          example: "عزيزي أحمد",
+        },
+        { key: "placeName", label: "المكان", example: "Code School - المعادي" },
+        {
+          key: "mapsLink",
+          label: "اللوكيشن",
+          example: "https://maps.google.com/...",
+        },
+      ],
+      ar: `{studentSalutation} 👋\n\n⏰ فاضل 30 دقيقة على بداية مقابلتك\n\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\nيلا استعد 👍\nCode School 💻`,
+      en: `{studentSalutation} 👋\n\n⏰ 30 minutes until your interview\n\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\nGet ready 👍\nCode School 💻`,
+    },
+
+    interview_pre_ping_offline_adult: {
+      variables: [
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب البالغ",
+          example: "عزيزي أحمد",
+        },
+      ],
+      ar: `{studentSalutation} 👋\n\nبنستعد نبدأ مقابلتك دلوقتي، ياريت نتأكد إنك موجود وجاهز ✨\nCode School 💻`,
+      en: `{studentSalutation} 👋\n\nWe're about to start your interview now, please make sure you're ready ✨\nCode School 💻`,
+    },
+
+    interview_reminder_24h_offline_instructor: {
+      variables: [
+        {
+          key: "instructorSalutation",
+          label: "تحية المُقابِل",
+          example: "عزيزي الأستاذ أحمد",
+        },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "date", label: "التاريخ", example: "غدًا" },
+        { key: "time", label: "الوقت", example: "07:00" },
+        ...interviewOfflineVars,
+      ],
+      ar: `{instructorSalutation} 👋\n\n⏰ تذكير: عندك مقابلة *{studentName}* بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\nبالتوفيق! 💻\nCode School`,
+      en: `{instructorSalutation} 👋\n\n⏰ Reminder: You have an interview for *{studentName}* tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\nGood luck! 💻\nCode School`,
+    },
+
+    interview_reminder_30min_offline_instructor: {
+      variables: [
+        {
+          key: "instructorSalutation",
+          label: "تحية المُقابِل",
+          example: "عزيزي الأستاذ أحمد",
+        },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+        { key: "placeName", label: "المكان", example: "Code School - المعادي" },
+        {
+          key: "mapsLink",
+          label: "اللوكيشن",
+          example: "https://maps.google.com/...",
+        },
+      ],
+      ar: `{instructorSalutation} 👋\n\n⏰ فاضل 30 دقيقة على بداية المقابلة مع *{studentName}*\n\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\nبالتوفيق! 💻\nCode School`,
+      en: `{instructorSalutation} 👋\n\n⏰ 30 minutes until the interview with *{studentName}*\n\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\nGood luck! 💻\nCode School`,
+    },
+
+    interview_pre_ping_offline_instructor: {
+      variables: [
+        {
+          key: "instructorSalutation",
+          label: "تحية المُقابِل",
+          example: "عزيزي الأستاذ أحمد",
+        },
+        { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
+      ],
+      ar: `{instructorSalutation} 👋\n\nالمقابلة مع *{studentName}* هتبدأ دلوقتي، ياريت نتأكد إن الطالب موجود وجاهز ✨\nCode School 💻`,
+      en: `{instructorSalutation} 👋\n\nThe interview with *{studentName}* is about to start, please make sure the student is present and ready ✨\nCode School 💻`,
     },
   };
 }

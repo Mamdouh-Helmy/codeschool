@@ -1,3 +1,4 @@
+// api/groups/[id]/sessions/route.js
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Group from '../../../../models/Group';
@@ -30,13 +31,11 @@ export async function GET(req, { params }) {
     const upcoming = searchParams.get('upcoming') === 'true';
     const past = searchParams.get('past') === 'true';
 
-    // ✅ جلب المجموعة مع بيانات الكورس
-    // ✅ ضيفنا hold + status + deliveryMode + instructors عشان الفرونت يستخدمهم
     const group = await Group.findOne({ _id: id, isDeleted: false })
       .populate('courseId', 'title level')
       .select(
         'name code courseId courseSnapshot schedule automation ' +
-        'hold status deliveryMode instructors'
+        'hold status deliveryMode instructors location locationDetails'
       )
       .lean();
 
@@ -46,6 +45,9 @@ export async function GET(req, { params }) {
         { status: 404 }
       );
     }
+
+    // ✅ الـ deliveryMode الفعلي للجروب (fallback: online)
+    const groupDeliveryMode = group.deliveryMode || 'online';
 
     const query = { groupId: id, isDeleted: false };
 
@@ -65,28 +67,54 @@ export async function GET(req, { params }) {
       .sort({ scheduledDate: 1, startTime: 1 })
       .lean();
 
-    const formattedSessions = sessions.map(session => ({
-      id: session._id,
-      _id: session._id,
-      title: session.title,
-      description: session.description,
-      moduleIndex: session.moduleIndex,
-      sessionNumber: session.sessionNumber,
-      lessonIndexes: session.lessonIndexes,
-      scheduledDate: session.scheduledDate,
-      startTime: session.startTime,
-      endTime: session.endTime,
-      status: session.status,
-      meetingLink: session.meetingLink,
-      recordingLink: session.recordingLink,
-      attendanceTaken: session.attendanceTaken,
-      attendance: session.attendance,
-      automationEvents: session.automationEvents,
-      instructorNotes: session.instructorNotes,
-      metadata: session.metadata,
-      isPast: new Date(session.scheduledDate) < now,
-      isToday: new Date(session.scheduledDate).toDateString() === now.toDateString()
-    }));
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ FIX: بنرجّع deliveryMode لكل session + group nested
+    //    عشان ReminderModal / أي حاجة تانية تعرف تفرّق online/offline
+    //    صح. Session.deliveryMode هو snapshot من وقت الإنشاء — لو مش
+    //    موجود بنـ fallback على deliveryMode الجروب الحالي.
+    // ═══════════════════════════════════════════════════════════════
+    const formattedSessions = sessions.map(session => {
+      const sessionDeliveryMode =
+        session.deliveryMode || groupDeliveryMode;
+
+      return {
+        id: session._id,
+        _id: session._id,
+        title: session.title,
+        description: session.description,
+        moduleIndex: session.moduleIndex,
+        sessionNumber: session.sessionNumber,
+        lessonIndexes: session.lessonIndexes,
+        scheduledDate: session.scheduledDate,
+        startTime: session.startTime,
+        endTime: session.endTime,
+        status: session.status,
+        meetingLink: session.meetingLink,
+        recordingLink: session.recordingLink,
+        attendanceTaken: session.attendanceTaken,
+        attendance: session.attendance,
+        automationEvents: session.automationEvents,
+        instructorNotes: session.instructorNotes,
+        metadata: session.metadata,
+
+        // ✅ جديد: الـ deliveryMode على مستوى السيشن نفسها
+        deliveryMode: sessionDeliveryMode,
+        isOffline: sessionDeliveryMode === 'offline',
+
+        // ✅ جديد: group nested مبسّط (لما نحتاج نقرأ منه حاجات)
+        group: {
+          _id: group._id,
+          name: group.name,
+          code: group.code,
+          deliveryMode: groupDeliveryMode,
+          location: group.location || '',
+          locationDetails: group.locationDetails || {},
+        },
+
+        isPast: new Date(session.scheduledDate) < now,
+        isToday: new Date(session.scheduledDate).toDateString() === now.toDateString()
+      };
+    });
 
     const stats = {
       total: sessions.length,
@@ -98,15 +126,11 @@ export async function GET(req, { params }) {
       past: sessions.filter(s => new Date(s.scheduledDate) < now).length
     };
 
-    // ✅ بناء courseSnapshot من الداتا الموجودة
     const courseSnapshot = group.courseSnapshot || {
       title: group.courseId?.title || '',
       level: group.courseId?.level || '',
     };
 
-    // ═══════════════════════════════════════════════════════════════
-    // ✅ الـ group object — ضيفنا hold + status + isOnHold
-    // ═══════════════════════════════════════════════════════════════
     return NextResponse.json({
       success: true,
       data: formattedSessions,
@@ -117,14 +141,15 @@ export async function GET(req, { params }) {
         code: group.code,
         name: group.name,
         status: group.status || "draft",
-        deliveryMode: group.deliveryMode || "online",
+        deliveryMode: groupDeliveryMode,
         courseSnapshot,
         courseId: group.courseId || null,
         schedule: group.schedule || {},
         automation: group.automation || {},
         instructors: group.instructors || [],
+        location: group.location || '',
+        locationDetails: group.locationDetails || {},
 
-        // ✅ جديد: بيانات الـ Hold (هو ده اللي الفرونت بيقرأه)
         isOnHold: !!group.hold?.isHeld,
         hold: group.hold
           ? {

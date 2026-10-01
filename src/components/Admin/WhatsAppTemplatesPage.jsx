@@ -113,6 +113,49 @@ const TEMPLATE_TYPES = [
   { id: "evaluation_pass_adult", label: "تقييم البالغ: ممتاز", icon: Star, color: "primary", emoji: "✅", category: "evaluation_adult", type: "student_with_session", api: "message", isNew: true },
   { id: "evaluation_review_adult", label: "تقييم البالغ: يحتاج مراجعة", icon: FileText, color: "accent", emoji: "⚠️", category: "evaluation_adult", type: "student_with_session", api: "message", isNew: true },
   { id: "evaluation_repeat_adult", label: "تقييم البالغ: يحتاج دعم إضافي", icon: RotateCcw, color: "rose", emoji: "🔄", category: "evaluation_adult", type: "student_with_session", api: "message", isNew: true },
+
+    { id: "interview_welcome_child_online", label: "ترحيب المقابلة - الطفل (Online)", icon: Sparkles, color: "primary", emoji: "🎯", category: "interview", type: "student_only", api: "message", isNew: true },
+  { id: "interview_welcome_child_offline", label: "ترحيب المقابلة - الطفل (Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "interview", type: "student_only", api: "message", isNew: true },
+  { id: "interview_welcome_guardian_online", label: "ترحيب المقابلة - ولي الأمر (Online)", icon: Sparkles, color: "secondary", emoji: "🎯", category: "interview", type: "guardian_only", api: "message", isNew: true },
+  { id: "interview_welcome_guardian_offline", label: "ترحيب المقابلة - ولي الأمر (Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "interview", type: "guardian_only", api: "message", isNew: true },
+  { id: "interview_welcome_adult_online", label: "ترحيب المقابلة - البالغ (Online)", icon: Sparkles, color: "primary", emoji: "🎯", category: "interview", type: "student_only", api: "message", isNew: true },
+  { id: "interview_welcome_adult_offline", label: "ترحيب المقابلة - البالغ (Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "interview", type: "student_only", api: "message", isNew: true },
+  { id: "interview_welcome_instructor_online", label: "ترحيب المقابلة - المُقابِل (Online)", icon: UserCog, color: "accent", emoji: "🎯", category: "interview", type: "instructor_only", api: "message", isNew: true },
+  { id: "interview_welcome_instructor_offline", label: "ترحيب المقابلة - المُقابِل (Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "interview", type: "instructor_only", api: "message", isNew: true },
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🎯 INTERVIEWS — Online Reminders
+  // ═══════════════════════════════════════════════════════════════
+  { id: "interview_reminder_24h_online_child", label: "تذكير المقابلة - الطفل (24س Online)", icon: Clock, color: "sky", emoji: "⏰", category: "interview", type: "student_only", api: "message", isNew: true },
+  { id: "interview_reminder_24h_online_guardian", label: "تذكير المقابلة - ولي الأمر (24س Online)", icon: Clock, color: "sky", emoji: "⏰", category: "interview", type: "guardian_only", api: "message", isNew: true },
+  { id: "interview_reminder_15min_online_child", label: "تذكير المقابلة - الطفل (15د Online)", icon: Clock, color: "accent", emoji: "⏳", category: "interview", type: "student_only", api: "message", isNew: true },
+  { id: "interview_reminder_15min_online_guardian", label: "تذكير المقابلة - ولي الأمر (15د Online)", icon: Clock, color: "accent", emoji: "⏳", category: "interview", type: "guardian_only", api: "message", isNew: true },
+  { id: "interview_reminder_24h_online_adult", label: "تذكير المقابلة - البالغ (24س Online)", icon: Clock, color: "sky", emoji: "⏰", category: "interview", type: "student_only", api: "message", isNew: true },
+  { id: "interview_reminder_15min_online_adult", label: "تذكير المقابلة - البالغ (15د Online)", icon: Clock, color: "accent", emoji: "⏳", category: "interview", type: "student_only", api: "message", isNew: true },
+  { id: "interview_reminder_24h_online_instructor", label: "تذكير المقابلة - المُقابِل (24س Online)", icon: Clock, color: "sky", emoji: "⏰", category: "interview", type: "instructor_only", api: "message", isNew: true },
+  { id: "interview_reminder_15min_online_instructor", label: "تذكير المقابلة - المُقابِل (15د Online)", icon: Clock, color: "accent", emoji: "⏳", category: "interview", type: "instructor_only", api: "message", isNew: true },
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🎯 INTERVIEWS — Offline Reminders
+  // ═══════════════════════════════════════════════════════════════
+  { id: "interview_reminder_24h_offline_child", label: "تذكير المقابلة - الطفل (24س Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "interview", type: "student_only", api: "message", isNew: true },
+  { id: "interview_reminder_30min_offline_child", label: "تنبيه المقابلة - الطفل (30د Drop-off)", icon: Car, color: "amber", emoji: "🚗", category: "interview", type: "student_only", api: "message", isNew: true },
+  { id: "interview_pre_ping_offline_child", label: "Pre-Ping المقابلة - الطفل", icon: Bell, color: "amber", emoji: "✅", category: "interview", type: "student_only", api: "message", isNew: true },
+  { id: "interview_reminder_24h_offline_guardian", label: "تذكير المقابلة - ولي الأمر (24س Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "interview", type: "guardian_only", api: "message", isNew: true },
+  { id: "interview_reminder_30min_offline_guardian", label: "تنبيه المقابلة - ولي الأمر (30د Drop-off)", icon: Car, color: "amber", emoji: "🚗", category: "interview", type: "guardian_only", api: "message", isNew: true },
+  { id: "interview_pre_ping_offline_guardian", label: "Pre-Ping المقابلة - ولي الأمر", icon: Bell, color: "amber", emoji: "✅", category: "interview", type: "guardian_only", api: "message", isNew: true },
+  { id: "interview_reminder_24h_offline_adult", label: "تذكير المقابلة - البالغ (24س Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "interview", type: "student_only", api: "message", isNew: true },
+  { id: "interview_reminder_30min_offline_adult", label: "تنبيه المقابلة - البالغ (30د Drop-off)", icon: Car, color: "amber", emoji: "🚗", category: "interview", type: "student_only", api: "message", isNew: true },
+  { id: "interview_pre_ping_offline_adult", label: "Pre-Ping المقابلة - البالغ", icon: Bell, color: "amber", emoji: "✅", category: "interview", type: "student_only", api: "message", isNew: true },
+  { id: "interview_reminder_24h_offline_instructor", label: "تذكير المقابلة - المُقابِل (24س Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "interview", type: "instructor_only", api: "message", isNew: true },
+  { id: "interview_reminder_30min_offline_instructor", label: "تنبيه المقابلة - المُقابِل (30د Offline)", icon: Car, color: "amber", emoji: "🚗", category: "interview", type: "instructor_only", api: "message", isNew: true },
+  { id: "interview_pre_ping_offline_instructor", label: "Pre-Ping المقابلة - المُقابِل", icon: Bell, color: "amber", emoji: "✅", category: "interview", type: "instructor_only", api: "message", isNew: true },
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🎯 INTERVIEWS — Evaluation
+  // ═══════════════════════════════════════════════════════════════
+  { id: "interview_evaluation_guardian", label: "تقرير المقابلة - ولي الأمر", icon: Star, color: "primary", emoji: "⭐", category: "interview", type: "guardian_only", api: "message", isNew: true },
+  { id: "interview_evaluation_adult", label: "تقرير المقابلة - البالغ", icon: Star, color: "primary", emoji: "⭐", category: "interview", type: "student_only", api: "message", isNew: true },
 ];
 
 const CATEGORIES = {
@@ -125,10 +168,11 @@ const CATEGORIES = {
   attendance: { label: "الحضور", emoji: "📋" },
   completion: { label: "الإكمال", emoji: "🎉" },
   evaluation: { label: "التقييم", emoji: "⭐" },
-  evaluation_adult: { label: "التقييم - البالغين", emoji: "🎯" }, // ✅ NEW
+  evaluation_adult: { label: "التقييم - البالغين", emoji: "🎯" },
   billing: { label: "الرصيد والباقات", emoji: "💳" },
   makeup: { label: "الحصص التعويضية", emoji: "🎁" },
   portfolio: { label: "البورتفوليو", emoji: "💼" },
+  interview: { label: "المقابلات الشخصية", emoji: "🎯" },
 };
 
 const VAR_GROUPS = {
@@ -146,6 +190,7 @@ const VAR_GROUPS = {
   offline: { label: "Offline (الموقع)", emoji: "📍" },
   billing: { label: "الرصيد والباقة", emoji: "💳" },
   makeup: { label: "الحصة التعويضية", emoji: "🎁" },
+  interview: { label: "المقابلة الشخصية", emoji: "🎯" },
 };
 
 const TEMPLATE_VARS = {
@@ -205,7 +250,44 @@ const TEMPLATE_VARS = {
   // 🎁 Make-up (Offline)
   makeup_session_student_offline: ["studentSalutation", "studentName", "courseName", "groupName", "groupCode", "originalDate", "originalTime", "originalSessionTitle", "newDate", "newTime", "newSessionTitle", "placeName", "address", "mapsLink", "instructorName"],
   makeup_session_guardian_offline: ["guardianSalutation", "guardianName", "childTitle", "studentName", "courseName", "groupName", "groupCode", "originalDate", "originalTime", "newDate", "newTime", "placeName", "address", "mapsLink", "instructorName"],
-  makeup_session_instructor_offline: ["instructorSalutation", "instructorName", "studentName", "courseName", "groupName", "groupCode", "originalDate", "originalTime", "originalSessionTitle", "newDate", "newTime", "placeName", "address", "mapsLink"],
+    makeup_session_instructor_offline: ["instructorSalutation", "instructorName", "studentName", "courseName", "groupName", "groupCode", "originalDate", "originalTime", "originalSessionTitle", "newDate", "newTime", "placeName", "address", "mapsLink"],
+
+    interview_welcome_child_online: ["salutation_ar", "salutation_en", "studentName", "date", "time", "meetingLink", "instructorName"],
+  interview_welcome_child_offline: ["salutation_ar", "salutation_en", "studentName", "date", "time", "placeName", "address", "mapsLink", "instructorName"],
+  interview_welcome_guardian_online: ["guardianSalutation", "childTitle", "studentName", "date", "time", "meetingLink", "instructorName"],
+  interview_welcome_guardian_offline: ["guardianSalutation", "childTitle", "studentName", "date", "time", "placeName", "address", "mapsLink", "instructorName"],
+  interview_welcome_adult_online: ["studentSalutation", "studentName", "date", "time", "meetingLink", "instructorName"],
+  interview_welcome_adult_offline: ["studentSalutation", "studentName", "date", "time", "placeName", "address", "mapsLink", "instructorName"],
+  interview_welcome_instructor_online: ["instructorSalutation", "instructorName", "studentName", "date", "time", "meetingLink"],
+  interview_welcome_instructor_offline: ["instructorSalutation", "instructorName", "studentName", "date", "time", "placeName", "address", "mapsLink"],
+
+  // 🎯 INTERVIEW — Online Reminders
+  interview_reminder_24h_online_child: ["salutation_ar", "salutation_en", "date", "time", "meetingLink"],
+  interview_reminder_24h_online_guardian: ["guardianSalutation", "childTitle", "studentName", "date", "time", "meetingLink"],
+  interview_reminder_15min_online_child: ["salutation_ar", "salutation_en", "meetingLink"],
+  interview_reminder_15min_online_guardian: ["guardianSalutation", "childTitle", "studentName", "meetingLink"],
+  interview_reminder_24h_online_adult: ["studentSalutation", "date", "time", "meetingLink"],
+  interview_reminder_15min_online_adult: ["studentSalutation", "meetingLink"],
+  interview_reminder_24h_online_instructor: ["instructorSalutation", "studentName", "date", "time", "meetingLink"],
+  interview_reminder_15min_online_instructor: ["instructorSalutation", "studentName", "meetingLink"],
+
+  // 🎯 INTERVIEW — Offline Reminders
+  interview_reminder_24h_offline_child: ["salutation_ar", "salutation_en", "date", "time", "placeName", "address", "mapsLink"],
+  interview_reminder_30min_offline_child: ["salutation_ar", "salutation_en", "placeName", "mapsLink"],
+  interview_pre_ping_offline_child: ["salutation_ar", "salutation_en"],
+  interview_reminder_24h_offline_guardian: ["guardianSalutation", "childTitle", "studentName", "date", "time", "placeName", "address", "mapsLink"],
+  interview_reminder_30min_offline_guardian: ["guardianSalutation", "childTitle", "studentName", "placeName", "mapsLink"],
+  interview_pre_ping_offline_guardian: ["guardianSalutation", "childTitle", "studentName"],
+  interview_reminder_24h_offline_adult: ["studentSalutation", "date", "time", "placeName", "address", "mapsLink"],
+  interview_reminder_30min_offline_adult: ["studentSalutation", "placeName", "mapsLink"],
+  interview_pre_ping_offline_adult: ["studentSalutation"],
+  interview_reminder_24h_offline_instructor: ["instructorSalutation", "studentName", "date", "time", "placeName", "address", "mapsLink"],
+  interview_reminder_30min_offline_instructor: ["instructorSalutation", "studentName", "placeName", "mapsLink"],
+  interview_pre_ping_offline_instructor: ["instructorSalutation", "studentName"],
+
+  // 🎯 INTERVIEW — Evaluation
+  interview_evaluation_guardian: ["guardianSalutation", "childTitle", "studentName", "interviewDate", "interviewNumber", "instructorComment", "evaluationDecision"],
+  interview_evaluation_adult: ["studentSalutation", "interviewDate", "interviewNumber", "instructorComment", "evaluationDecision"],
 };
 
 const FRONTEND_FALLBACKS = {
@@ -365,10 +447,144 @@ const FRONTEND_FALLBACKS = {
     ar: `{guardianSalutation} 👋\n\nيسرنا إبلاغكم إنه تم تحديد حصة تعويضية لـ{childTitle} **{studentName}**:\n\n📘 الكورس: {courseName}\n👥 المجموعة الجديدة: {groupName} ({groupCode})\n\n🔄 الحصة الأصلية:\n📅 {originalDate}\n⏰ {originalTime}\n\n✨ الحصة التعويضية الجديدة:\n📅 {newDate}\n⏰ {newTime}\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن: {mapsLink}\n👨‍🏫 المدرس: {instructorName}\n\n🎉 الحصة دي مجانية — مش هتتخصم من رصيد {childTitle}.\n\nفريق Code School 💻`,
     en: `{guardianSalutation} 👋\n\nWe are pleased to inform you that a make-up session has been scheduled for {childTitle} **{studentName}**:\n\n📘 Course: {courseName}\n👥 New Group: {groupName} ({groupCode})\n\n🔄 Original Session:\n📅 {originalDate}\n⏰ {originalTime}\n\n✨ New Make-up Session:\n📅 {newDate}\n⏰ {newTime}\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Maps: {mapsLink}\n👨‍🏫 Instructor: {instructorName}\n\n🎉 This session is free — it won't be deducted from {childTitle}'s balance.\n\nCode School Team 💻`,
   },
-  makeup_session_instructor_offline: {
+    makeup_session_instructor_offline: {
     ar: `{instructorSalutation} 👋\n\nتم تحديد حصة تعويضية جديدة ليك (Offline):\n\n📘 الكورس: {courseName}\n👥 المجموعة: {groupName} ({groupCode})\n👤 الطالب: {studentName}\n\n📅 التاريخ: {newDate}\n⏰ الوقت: {newTime}\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن: {mapsLink}\n\n🔄 الحصة الأصلية:\n📅 {originalDate}\n⏰ {originalTime}\n📚 {originalSessionTitle}\n\nملاحظة: الحصة دي تعويضية (مجانية على الطالب)، لكن المدرس بيتحاسب عليها عادي.\n\nفريق Code School 💻`,
     en: `{instructorSalutation} 👋\n\nA new make-up session has been scheduled for you (Offline):\n\n📘 Course: {courseName}\n👥 Group: {groupName} ({groupCode})\n👤 Student: {studentName}\n\n📅 Date: {newDate}\n⏰ Time: {newTime}\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Maps: {mapsLink}\n\n🔄 Original Session:\n📅 {originalDate}\n⏰ {originalTime}\n📚 {originalSessionTitle}\n\nNote: This is a make-up session (free for the student), but the instructor is still paid for it.\n\nCode School Team 💻`,
   },
+
+    interview_welcome_child_online: {
+    ar: `{salutation_ar} 👋\n\nأهلاً بيك في Code School! 🎉\n\nبنسعد بإبلاغك إنه تم تحديد ميعاد المقابلة الشخصية بتاعتك (Online):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\n💡 ياريت تجهز قبل الميعاد بخمس دقايق، وتتأكد إن اللاب مشحون، النت مستقر، والكاميرا جاهزة 👍\n\nمتحمسين نشوفك! 💻🚀\nفريق Code School`,
+    en: `{salutation_en} 👋\n\nWelcome to Code School! 🎉\n\nWe're happy to confirm your interview has been scheduled (Online):\n\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n👨‍🏫 Interviewer: {instructorName}\n\n💡 Please be ready 5 minutes early, make sure your laptop is charged, internet is stable, and camera is ready 👍\n\nExcited to meet you! 💻🚀\nCode School Team`,
+  },
+  interview_welcome_child_offline: {
+    ar: `{salutation_ar} 👋\n\nأهلاً بيك في Code School! 🎉\n\nبنسعد بإبلاغك إنه تم تحديد ميعاد المقابلة الشخصية بتاعتك (Offline):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\n💡 ياريت تكون في المكان قبل الميعاد بخمس دقايق 👍\n\nمتحمسين نشوفك! 💻🚀\nفريق Code School`,
+    en: `{salutation_en} 👋\n\nWelcome to Code School! 🎉\n\nWe're happy to confirm your interview has been scheduled (Offline):\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\n👨‍🏫 Interviewer: {instructorName}\n\n💡 Please be at the location 5 minutes early 👍\n\nExcited to meet you! 💻🚀\nCode School Team`,
+  },
+  interview_welcome_guardian_online: {
+    ar: `{guardianSalutation} 👋\n\nيسرنا إبلاغكم بأنه تم تحديد ميعاد المقابلة الشخصية لـ{childTitle} **{studentName}** (Online):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\nنتمنى من حضرتكم تجهيز {childTitle} للمقابلة في الميعاد، والتأكد من استقرار النت وجاهزية الكاميرا 👍\n\nنتطلع للقائكم قريباً 🌟\nفريق Code School 💻`,
+    en: `{guardianSalutation} 👋\n\nWe are pleased to inform you that an interview has been scheduled for {childTitle} **{studentName}** (Online):\n\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n👨‍🏫 Interviewer: {instructorName}\n\nPlease ensure {childTitle} is ready on time, with a stable internet connection and a working camera 👍\n\nLooking forward to meeting you soon 🌟\nCode School Team 💻`,
+  },
+  interview_welcome_guardian_offline: {
+    ar: `{guardianSalutation} 👋\n\nيسرنا إبلاغكم بأنه تم تحديد ميعاد المقابلة الشخصية لـ{childTitle} **{studentName}** (Offline):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\nنتمنى من حضرتكم تجهيز {childTitle} للوصول في الميعاد 👍\n\nنتطلع للقائكم قريباً 🌟\nفريق Code School 💻`,
+    en: `{guardianSalutation} 👋\n\nWe are pleased to inform you that an interview has been scheduled for {childTitle} **{studentName}** (Offline):\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\n👨‍🏫 Interviewer: {instructorName}\n\nPlease ensure {childTitle} arrives on time 👍\n\nLooking forward to meeting you soon 🌟\nCode School Team 💻`,
+  },
+  interview_welcome_adult_online: {
+    ar: `{studentSalutation} 👋\n\nأهلاً بيك في Code School! 🎉\n\nتم تحديد ميعاد المقابلة الشخصية بتاعتك (Online):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\n💡 ياريت تجهز قبل الميعاد بخمس دقايق 👍\n\nمتحمسين نشوفك! 💻🚀\nفريق Code School`,
+    en: `{studentSalutation} 👋\n\nWelcome to Code School! 🎉\n\nYour interview has been scheduled (Online):\n\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n👨‍🏫 Interviewer: {instructorName}\n\n💡 Please be ready 5 minutes early 👍\n\nExcited to meet you! 💻🚀\nCode School Team`,
+  },
+  interview_welcome_adult_offline: {
+    ar: `{studentSalutation} 👋\n\nأهلاً بيك في Code School! 🎉\n\nتم تحديد ميعاد المقابلة الشخصية بتاعتك (Offline):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\n💡 ياريت تكون في المكان قبل الميعاد بخمس دقايق 👍\n\nمتحمسين نشوفك! 💻🚀\nفريق Code School`,
+    en: `{studentSalutation} 👋\n\nWelcome to Code School! 🎉\n\nYour interview has been scheduled (Offline):\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\n👨‍🏫 Interviewer: {instructorName}\n\n💡 Please be at the location 5 minutes early 👍\n\nExcited to meet you! 💻🚀\nCode School Team`,
+  },
+  interview_welcome_instructor_online: {
+    ar: `{instructorSalutation} 👋\n\nتم تحديد مقابلة شخصية جديدة ليك (Online):\n\n👤 الطالب: {studentName}\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\nياريت تكون جاهز قبل الميعاد بخمس دقايق، وتتأكد من استقرار النت والكاميرا 👍\n\nبالتوفيق! 💻🚀\nفريق Code School`,
+    en: `{instructorSalutation} 👋\n\nA new interview has been scheduled for you (Online):\n\n👤 Student: {studentName}\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\nPlease be ready 5 minutes early, with a stable internet connection and working camera 👍\n\nGood luck! 💻🚀\nCode School Team`,
+  },
+  interview_welcome_instructor_offline: {
+    ar: `{instructorSalutation} 👋\n\nتم تحديد مقابلة شخصية جديدة ليك (Offline):\n\n👤 الطالب: {studentName}\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\nياريت تكون في المكان قبل الميعاد بخمس دقايق 👍\n\nبالتوفيق! 💻🚀\nفريق Code School`,
+    en: `{instructorSalutation} 👋\n\nA new interview has been scheduled for you (Offline):\n\n👤 Student: {studentName}\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\nPlease be at the location 5 minutes early 👍\n\nGood luck! 💻🚀\nCode School Team`,
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🎯 INTERVIEW — Online Reminders
+  // ═══════════════════════════════════════════════════════════════
+  interview_reminder_24h_online_child: {
+    ar: `{salutation_ar} 👋\n\n⏰ تذكير: عندك مقابلة شخصية بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\n💡 ياريت تجهز قبل الميعاد، وتتأكد إن اللاب مشحون والنت مستقر 👍\n\nمستنيينك! 💻\nCode School`,
+    en: `{salutation_en} 👋\n\n⏰ Reminder: You have an interview tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n💡 Please prepare on time, and make sure your laptop is charged and internet is stable 👍\n\nWe're waiting for you! 💻\nCode School`,
+  },
+  interview_reminder_24h_online_guardian: {
+    ar: `{guardianSalutation} 👋\n\n⏰ تذكير: مقابلة {childTitle} *{studentName}* بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\nياريت تجهز {childTitle} للمقابلة في الميعاد، وتتأكد من استقرار النت والكاميرا 🙏\nCode School 💻`,
+    en: `{guardianSalutation} 👋\n\n⏰ Reminder: {childTitle} *{studentName}*'s interview is tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\nPlease have {childTitle} ready on time, with stable internet and camera 🙏\nCode School 💻`,
+  },
+  interview_reminder_15min_online_child: {
+    ar: `{salutation_ar} 👋\n\n⏳ فاضل 15 دقيقة على بداية المقابلة بتاعتك ⏰\n\n🔗 رابط المقابلة:\n{meetingLink}\n\nيلا استعد من دلوقتي 👍\nCode School 💻`,
+    en: `{salutation_en} 👋\n\n⏳ 15 minutes until your interview ⏰\n\n🔗 Meeting Link:\n{meetingLink}\n\nGet ready now 👍\nCode School 💻`,
+  },
+  interview_reminder_15min_online_guardian: {
+    ar: `{guardianSalutation} 👋\n\n⏳ فاضل 15 دقيقة على بداية مقابلة {childTitle} *{studentName}* ⏰\n\n🔗 رابط المقابلة:\n{meetingLink}\n\nياريت تجهز {childTitle} في الميعاد 🙏\nCode School 💻`,
+    en: `{guardianSalutation} 👋\n\n⏳ 15 minutes until {childTitle} *{studentName}*'s interview ⏰\n\n🔗 Meeting Link:\n{meetingLink}\n\nPlease have {childTitle} ready on time 🙏\nCode School 💻`,
+  },
+  interview_reminder_24h_online_adult: {
+    ar: `{studentSalutation} 👋\n\n⏰ تذكير: عندك مقابلة شخصية بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\nمستنيينك! 💻\nCode School`,
+    en: `{studentSalutation} 👋\n\n⏰ Reminder: You have an interview tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\nWe're waiting for you! 💻\nCode School`,
+  },
+  interview_reminder_15min_online_adult: {
+    ar: `{studentSalutation} 👋\n\n⏳ فاضل 15 دقيقة على بداية المقابلة ⏰\n\n🔗 رابط المقابلة:\n{meetingLink}\n\nيلا استعد 👍\nCode School 💻`,
+    en: `{studentSalutation} 👋\n\n⏳ 15 minutes until the interview ⏰\n\n🔗 Meeting Link:\n{meetingLink}\n\nGet ready 👍\nCode School 💻`,
+  },
+  interview_reminder_24h_online_instructor: {
+    ar: `{instructorSalutation} 👋\n\n⏰ تذكير: عندك مقابلة شخصية للطالب *{studentName}* بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\nبالتوفيق! 💻\nCode School`,
+    en: `{instructorSalutation} 👋\n\n⏰ Reminder: You have an interview for *{studentName}* tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\nGood luck! 💻\nCode School`,
+  },
+  interview_reminder_15min_online_instructor: {
+    ar: `{instructorSalutation} 👋\n\n⏳ فاضل 15 دقيقة على بداية المقابلة مع *{studentName}* ⏰\n\n🔗 رابط المقابلة:\n{meetingLink}\n\nبالتوفيق! 💻\nCode School`,
+    en: `{instructorSalutation} 👋\n\n⏳ 15 minutes until the interview with *{studentName}* ⏰\n\n🔗 Meeting Link:\n{meetingLink}\n\nGood luck! 💻\nCode School`,
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🎯 INTERVIEW — Offline Reminders
+  // ═══════════════════════════════════════════════════════════════
+  interview_reminder_24h_offline_child: {
+    ar: `{salutation_ar} 👋\n\n⏰ تذكير: عندك مقابلة شخصية بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\nمستنيينك! 💻\nCode School`,
+    en: `{salutation_en} 👋\n\n⏰ Reminder: You have an interview tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\nWe're waiting for you! 💻\nCode School`,
+  },
+  interview_reminder_30min_offline_child: {
+    ar: `{salutation_ar} 👋\n\n⏰ فاضل 30 دقيقة على بداية مقابلتك\n\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\nيلا استعد للنزول 👍\nCode School 💻`,
+    en: `{salutation_en} 👋\n\n⏰ 30 minutes until your interview\n\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\nGet ready to head out 👍\nCode School 💻`,
+  },
+  interview_pre_ping_offline_child: {
+    ar: `{salutation_ar} 👋\n\nبنستعد نبدأ مقابلتك دلوقتي، ياريت نتأكد إنك موجود وجاهز ✨\nCode School 💻`,
+    en: `{salutation_en} 👋\n\nWe're about to start your interview now, please make sure you're ready ✨\nCode School 💻`,
+  },
+  interview_reminder_24h_offline_guardian: {
+    ar: `{guardianSalutation} 👋\n\n⏰ تذكير: مقابلة {childTitle} *{studentName}* بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\nياريت تجهز {childTitle} للوصول في الميعاد 🙏\nCode School 💻`,
+    en: `{guardianSalutation} 👋\n\n⏰ Reminder: {childTitle} *{studentName}*'s interview is tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\nPlease have {childTitle} arrive on time 🙏\nCode School 💻`,
+  },
+  interview_reminder_30min_offline_guardian: {
+    ar: `{guardianSalutation} 👋\n\n🚗 تنبيه: مقابلة {childTitle} *{studentName}* هتبدأ بعد 30 دقيقة\n\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\nياريت تجهز {childTitle} للنزول في الميعاد 🙏\nCode School 💻`,
+    en: `{guardianSalutation} 👋\n\n🚗 Heads-up: {childTitle} *{studentName}*'s interview starts in 30 minutes\n\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\nPlease have {childTitle} head out on time 🙏\nCode School 💻`,
+  },
+  interview_pre_ping_offline_guardian: {
+    ar: `{guardianSalutation} 👋\n\nبنستعد نبدأ مقابلة {childTitle} *{studentName}* دلوقتي، ياريت نتأكد إنه موجود وجاهز ✨\nCode School 💻`,
+    en: `{guardianSalutation} 👋\n\nWe're about to start {childTitle} *{studentName}*'s interview now, please make sure they're ready ✨\nCode School 💻`,
+  },
+  interview_reminder_24h_offline_adult: {
+    ar: `{studentSalutation} 👋\n\n⏰ تذكير: عندك مقابلة شخصية بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\nمستنيينك! 💻\nCode School`,
+    en: `{studentSalutation} 👋\n\n⏰ Reminder: You have an interview tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\nWe're waiting for you! 💻\nCode School`,
+  },
+  interview_reminder_30min_offline_adult: {
+    ar: `{studentSalutation} 👋\n\n⏰ فاضل 30 دقيقة على بداية مقابلتك\n\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\nيلا استعد 👍\nCode School 💻`,
+    en: `{studentSalutation} 👋\n\n⏰ 30 minutes until your interview\n\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\nGet ready 👍\nCode School 💻`,
+  },
+  interview_pre_ping_offline_adult: {
+    ar: `{studentSalutation} 👋\n\nبنستعد نبدأ مقابلتك دلوقتي، ياريت نتأكد إنك موجود وجاهز ✨\nCode School 💻`,
+    en: `{studentSalutation} 👋\n\nWe're about to start your interview now, please make sure you're ready ✨\nCode School 💻`,
+  },
+  interview_reminder_24h_offline_instructor: {
+    ar: `{instructorSalutation} 👋\n\n⏰ تذكير: عندك مقابلة *{studentName}* بكرة إن شاء الله ✨\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\nبالتوفيق! 💻\nCode School`,
+    en: `{instructorSalutation} 👋\n\n⏰ Reminder: You have an interview for *{studentName}* tomorrow ✨\n\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\nGood luck! 💻\nCode School`,
+  },
+  interview_reminder_30min_offline_instructor: {
+    ar: `{instructorSalutation} 👋\n\n⏰ فاضل 30 دقيقة على بداية المقابلة مع *{studentName}*\n\n📍 المكان: {placeName}\n🗺️ {mapsLink}\n\nبالتوفيق! 💻\nCode School`,
+    en: `{instructorSalutation} 👋\n\n⏰ 30 minutes until the interview with *{studentName}*\n\n📍 Location: {placeName}\n🗺️ {mapsLink}\n\nGood luck! 💻\nCode School`,
+  },
+  interview_pre_ping_offline_instructor: {
+    ar: `{instructorSalutation} 👋\n\nالمقابلة مع *{studentName}* هتبدأ دلوقتي، ياريت نتأكد إن الطالب موجود وجاهز ✨\nCode School 💻`,
+    en: `{instructorSalutation} 👋\n\nThe interview with *{studentName}* is about to start, please make sure the student is present and ready ✨\nCode School 💻`,
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🎯 INTERVIEW — Evaluation
+  // ═══════════════════════════════════════════════════════════════
+  interview_evaluation_guardian: {
+    ar: `{guardianSalutation}،\n\nتقرير المقابلة 📋✨\n📆 التاريخ : {interviewDate}\n📑 رقم المقابلة : {interviewNumber}\n👤 الطالب : {studentName}\n\n📝 تعليق المُقابِل :\n{instructorComment}\n\n🏆 النتيجة : {evaluationDecision}\n\n🙏 نشكركم على ثقتكم في Code School\n📞 للتواصل : +2 011 40 474 129`,
+    en: `{guardianSalutation},\n\nInterview Report 📋✨\n📆 Date : {interviewDate}\n📑 Interview No. : {interviewNumber}\n👤 Student : {studentName}\n\n📝 Interviewer's Comment :\n{instructorComment}\n\n🏆 Result : {evaluationDecision}\n\n🙏 Thank you for trusting Code School\n📞 Contact : +2 011 40 474 129`,
+  },
+  interview_evaluation_adult: {
+    ar: `{studentSalutation}،\n\nتقرير المقابلة 📋✨\n📆 التاريخ : {interviewDate}\n📑 رقم المقابلة : {interviewNumber}\n\n📝 تعليق المُقابِل :\n{instructorComment}\n\n🏆 النتيجة : {evaluationDecision}\n\n🙏 نشكرك على ثقتك في Code School\n📞 للتواصل : +2 011 40 474 129`,
+    en: `{studentSalutation},\n\nInterview Report 📋✨\n📆 Date : {interviewDate}\n📑 Interview No. : {interviewNumber}\n\n📝 Interviewer's Comment :\n{instructorComment}\n\n🏆 Result : {evaluationDecision}\n\n🙏 Thank you for trusting Code School\n📞 Contact : +2 011 40 474 129`,
+  },
+
 
   instructor_group_activation: {
     ar: `{salutation} 👋\n\nحبيت أبلغك إنه تم إسناد جروب *{groupName}* الخاص بكورس *{courseName}* لحضرتك ✨\nدي كل تفاصيل البداية عشان تكون جاهز:\n\n📘 الـ Course: {courseName}\n👥 الـ Group: {groupName}\n📅 تاريخ البداية: {startDate}\n⏰ المعاد: من {timeFrom} إلى {timeTo}\n🔗 لينك الحصة:\n{meetingLink}\n\nمتحمسين جداً لبداية قوية معاك، وبالتوفيق يا هندسة 🌟\n\nنور ✨\nفريق الأوبيريشن - Code School`,
@@ -379,13 +595,6 @@ const FRONTEND_FALLBACKS = {
     en: `{salutation} 👋\n\nWe're pleased to assign you group *{groupName}* for *{courseName}* ✨\nHere are all the starting details to get you ready:\n\n📘 Course: {courseName}\n👥 Group: {groupName}\n📅 Start Date: {startDate}\n⏰ Time: From {timeFrom} to {timeTo}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Maps: {mapsLink}\n\nExcited for a strong start with you, best of luck! 🌟\n\nNour ✨\nOperations Team - Code School`,
   },
 
-    // ═══════════════════════════════════════════════════════════════
-  // ✅ ADULTS — Reminders
-  // ═══════════════════════════════════════════════════════════════
-  reminder_24h_adult: ["studentSalutation", "studentName", "sessionName", "sessionDescription", "date", "time", "meetingLink", "enrollmentNumber"],
-  reminder_15min_adult: ["studentSalutation", "studentName", "sessionName", "sessionDescription", "time", "meetingLink", "enrollmentNumber"],
-  reminder_24h_offline_adult: ["studentSalutation", "studentName", "sessionName", "date", "time", "placeName", "address", "mapsLink"],
-  reminder_30min_offline_adult: ["studentSalutation", "studentName", "sessionName", "time", "placeName", "mapsLink"],
 
   // ✅ ADULTS — Attendance
   absence_notification_adult: ["studentSalutation", "studentName", "status", "sessionName", "date", "time", "enrollmentNumber"],
@@ -397,7 +606,7 @@ const FRONTEND_FALLBACKS = {
   evaluation_review_adult: ["studentSalutation", "studentName", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink"],
   evaluation_repeat_adult: ["studentSalutation", "studentName", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink"],
 
-    // ═══════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════
   // ✅ ADULTS — Reminders
   // ═══════════════════════════════════════════════════════════════
   reminder_24h_adult: {
@@ -509,6 +718,15 @@ function buildVals(variable) {
 function getRecipientType(tabId) {
   if (tabId.startsWith("portfolio_")) return "portfolio_owner";
   if (tabId.startsWith("makeup_session_instructor")) return "instructor";
+
+  // ✅ INTERVIEW: لازم نتشيك قبل "_adult" و "student"
+  // لأن أسماء القوالب زي interview_welcome_child مش فيها "student"
+  if (tabId.startsWith("interview_")) {
+    if (tabId.includes("_instructor")) return "instructor";
+    if (tabId.includes("_guardian")) return "guardian";
+    return "student"; // child, adult
+  }
+
   // ✅ ADULTS: أي قالب فيه "_adult" → للطالب مباشرة
   if (tabId.includes("_adult") || tabId.endsWith("_adult")) return "student";
   if (tabId.includes("student")) return "student";

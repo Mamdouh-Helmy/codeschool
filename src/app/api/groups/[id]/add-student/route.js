@@ -8,7 +8,11 @@ import Course from "../../../../models/Course";
 import { onStudentAddedToGroup } from "../../../../services/groupAutomation";
 import { requireAdmin } from "@/utils/authMiddleware";
 
-// ✅ Helper: build maps link from group (offline)
+// ═══════════════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ✅ بناء لينك الخريطة للجروب (Offline)
 function buildMapsLink(group) {
   const loc = group?.locationDetails || {};
   if (loc.lat != null && loc.lng != null) {
@@ -23,6 +27,166 @@ function buildMapsLink(group) {
   return "";
 }
 
+// ✅ التحقق من أهلية الطالب للانضمام لجروب (لازم يكون عنده رصيد)
+function checkStudentCreditEligibility(student) {
+  if (!student) {
+    return { eligible: false, reason: "student_not_found" };
+  }
+
+  const pkg = student.creditSystem?.currentPackage;
+  if (!pkg) {
+    return { eligible: false, reason: "no_package", remainingHours: 0 };
+  }
+
+  const remaining = pkg.remainingHours || 0;
+  if (remaining <= 0) {
+    return { eligible: false, reason: "zero_balance", remainingHours: 0 };
+  }
+
+  return { eligible: true, remainingHours: remaining };
+}
+
+// ✅ رسالة خطأ واضحة للطالب/الأدمن حسب السبب
+function getIneligibilityMessage(reason, isRTL = true) {
+  const messages = {
+    no_package: isRTL
+      ? "الطالب معندهوش باقة سارية — مينفعش نضيفه لجروب"
+      : "Student has no active package — cannot be added to a group",
+    zero_balance: isRTL
+      ? "رصيد الطالب صفر — مينفعش نضيفه لجروب"
+      : "Student's credit is zero — cannot be added to a group",
+    student_not_found: isRTL ? "الطالب غير موجود" : "Student not found",
+  };
+  return messages[reason] || (isRTL ? "الطالب غير مؤهل" : "Student not eligible");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GET — قائمة الطلاب المؤهلين للإضافة للجروب
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Query params:
+//   ?search=xxx   → ابحث بالاسم / الإيميل / رقم القيد / الهاتف
+//   ?limit=500    → حد أقصى للنتائج (default 500, max 1000)
+//
+// الفلاتر التلقائية:
+//   1. الطالب مش محذوف (isDeleted: false)
+//   2. الطالب مش موجود في الجروب بالفعل
+//   3. الطالب عنده currentPackage
+//   4. الطالب عنده remainingHours > 0
+// ═══════════════════════════════════════════════════════════════════════════
+export async function GET(req, { params }) {
+  try {
+    const authCheck = await requireAdmin(req);
+    if (!authCheck.authorized) return authCheck.response;
+
+    await connectDB();
+
+    const { id: groupId } = await params;
+    const { searchParams } = new URL(req.url);
+    const searchQuery = (searchParams.get("search") || "").trim();
+    const limitParam = parseInt(searchParams.get("limit") || "500", 10);
+
+    // ✅ نجيب الجروب عشان نستثني الطلاب اللي فيه بالفعل
+    const group = await Group.findById(groupId).select("students").lean();
+
+    if (!group) {
+      return NextResponse.json(
+        { success: false, error: "Group not found" },
+        { status: 404 },
+      );
+    }
+
+    // الطلاب الموجودين في الجروب — نستثنيهم من القائمة
+    const existingStudentIds = (group.students || [])
+      .map((s) => s?._id || s)
+      .filter(Boolean);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ✅ الفلتر الأساسي — لازم الطالب يكون مؤهل للإضافة
+    // ═══════════════════════════════════════════════════════════════════
+    const filter = {
+      isDeleted: false,
+
+      // ✅ استبعاد الطلاب اللي في الجروب بالفعل
+      ...(existingStudentIds.length > 0 && {
+        _id: { $nin: existingStudentIds },
+      }),
+
+      // ✅ فلتر الرصيد — الطالب لازم يكون عنده باكدج فيها ساعات متبقية
+      //    المفتاح "creditSystem.currentPackage.remainingHours" بيتحقق
+      //    تلقائيًا من إن currentPackage موجود (مش null) + إن remainingHours > 0
+      "creditSystem.currentPackage.remainingHours": { $gt: 0 },
+    };
+
+    // ✅ البحث
+    if (searchQuery.length >= 2) {
+      filter.$or = [
+        { "personalInfo.fullName": { $regex: searchQuery, $options: "i" } },
+        { "personalInfo.email": { $regex: searchQuery, $options: "i" } },
+        { enrollmentNumber: { $regex: searchQuery, $options: "i" } },
+        { "personalInfo.phone": { $regex: searchQuery, $options: "i" } },
+        { "personalInfo.whatsappNumber": { $regex: searchQuery, $options: "i" } },
+      ];
+    }
+
+    const limit = Math.min(Math.max(limitParam, 1), 1000);
+    const sortBy =
+      searchQuery.length >= 2
+        ? { "personalInfo.fullName": 1 }
+        : { createdAt: -1 };
+
+    const students = await Student.find(filter)
+      .select(
+        // ✅ بنجيب كل الكائنات اللي الفرونت بيستخدمها عشان مايحتاجش تعديل
+        "_id enrollmentNumber studentType " +
+          "personalInfo guardianInfo communicationPreferences " +
+          "creditSystem.currentPackage",
+      )
+      .sort(sortBy)
+      .limit(limit)
+      .lean();
+
+    return NextResponse.json({
+      success: true,
+      data: students.map((s) => ({
+        _id: s._id,
+        // ✅ نفس شكل الـ allStudents عشان الفرونت يشتغل بدون تعديل في العرض
+        personalInfo: s.personalInfo || {},
+        guardianInfo: s.guardianInfo || {},
+        communicationPreferences: s.communicationPreferences || {
+          preferredLanguage: "ar",
+        },
+        enrollmentNumber: s.enrollmentNumber || "",
+        studentType: s.studentType || "kids",
+        isAdult: (s.studentType || "kids") === "adults",
+        // ✅ بيانات الرصيد للعرض
+        remainingHours: s.creditSystem?.currentPackage?.remainingHours || 0,
+        packageName: s.creditSystem?.currentPackage?.packageName || "",
+        packageType: s.creditSystem?.currentPackage?.packageType || "",
+      })),
+      meta: {
+        count: students.length,
+        mode: searchQuery.length >= 2 ? "search" : "list",
+        query: searchQuery,
+        filterApplied: {
+          creditRequired: true,
+          minRemainingHours: 1,
+          excludedGroupMembers: existingStudentIds.length,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("❌ [Add-Student GET]:", error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// POST — إضافة طالب للجروب
+// ═══════════════════════════════════════════════════════════════════════════
 export async function POST(req, { params }) {
   try {
     const authCheck = await requireAdmin(req);
@@ -49,6 +213,8 @@ export async function POST(req, { params }) {
       studentMessage = null,
       guardianMessage = null,
       moduleOverviewMessage = null,
+      // ✅ NEW: الأدمن يقدر يتخطى فحص الرصيد لو عايز (حالات استثنائية)
+      force = false,
     } = body;
 
     if (!studentId) {
@@ -78,6 +244,31 @@ export async function POST(req, { params }) {
       return NextResponse.json(
         { success: false, error: "Student not found" },
         { status: 404 },
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ✅ NEW: فحص الرصيد — نرفض الإضافة لو مفيش باكدج أو الرصيد صفر
+    //    مالم الأدمن يبعت force: true (لحالات استثنائية)
+    // ═══════════════════════════════════════════════════════════════════
+    if (!force) {
+      const creditCheck = checkStudentCreditEligibility(student);
+
+      if (!creditCheck.eligible) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: getIneligibilityMessage(creditCheck.reason, true),
+            reason: creditCheck.reason,
+            remainingHours: creditCheck.remainingHours ?? 0,
+            hint: "لو عايز تضيفه بالرغم من كده، ابعت force: true",
+          },
+          { status: 400 },
+        );
+      }
+    } else {
+      console.log(
+        `⚠️ [add-student] force=true — skipping credit check for student ${studentId}`,
       );
     }
 
@@ -186,11 +377,9 @@ export async function POST(req, { params }) {
           moduleOverview: moduleOverviewMessage,
         },
         sendWhatsApp,
-        // ✅ مرّر module + location data للـ automation
         {
           moduleTitle,
           moduleDescription,
-          // ✅ Offline data
           isOffline,
           placeName,
           address,
@@ -242,7 +431,6 @@ export async function POST(req, { params }) {
           title: moduleTitle,
           description: moduleDescription,
         },
-        // ✅ NEW: location data في الـ response
         ...(isOffline && {
           locationData: {
             placeName,

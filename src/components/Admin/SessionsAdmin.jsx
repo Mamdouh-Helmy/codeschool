@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import {
   Calendar, Clock, Users, CheckCircle, XCircle, AlertCircle,
   Eye, Edit, RefreshCw, ClipboardCheck, Trophy, PauseCircle, Lock,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, BellRing,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -180,10 +180,9 @@ function StatPill({ icon: Icon, label, value, tone }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ✅ Student normalizer — بيضمن إن studentType دايمًا موجود
+// ✅ Student normalizer
 // ═══════════════════════════════════════════════════════════════════════════
 function normalizeStudent(student) {
-  // ✅ studentType: kids (default) | adults
   const studentType = student.studentType || student.type || "kids";
 
   return {
@@ -247,6 +246,11 @@ export default function SessionsAdmin() {
   // ═══════════════════════════════════════════════════════════════════════
   const groupIsOnHold = !!group?.hold?.isHeld;
 
+  // ✅ هل الجروب Offline؟ (بيتحكم في ظهور زرار الـ Pre-Ping)
+  const groupIsOffline =
+    group?.deliveryMode === "offline" ||
+    sessions.some((s) => s?.deliveryMode === "offline");
+
   const completedCount = useMemo(
     () => sessions.filter((s) => s.status === "completed").length,
     [sessions],
@@ -287,7 +291,6 @@ export default function SessionsAdmin() {
     [lockedSessionIds],
   );
 
-  // ✅ هل فيه طلاب بالغين في الجروب؟
   const hasAdultStudents = useMemo(
     () => groupStudents.some((s) => s.studentType === "adults"),
     [groupStudents],
@@ -383,7 +386,6 @@ export default function SessionsAdmin() {
     checkIfGroupComplete,
   ]);
 
-  // ✅ NEW: normalizeStudent بتضمن إن studentType دايمًا موجود
   const loadGroupStudents = useCallback(async () => {
     if (!groupId) return;
 
@@ -591,21 +593,24 @@ export default function SessionsAdmin() {
           </div>
         </div>
 
-        {/* ✅ بادج نوع الجروب (Kids/Adults/Mixed) — من طلاب الجروب */}
-        {(hasAdultStudents || hasKidStudents) && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {hasKidStudents && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                🧒 {isRTL ? "أطفال" : "Kids"}
-              </span>
-            )}
-            {hasAdultStudents && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
-                🧑 {isRTL ? "بالغين — بدون رسالة ولي أمر" : "Adults — no guardian message"}
-              </span>
-            )}
-          </div>
-        )}
+        {/* بادج نوع الجروب + الوضع */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {hasKidStudents && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+              🧒 {isRTL ? "أطفال" : "Kids"}
+            </span>
+          )}
+          {hasAdultStudents && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
+              🧑 {isRTL ? "بالغين — بدون رسالة ولي أمر" : "Adults — no guardian message"}
+            </span>
+          )}
+          {groupIsOffline && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-bold text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">
+              📍 {isRTL ? "أوفلاين (حضوري)" : "Offline (On-site)"}
+            </span>
+          )}
+        </div>
 
         {/* stat pills */}
         <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -714,6 +719,12 @@ export default function SessionsAdmin() {
                     ? session.sessionIsLocked
                     : isLocked(session);
 
+                // ✅ هل السيشن دي Offline؟ (بنحدد منه ظهور زرار الـ Pre-Ping)
+                const sessionIsOffline =
+                  session?.deliveryMode === "offline" ||
+                  session?.group?.deliveryMode === "offline" ||
+                  group?.deliveryMode === "offline";
+
                 return (
                   <tr
                     key={session.id}
@@ -760,20 +771,42 @@ export default function SessionsAdmin() {
                       <div className="flex items-center gap-1 rounded-lg border border-slate-100 bg-slate-50/60 p-1 dark:border-white/5 dark:bg-white/[0.02] w-fit">
                         {session.status === "scheduled" && !sessionIsLocked && (
                           <>
+                            {/* 24h Reminder */}
                             <button
                               onClick={() => openReminderModal(session, "24hours")}
                               className="rounded-md p-1.5 text-sky-600 transition-colors hover:bg-sky-100 dark:text-sky-400 dark:hover:bg-sky-500/20"
-                              title={isRTL ? "إرسال تذكير 24 ساعة" : "Send 24h reminder"}
+                              title={
+                                sessionIsOffline
+                                  ? isRTL ? "تذكير 24 ساعة (Offline)" : "Send 24h location reminder"
+                                  : isRTL ? "إرسال تذكير 24 ساعة" : "Send 24h reminder"
+                              }
                             >
                               <Calendar className="h-4 w-4" />
                             </button>
+
+                            {/* 1h / 30min Reminder */}
                             <button
                               onClick={() => openReminderModal(session, "1hour")}
                               className="rounded-md p-1.5 text-amber-600 transition-colors hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-500/20"
-                              title={isRTL ? "إرسال تذكير ساعة" : "Send 1h reminder"}
+                              title={
+                                sessionIsOffline
+                                  ? isRTL ? "تنبيه 30 دقيقة (Offline)" : "Send 30min drop-off alert"
+                                  : isRTL ? "إرسال تذكير ساعة" : "Send 1h reminder"
+                              }
                             >
                               <Clock className="h-4 w-4" />
                             </button>
+
+                            {/* ✅ Pre-Attendance Ping — Offline فقط */}
+                            {sessionIsOffline && (
+                              <button
+                                onClick={() => openReminderModal(session, "pre_attendance_ping")}
+                                className="rounded-md p-1.5 text-violet-600 transition-colors hover:bg-violet-100 dark:text-violet-400 dark:hover:bg-violet-500/20"
+                                title={isRTL ? "تنبيه قبل بداية الحصة" : "Send Pre-Attendance Ping"}
+                              >
+                                <BellRing className="h-4 w-4" />
+                              </button>
+                            )}
                           </>
                         )}
 

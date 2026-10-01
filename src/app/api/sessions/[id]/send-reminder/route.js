@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { requireAdmin } from '@/utils/authMiddleware';
-import { sendManualSessionReminder } from '@/app/services/groupAutomation';
+import { sendManualSessionReminder } from '../../../../services/groupAutomation';
 import mongoose from 'mongoose';
 
 export async function POST(req, { params }) {
@@ -28,10 +28,15 @@ export async function POST(req, { params }) {
 
     const { reminderType = '24hours', metadata = {} } = body;
 
-    // ✅ بيقبل 24hours و 15min و 1hour (للتوافق مع القديم)
-    if (!['24hours', '15min', '1hour'].includes(reminderType)) {
+    // ✅ الأنواع المسموحة: 24hours | 15min | 1hour (legacy) | pre_attendance_ping (Offline فقط)
+    const allowedTypes = ['24hours', '15min', '1hour', 'pre_attendance_ping'];
+    if (!allowedTypes.includes(reminderType)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid reminder type. Use 24hours, 15min, or 1hour' },
+        {
+          success: false,
+          error:
+            'Invalid reminder type. Use 24hours, 15min, 1hour, or pre_attendance_ping',
+        },
         { status: 400 }
       );
     }
@@ -43,7 +48,7 @@ export async function POST(req, { params }) {
       );
     }
 
-    const studentMsgsCount  = metadata?.studentMessages
+    const studentMsgsCount = metadata?.studentMessages
       ? Object.keys(metadata.studentMessages).length
       : 0;
     const guardianMsgsCount = metadata?.guardianMessages
@@ -77,13 +82,14 @@ export async function POST(req, { params }) {
         successCount:          result.successCount,
         failCount:             result.failCount,
         reminderType:          result.reminderType,
+        isOffline:             result.isOffline,
+        isPrePing:             result.isPrePing,
         customMessageUsed:     result.customMessageUsed,
         studentMessagesCount:  studentMsgsCount,
         guardianMessagesCount: guardianMsgsCount,
         notificationResults:   result.notificationResults,
-      }
+      },
     });
-
   } catch (error) {
     console.error('❌ Error sending manual reminder:', error);
     return NextResponse.json(
