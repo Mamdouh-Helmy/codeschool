@@ -173,6 +173,12 @@ async function revertDelivery(studentId, moduleId, who) {
   }
 }
 
+// ✅ الـ revert آمن بس لو الـ API رفض صراحة (يعني الرسالة أكيد ماتبعتتش).
+// أي خطأ تاني (timeout / network) ممكن تكون الرسالة وصلت فعلاً → منرجّعش الحجز.
+function isDefiniteSendFailure(result) {
+  return String(result?.error || "").startsWith("WhatsApp API media error");
+}
+
 // ✅ تنظيف الـ claims القديمة (failover لو السيرفر وقع في النص)
 async function cleanupStaleCertificateClaims() {
   try {
@@ -199,10 +205,7 @@ async function cleanupStaleCertificateClaims() {
       );
     }
   } catch (err) {
-    console.error(
-      "⚠️ cleanupStaleCertificateClaims error:",
-      err.message,
-    );
+    console.error("⚠️ cleanupStaleCertificateClaims error:", err.message);
   }
 }
 
@@ -319,9 +322,7 @@ async function sendCertificateWithFallback(
     );
 
     if (!result?.success) {
-      console.warn(
-        `⚠️ Wapilot failed for ${studentName}: ${result?.error}`,
-      );
+      console.warn(`⚠️ Wapilot failed for ${studentName}: ${result?.error}`);
     }
 
     return result;
@@ -374,7 +375,8 @@ export async function GET(request) {
       portfolioSkippedNoUser: 0,
       noAttendanceYet: 0,
       alreadyClaimed: 0,
-      alreadyDeliveredDedup: 0, // ✅ NEW: اتمنع تكرارها بالـ dedup
+      alreadyDeliveredDedup: 0, // ✅ اتمنع تكرارها بالـ dedup
+      uncertainSends: 0, // ✅ NEW: إرسال غير مؤكد (الحجز اتساب)
       errors: 0,
     };
 
@@ -602,11 +604,18 @@ export async function GET(request) {
                 if (result?.success) {
                   studentDelivered = true;
                   summary.studentSent++;
-                } else {
-                  // الإرسال فشل فعلاً → نرجّع الحجز عشان يحاول في الدورة الجاية
+                } else if (isDefiniteSendFailure(result)) {
+                  // الـ API رفض صراحة → الرسالة أكيد ماتبعتتش → نرجّع الحجز
                   await revertDelivery(student._id, moduleId, "student");
                   console.warn(
                     `⚠️ فشل إرسال الشهادة للطالب ${student.personalInfo.fullName}: ${result?.error}`,
+                  );
+                } else {
+                  // فشل غير مؤكد (timeout / network) → نسيب الحجز (ممنوع التكرار)
+                  summary.uncertainSends++;
+                  studentDelivered = true;
+                  console.warn(
+                    `❓ إرسال غير مؤكد للطالب ${student.personalInfo.fullName} — الحجز اتساب: ${result?.error}`,
                   );
                 }
               }
@@ -649,10 +658,16 @@ export async function GET(request) {
                 if (result?.success) {
                   guardianDelivered = true;
                   summary.guardianSent++;
-                } else {
+                } else if (isDefiniteSendFailure(result)) {
                   await revertDelivery(student._id, moduleId, "guardian");
                   console.warn(
                     `⚠️ فشل إرسال الشهادة لولي أمر ${student.personalInfo.fullName}: ${result?.error}`,
+                  );
+                } else {
+                  summary.uncertainSends++;
+                  guardianDelivered = true;
+                  console.warn(
+                    `❓ إرسال غير مؤكد لولي أمر ${student.personalInfo.fullName} — الحجز اتساب: ${result?.error}`,
                   );
                 }
               }
@@ -672,7 +687,10 @@ export async function GET(request) {
                   "issuedCertificates.$.imageUrl": fullImageUrl,
                   // الطالب البالغ: ولي الأمر مش مطلوب، فنعتبره مسلَّم
                   ...(isAdult
-                    ? { "issuedCertificates.$.guardianDelivered": true }
+                    ? {
+                        "issuedCertificates.$.guardianDelivered": true,
+                        "issuedCertificates.$.guardianDeliveredAt": new Date(),
+                      }
                     : {}),
                 },
               },
