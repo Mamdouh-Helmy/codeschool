@@ -337,26 +337,64 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
   };
 }
 
-// ─── Recording message (للأطفال فقط) ─────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── Recording message ─────────────────────────────────────────────────────
+// ✅ NEW:
+//   - Child  → قالب session_recording (موجّه لولي الأمر) + الرقم اللي في recipientPhone
+//   - Adult  → قالب session_recording_adult (موجّه للطالب) + رقم الطالب
+//   - sessionIsOffline → مفيش تسجيل (ما بيتحسبش مشكلة، بس بيتخطى)
+//
+// ⚠️ المستلم (recipientPhone) بيتحدد مسبقًا في buildEvaluationMessage
+//    عن طريق routeMessage — نفس المنطق:
+//      kids  → رقم ولي الأمر
+//      adults → رقم الطالب
+//    فبنستخدم نفس المستلم هنا عشان يفضل "تناسق كامل" بين التقييم والتسجيل.
+// ────────────────────────────────────────────────────────────────────────────
 async function buildRecordingMessage(student, session, recordingLink) {
   const dbVars = await loadDbVars();
   const ctx = buildRecipientContext(student, dbVars);
+  const isAdult = student.studentType === 'adults';
 
-  const result = await MessageTemplate.getOrFallback('session_recording', ctx.lang);
+  const templateType = isAdult
+    ? 'session_recording_adult'
+    : 'session_recording';
 
-  const rendered = renderTemplate(result.content, {
-    guardianSalutation: ctx.guardianSalutation,
-    guardianName: ctx.guardianFirstName,
-    studentName: ctx.studentFirstName,
-    childTitle: ctx.childTitle,
-    sessionName: session?.title || '',
-    recordingLink: recordingLink.trim(),
-  });
+  const result = await MessageTemplate.getOrFallback(
+    templateType,
+    ctx.lang,
+    isAdult ? 'student' : 'guardian',
+  );
 
-  return { rendered, lang: ctx.lang, isFallback: result.isFallback };
+  // ✅ متغيرات البالغ مختلفة عن متغيرات الطفل
+  const vars = isAdult
+    ? {
+        studentSalutation: ctx.studentSalutation,
+        studentName: ctx.studentFirstName,
+        sessionName: session?.title || '',
+        recordingLink: recordingLink.trim(),
+      }
+    : {
+        guardianSalutation: ctx.guardianSalutation,
+        guardianName: ctx.guardianFirstName,
+        studentName: ctx.studentFirstName,
+        childTitle: ctx.childTitle,
+        sessionName: session?.title || '',
+        recordingLink: recordingLink.trim(),
+      };
+
+  const rendered = renderTemplate(result.content, vars);
+
+  return {
+    rendered,
+    lang: ctx.lang,
+    isFallback: result.isFallback,
+    isAdult,
+    templateType,
+  };
 }
 
 // ─── Session blog message (للكل: الطفل → ولي الأمر | البالغ → الطالب) ─────
+// ✅ مشترك بين الأونلاين والأوفلاين
 async function buildBlogMessage(student, session, blogInfo) {
   const lang = student.communicationPreferences?.preferredLanguage || 'ar';
   const hasContentForLang = lang === 'ar' ? blogInfo?.hasAr : blogInfo?.hasEn;
@@ -858,25 +896,46 @@ export async function PATCH(req, { params }) {
         );
 
         if (!duplicate) {
-          // ✅ التسجيل للأطفال بس (قالبه مبني على ولي الأمر)
-          if (!isAdult && recordingLink?.trim() && !sessionIsOffline) {
-            const { rendered: recRendered } = await buildRecordingMessage(
-              student,
-              session,
-              recordingLink,
-            );
-            const linkResult = await wapilotService.sendAndLogMessage({
-              studentId,
-              phoneNumber: recipientPhone,
-              messageContent: recRendered,
-              messageType: 'session_recording',
-              language: lang,
-              metadata: baseMeta,
-            });
-            recordingLinkSent = linkResult?.success || false;
+          // ═══════════════════════════════════════════════════════════════════════
+          // ✅ Recording link — للطالب وولي الأمر (على حسب النوع)
+          //    - Online فقط (الـ Offline مفيش تسجيل)
+          //    - نفس المستلم بتاع التقييم (recipientPhone):
+          //        kids   → رقم ولي الأمر
+          //        adults → رقم الطالب
+          // ═══════════════════════════════════════════════════════════════════════
+          if (recordingLink?.trim() && !sessionIsOffline) {
+            try {
+              const recBuilt = await buildRecordingMessage(
+                student,
+                session,
+                recordingLink,
+              );
+
+              if (recBuilt?.rendered?.trim()) {
+                const linkResult = await wapilotService.sendAndLogMessage({
+                  studentId,
+                  phoneNumber: recipientPhone,
+                  messageContent: recBuilt.rendered,
+                  // ✅ session_recording للطفل | session_recording_adult للبالغ
+                  messageType: recBuilt.templateType,
+                  language: lang,
+                  metadata: {
+                    ...baseMeta,
+                    isAdult: recBuilt.isAdult,
+                    isFallback: recBuilt.isFallback,
+                  },
+                });
+                recordingLinkSent = linkResult?.success || false;
+              }
+            } catch (recErr) {
+              console.error('❌ RECORDING SEND ERROR:', recErr);
+            }
           }
 
-          // ✅ الملخص للكل (طفل → ولي أمر | بالغ → الطالب)
+          // ═══════════════════════════════════════════════════════════════════════
+          // ✅ Session blog (ملخص الجلسة) — مشترك بين الأطفال والبالغين
+          //    يتبعت للأونلاين والأوفلاين — نفس المستلم (recipientPhone)
+          // ═══════════════════════════════════════════════════════════════════════
           const blogMessage = await buildBlogMessage(student, session, blogInfo);
           if (blogMessage?.rendered) {
             try {

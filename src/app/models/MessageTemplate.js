@@ -27,6 +27,7 @@ const MessageTemplateSchema = new mongoose.Schema(
         "evaluation_review",
         "evaluation_repeat",
         "session_recording",
+        "session_recording_adult",
         "learning_supervisor_intro",
         "module_overview",
         "module_overview_adult",
@@ -867,6 +868,26 @@ function getFallbackTemplates() {
       ],
       ar: `{studentSalutation} 👋\nحابب أشارك معاك لمحة سريعة عن الـ Module الجديد اللي هتبدأه ✨\n\n**Module Title:** {moduleTitle}\n\nخلال الـ Module ده، هتاخد فكرة عملية وممتعة عن إزاي التطبيقات اللي بنستخدمها في حياتنا بتتعمل وبتتجهز بشكل مناسب للمستخدمين 📱\nوهتركز كمان على بناء شاشات بسيطة تشبه تطبيقات الموبايل، مع تدريب عملي يساعدك تفهم الفكرة خطوة بخطوة 🌟\n\nوأنا هكون متابع معاك خلال الـ Module، وهشاركك أي ملاحظات مهمة أو تطور واضح بإذن الله.\n\n{supervisorName} ✨\nLearning Supervisor`,
       en: `{studentSalutation} 👋\nI would like to share with you a quick overview of the new Module that you will be starting ✨\n\n**Module Title:** {moduleTitle}\n\nDuring this Module, you will get a practical and fun idea about how the applications we use in our daily lives are built and tailored for users 📱\nYou will also focus on building simple screens similar to mobile applications, with practical training to help you understand the concept step by step 🌟\n\nI will be following up with you during the Module and will share any important notes or noticeable progress with you, God willing.\n\n{supervisorName} ✨\nLearning Supervisor`,
+    },
+
+    // ── session_recording_adult (للبالغين — يبعت للطالب مباشرة) ──
+    session_recording_adult: {
+      variables: [
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب",
+          example: "عزيزي أحمد",
+        },
+        { key: "studentName", label: "اسم الطالب", example: "أحمد" },
+        { key: "sessionName", label: "اسم الجلسة", example: "الجلسة الأولى" },
+        {
+          key: "recordingLink",
+          label: "رابط التسجيل",
+          example: "https://drive.google.com/xxx",
+        },
+      ],
+      ar: `{studentSalutation}،\n\n🎥 رابط تسجيل جلسة "{sessionName}":\n\n{recordingLink}\n\nيمكنك مراجعة التسجيل في أي وقت للمذاكرة والمراجعة.\nفريق Code School 💻`,
+      en: `{studentSalutation},\n\n🎥 Recording for "{sessionName}":\n\n{recordingLink}\n\nYou can review the recording anytime for study and revision.\nCode School Team 💻`,
     },
 
     // ── reminder_15min_guardian ───────────────────────────────

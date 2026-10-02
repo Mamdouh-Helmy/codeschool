@@ -45,6 +45,7 @@ const TEMPLATE_TYPES = [
   { id: "evaluation_review", label: "تقييم: يحتاج مراجعة", icon: FileText, color: "accent", emoji: "⚠️", category: "evaluation", type: "guardian_with_session", api: "message" },
   { id: "evaluation_repeat", label: "تقييم: يحتاج دعم إضافي", icon: RotateCcw, color: "rose", emoji: "🔄", category: "evaluation", type: "guardian_with_session", api: "message" },
   { id: "session_recording", label: "رابط التسجيل", icon: Video, color: "sky", emoji: "🎥", category: "evaluation", type: "guardian_with_session", api: "message" },
+  { id: "session_recording_adult", label: "رابط التسجيل - البالغ", icon: Video, color: "sky", emoji: "🎥", category: "evaluation_adult", type: "student_with_session", api: "message", isNew: true },
   { id: "learning_supervisor_intro", label: "تقديم المشرف الأكاديمي", icon: User, color: "primary", emoji: "👨‍🏫", category: "basic", type: "guardian_only", api: "message", isNew: true },
   { id: "module_overview", label: "نظرة عامة على الموديول", icon: BookOpen, color: "secondary", emoji: "📚", category: "basic", type: "guardian_only", api: "message", isNew: true },
   { id: "module_overview_adult", label: "نظرة عامة على الموديول - البالغ", icon: BookOpen, color: "primary", emoji: "📚", category: "basic", type: "student_only", api: "message", isNew: true },
@@ -222,6 +223,7 @@ const TEMPLATE_VARS = {
   evaluation_review: ["guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink", "supervisorName", "moduleTitle", "moduleDescription"],
   evaluation_repeat: ["guardianSalutation", "sessionDate", "sessionNumber", "attendanceStatus", "starsCommitment", "starsUnderstanding", "starsTaskExecution", "starsParticipation", "instructorComment", "completedSessions", "recordingLink", "supervisorName", "moduleTitle", "moduleDescription"],
   session_recording: ["guardianSalutation", "guardianName", "childTitle", "studentName", "sessionName", "recordingLink"],
+  session_recording_adult: ["studentSalutation", "studentName", "sessionName", "recordingLink"],
   instructor_reminder_24h: ["instructorSalutation", "sessionName", "sessionDescription", "date", "time", "meetingLink", "username", "password", "groupName", "studentCount"],
   instructor_reminder_15min: ["instructorSalutation", "sessionName", "sessionDescription", "time", "meetingLink", "username", "password", "groupName"],
   reminder_24h_offline_student: ["salutation_ar", "salutation_en", "sessionName", "date", "time", "placeName", "address", "mapsLink"],
@@ -333,6 +335,10 @@ const FRONTEND_FALLBACKS = {
     ar: `{guardianSalutation}،\n\n🎥 رابط تسجيل جلسة "{sessionName}" لـ{childTitle} *{studentName}*:\n\n{recordingLink}\n\nيمكن مراجعة التسجيل في أي وقت للمذاكرة والمراجعة.\nفريق Code School 💻`,
     en: `{guardianSalutation},\n\n🎥 Recording for "{sessionName}" — {childTitle} *{studentName}*:\n\n{recordingLink}\n\nThe recording can be reviewed anytime for study and revision.\nCode School Team 💻`,
   },
+  session_recording_adult: {
+  ar: `{studentSalutation}،\n\n🎥 رابط تسجيل جلسة "{sessionName}":\n\n{recordingLink}\n\nيمكنك مراجعة التسجيل في أي وقت للمذاكرة والمراجعة.\nفريق Code School 💻`,
+  en: `{studentSalutation},\n\n🎥 Recording for "{sessionName}":\n\n{recordingLink}\n\nYou can review the recording anytime for study and revision.\nCode School Team 💻`,
+},
   learning_supervisor_intro: {
     ar: `{guardianSalutation} 👋\nأنا {supervisorName}، الـ Learning Supervisor الخاص بـ {childTitle} **{studentName}** في Code School ✨\nحبيت أعرف حضرتك بنفسي، لأنني هكون معاكم في المتابعة الأكاديمية خلال الفترة الجاية، وهشارك مع حضرتك التقييمات الدورية، وكمان في بداية كل Module هبعت لحضرتك نظرة بسيطة على اللي {childTitle} هيتعلمه خلالها 🌟\nهدفي إن المتابعة تكون واضحة ومريحة، وإن حضرتك تبقى مطّمن على رحلة {studentName} التعليمية خطوة بخطوة 🤍\nوأي وقت تحب تستفسر عن أي حاجة تخص المستوى أو التقدم، أنا موجود مع حضرتك.\n{supervisorName} ✨\nLearning Supervisor`,
     en: `{guardianSalutation} 👋\nI am {supervisorName}, your Learning Supervisor for {childTitle} **{studentName}** at Code School ✨\nI wanted to introduce myself, as I will be following up on the academic progress during the coming period. I will share periodic evaluations with you, and at the beginning of each Module, I will send you a brief overview of what {childTitle} will be learning 🌟\nMy goal is to make follow-up clear and comfortable, and to keep you reassured about {studentName}'s educational journey step by step 🤍\nAnytime you would like to inquire about anything regarding the level or progress, I am here for you.\n{supervisorName} ✨\nLearning Supervisor`,

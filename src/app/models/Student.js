@@ -103,7 +103,9 @@ const whatsappMessageSchema = new mongoose.Schema(
         "evaluation_review",
         "evaluation_repeat",
         "session_recording",
+        "session_recording_adult", // ✅ جديد: تسجيل للبالغ
         "module_overview",
+        "module_overview_adult", // ✅ جديد: نظرة عامة للبالغ
         "learning_supervisor_intro",
         "guardian_notification",
         "reminder_15min_student",
