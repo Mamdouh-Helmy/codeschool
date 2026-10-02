@@ -295,7 +295,38 @@ class WapilotService {
     }
   }
 
-    async sendAndLogMessage({
+    // ✅ NEW: تحديد "نطاق" الـ dedupe (سيشن أو مقابلة)
+  resolveDedupeScope(metadata = {}) {
+    if (metadata.sessionId)
+      return { field: "metadata.sessionId", value: metadata.sessionId };
+    if (metadata.interviewId)
+      return { field: "metadata.interviewId", value: metadata.interviewId };
+    return null;
+  }
+
+  async alreadySent(
+    studentId,
+    phoneNumber,
+    messageTypes,
+    scopeValue,
+    scopeField = "metadata.sessionId",
+  ) {
+    await connectDB();
+    const types = Array.isArray(messageTypes) ? messageTypes : [messageTypes];
+    return !!(await Student.exists({
+      _id: studentId,
+      whatsappMessages: {
+        $elemMatch: {
+          messageType: { $in: types },
+          recipientNumber: phoneNumber,
+          status: "sent",
+          [scopeField]: scopeValue,
+        },
+      },
+    }));
+  }
+
+  async sendAndLogMessage({
     studentId,
     phoneNumber,
     messageContent,
@@ -307,15 +338,16 @@ class WapilotService {
       const preparedNumber = this.preparePhoneNumber(phoneNumber);
       if (!preparedNumber) throw new Error("Invalid phone number format");
 
+      const scope =
+        metadata.dedupe && studentId ? this.resolveDedupeScope(metadata) : null;
       if (
-        metadata.dedupe &&
-        studentId &&
-        metadata.sessionId &&
+        scope &&
         (await this.alreadySent(
           studentId,
           preparedNumber,
           metadata.dedupeTypes || messageType,
-          metadata.sessionId,
+          scope.value,
+          scope.field,
         ))
       ) {
         return { success: false, duplicate: true };
@@ -369,15 +401,17 @@ class WapilotService {
     try {
       const preparedNumber = this.preparePhoneNumber(phoneNumber);
       if (!preparedNumber) throw new Error("Invalid phone number format");
+
+      const scope =
+        metadata.dedupe && studentId ? this.resolveDedupeScope(metadata) : null;
       if (
-        metadata.dedupe &&
-        studentId &&
-        metadata.sessionId &&
+        scope &&
         (await this.alreadySent(
           studentId,
           preparedNumber,
           metadata.dedupeTypes || messageType,
-          metadata.sessionId,
+          scope.value,
+          scope.field,
         ))
       ) {
         return { success: false, duplicate: true };
@@ -421,22 +455,6 @@ class WapilotService {
       console.error(`❌ Error in sendAndLogEvalMessage:`, error.message);
       throw error;
     }
-  }
-
-    async alreadySent(studentId, phoneNumber, messageTypes, sessionId) {
-    await connectDB();
-    const types = Array.isArray(messageTypes) ? messageTypes : [messageTypes];
-    return !!(await Student.exists({
-      _id: studentId,
-      whatsappMessages: {
-        $elemMatch: {
-          messageType: { $in: types },
-          recipientNumber: phoneNumber,
-          status: "sent",
-          "metadata.sessionId": sessionId,
-        },
-      },
-    }));
   }
 
   // ============================================================

@@ -134,7 +134,10 @@ export function extractSessionShortName(title) {
 /**
  * ✅ التحقق من صلاحية الطالب لاستقبال الرسائل
  */
-export async function canSendMessage(student, { isComplimentary = false } = {}) {
+export async function canSendMessage(
+  student,
+  { isComplimentary = false } = {},
+) {
   if (!student) return false;
 
   const whatsappEnabled =
@@ -2667,10 +2670,6 @@ export async function sendInstructorWelcomeMessages(
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ✅ sendToStudentWithLogging — إرسال للطالب + ولي الأمر مع logging
-// ✅ NEW: لو الطالب adults → رسالة ولي الأمر تتخطى تلقائيًا
-// ═══════════════════════════════════════════════════════════════════════════
 async function sendToStudentWithLogging({
   studentId,
   student,
@@ -2684,26 +2683,28 @@ async function sendToStudentWithLogging({
     const language =
       student.communicationPreferences?.preferredLanguage || "ar";
 
-    // ✅ NEW: هل الطالب بالغ؟
     const isAdult = student.studentType === "adults";
-
-    // ✅ لو adult → نتخطى رقم ولي الأمر تمامًا
     const guardianWhatsApp = isAdult
       ? null
       : student.guardianInfo?.whatsappNumber;
 
+    // ✅ metadata.dedupe = true → ممنوع تتبعت نفس الرسالة (نفس النوع + نفس الرقم + نفس السيشن/المقابلة) مرتين
+    const dedupe = metadata?.dedupe === true;
+
     const results = {
       guardian: false,
       student: false,
+      guardianDuplicate: false,
+      studentDuplicate: false,
       guardianError: isAdult ? "skipped_adult_student" : null,
       studentError: null,
       isAdult,
     };
 
-    // ── Guardian message (نتخطاها تلقائيًا لو adult) ──
+    // ── Guardian message ──
     if (guardianWhatsApp && guardianMessage) {
       try {
-        await wapilotService.sendAndLogMessage({
+        const res = await wapilotService.sendAndLogMessage({
           studentId,
           phoneNumber: guardianWhatsApp,
           messageContent: guardianMessage,
@@ -2713,9 +2714,12 @@ async function sendToStudentWithLogging({
             ...metadata,
             recipientType: "guardian",
             guardianName: student.guardianInfo?.name,
+            dedupe,
           },
         });
-        results.guardian = true;
+        if (res?.duplicate) results.guardianDuplicate = true;
+        else if (res?.success) results.guardian = true;
+        else results.guardianError = res?.error || "send_failed";
       } catch (error) {
         results.guardianError = error.message;
         console.error(`❌ Failed to send guardian message:`, error);
@@ -2725,23 +2729,30 @@ async function sendToStudentWithLogging({
     // ── Student message ──
     if (studentWhatsApp && studentMessage) {
       try {
-        await wapilotService.sendAndLogMessage({
+        const res = await wapilotService.sendAndLogMessage({
           studentId,
           phoneNumber: studentWhatsApp,
           messageContent: studentMessage,
           messageType,
           language,
-          metadata: { ...metadata, recipientType: "student" },
+          metadata: { ...metadata, recipientType: "student", dedupe },
         });
-        results.student = true;
+        if (res?.duplicate) results.studentDuplicate = true;
+        else if (res?.success) results.student = true;
+        else results.studentError = res?.error || "send_failed";
       } catch (error) {
         results.studentError = error.message;
         console.error(`❌ Failed to send student message:`, error);
       }
     }
 
+    const anySent = results.guardian || results.student;
+    const anyDuplicate = results.guardianDuplicate || results.studentDuplicate;
+
     return {
-      success: results.guardian || results.student,
+      // ✅ الـ duplicate بيتحسب نجاح (الرسالة وصلت قبل كده) عشان الـ cron مايعملش unlock ويعيد
+      success: anySent || anyDuplicate,
+      duplicate: !anySent && anyDuplicate,
       studentId,
       studentName: student.personalInfo?.fullName,
       isAdult,
@@ -3741,6 +3752,7 @@ export async function sendManualSessionReminder(
             isOffline: isOfflineMode,
             deliveryMode,
             isPrePing,
+            dedupe: metadata?.automatedCron === true,
           },
         });
 
@@ -4678,6 +4690,12 @@ async function getCompletedModuleIndexes(groupId) {
   return completed.sort((a, b) => a - b);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ sendModuleOverviewMessage
+// ✅ NEW:
+//   - kids  → بيتبعت لولي الأمر (زي ما كان)
+//   - adults → بيتبعت للطالب مباشرة باستخدام قالب module_overview_adult
+// ═══════════════════════════════════════════════════════════════════════════
 async function sendModuleOverviewMessage(
   student,
   group,
@@ -4692,45 +4710,82 @@ async function sendModuleOverviewMessage(
   const studentNickname = student.personalInfo?.nickname || null;
   const studentName = student.personalInfo?.fullName || "";
 
-  const guardianPhone =
-    student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
-  if (!guardianPhone)
-    return { success: false, skipped: true, reason: "no_guardian_phone" };
+  // ✅ هل الطالب بالغ؟
+  const isAdult = student.studentType === "adults";
+
+  // ✅ اختيار المستلم حسب النوع
+  const recipientType = isAdult ? "student" : "guardian";
+  const recipientPhone = isAdult
+    ? student.personalInfo?.whatsappNumber
+    : student.guardianInfo?.whatsappNumber || student.guardianInfo?.phone;
+
+  if (!recipientPhone) {
+    return {
+      success: false,
+      skipped: true,
+      reason: isAdult ? "no_student_phone" : "no_guardian_phone",
+    };
+  }
+
+  // ✅ اختيار القالب حسب النوع
+  const templateType = isAdult ? "module_overview_adult" : "module_overview";
 
   const template = await getMessageTemplate(
-    "module_overview",
+    templateType,
     language,
-    "guardian",
+    recipientType,
   );
-
-  const guardianSalutation = await wapilotService.getGuardianSalutation(
-    guardianName,
-    relationship,
-    guardianNickname,
-    language,
-  );
-  const childTitle = await wapilotService.getStudentChildTitle(
-    gender,
-    language,
-  );
-  const supervisorName =
-    (await wapilotService.getDbVariable("supervisorName", language)) || "";
 
   const studentDisplayName =
     (language === "ar" ? studentNickname?.ar : studentNickname?.en) ||
     studentName.split(" ")[0] ||
     studentName;
 
-  const vars = {
-    guardianSalutation,
-    childTitle,
-    studentName: studentDisplayName,
-    moduleTitle: moduleData?.title || "",
-    moduleDescription: moduleData?.description || "",
-    supervisorName,
-    courseName: group.courseSnapshot?.title || "",
-    groupName: group.name || "",
-  };
+  const supervisorName =
+    (await wapilotService.getDbVariable("supervisorName", language)) || "";
+
+  const courseName = group.courseSnapshot?.title || group.courseId?.title || "";
+
+  // ✅ بناء المتغيرات حسب المستلم
+  let vars;
+  if (isAdult) {
+    const studentSalutation = await wapilotService.getStudentSalutation(
+      gender,
+      language,
+      studentNickname?.ar,
+      studentNickname?.en,
+    );
+    vars = {
+      studentSalutation,
+      studentName: studentDisplayName,
+      moduleTitle: moduleData?.title || "",
+      moduleDescription: moduleData?.description || "",
+      supervisorName,
+      courseName,
+      groupName: group.name || "",
+    };
+  } else {
+    const guardianSalutation = await wapilotService.getGuardianSalutation(
+      guardianName,
+      relationship,
+      guardianNickname,
+      language,
+    );
+    const childTitle = await wapilotService.getStudentChildTitle(
+      gender,
+      language,
+    );
+    vars = {
+      guardianSalutation,
+      childTitle,
+      studentName: studentDisplayName,
+      moduleTitle: moduleData?.title || "",
+      moduleDescription: moduleData?.description || "",
+      supervisorName,
+      courseName,
+      groupName: group.name || "",
+    };
+  }
 
   let content = template.content;
   Object.entries(vars).forEach(([key, value]) => {
@@ -4739,16 +4794,17 @@ async function sendModuleOverviewMessage(
 
   return await wapilotService.sendAndLogEvalMessage({
     studentId: student._id,
-    phoneNumber: guardianPhone,
+    phoneNumber: recipientPhone,
     messageContent: content,
-    messageType: "module_overview",
+    messageType: templateType,
     language,
     metadata: {
       groupId: group._id,
       groupName: group.name,
       moduleIndex: moduleIdx,
       moduleTitle: moduleData?.title,
-      recipientType: "guardian",
+      recipientType,
+      isAdult,
       automationType: "module_progress_cron",
     },
   });
@@ -4812,6 +4868,37 @@ async function markModuleOverviewSent(studentId, groupId, moduleIdx) {
   }
 }
 
+// ✅ بعد محاولة إرسال فعلية فشلت: منمسحش الحجز (ممكن الرسالة وصلت فعلاً
+// والـ API رجّع خطأ/timeout). بنعلّمها failed عشان الكرون ما يبعتهاش تاني.
+async function markModuleOverviewFailed(
+  studentId,
+  groupId,
+  moduleIdx,
+  errorMsg,
+) {
+  try {
+    await Student.updateOne(
+      {
+        _id: studentId,
+        moduleOverviewsSent: {
+          $elemMatch: { groupId, moduleIndex: moduleIdx, status: "sending" },
+        },
+      },
+      {
+        $set: {
+          "moduleOverviewsSent.$.status": "failed",
+          "moduleOverviewsSent.$.error": String(errorMsg || "").slice(0, 500),
+        },
+      },
+    );
+  } catch (err) {
+    console.error(
+      `⚠️ markModuleOverviewFailed error [student=${studentId}, module=${moduleIdx}]:`,
+      err.message,
+    );
+  }
+}
+
 async function releaseModuleOverviewClaim(studentId, groupId, moduleIdx) {
   try {
     await Student.updateOne(
@@ -4839,16 +4926,13 @@ async function releaseModuleOverviewClaim(studentId, groupId, moduleIdx) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ✅ checkAndSendModuleOverviewNotifications (CRON)
-// ✅ NEW: لو الطالب adults → نتخطى الـ module overview بالكامل
-// ═══════════════════════════════════════════════════════════════════════════
 export async function checkAndSendModuleOverviewNotifications() {
   const groups = await Group.find({
     status: "active",
     isDeleted: false,
     sessionsGenerated: true,
     "hold.isHeld": { $ne: true },
+    isMakeupGroup: { $ne: true },
   })
     .populate({ path: "courseId", select: "title curriculum" })
     .populate("students");
@@ -4857,6 +4941,13 @@ export async function checkAndSendModuleOverviewNotifications() {
 
   for (const group of groups) {
     try {
+      if (group.isMakeupGroup === true) {
+        console.log(
+          `⏭️ [MAKEUP GUARD] Skipping makeup group ${group._id} in module overview cron`,
+        );
+        continue;
+      }
+
       const curriculum =
         group.courseId?.curriculum?.length > 0
           ? group.courseId.curriculum
@@ -4873,17 +4964,7 @@ export async function checkAndSendModuleOverviewNotifications() {
       for (const student of studentsInGroup) {
         if (!student) continue;
 
-        // ✅ NEW: لو الطالب بالغ → نتخطى module overviews تمامًا
-        //    (لأن القوالب دي أصلاً موجهة لولي الأمر)
-        if (student.studentType === "adults") {
-          results.push({
-            studentId: student._id,
-            groupId: group._id,
-            success: false,
-            skipped: "adult_student",
-          });
-          continue;
-        }
+        const isAdult = student.studentType === "adults";
 
         for (
           let moduleIdx = 1;
@@ -4892,11 +4973,13 @@ export async function checkAndSendModuleOverviewNotifications() {
         ) {
           if (moduleIdx >= curriculum.length) continue;
 
+          // ✅ فحص الصلاحية قبل الحجز (عشان ما نحرقش الـ slot على طالب مش مؤهل)
           const eligible = await canSendMessage(student);
           if (!eligible) continue;
 
           const moduleData = curriculum[moduleIdx];
 
+          // 🔒 حجز atomic — أي entry موجودة (sending/sent/failed) = ممنوع الإرسال
           const claimed = await claimModuleOverviewSlot(
             student._id,
             group._id,
@@ -4934,8 +5017,17 @@ export async function checkAndSendModuleOverviewNotifications() {
 
           if (sendResult?.success) {
             await markModuleOverviewSent(student._id, group._id, moduleIdx);
-          } else {
+          } else if (sendResult?.skipped) {
+            // مفيش إرسال حصل أصلاً (مفيش رقم) → نفك الحجز عشان لو اتضاف رقم بعدين يتبعت
             await releaseModuleOverviewClaim(student._id, group._id, moduleIdx);
+          } else {
+            // 🔒 حصلت محاولة إرسال فعلية وفشلت (أو غير مؤكدة) → منكررش
+            await markModuleOverviewFailed(
+              student._id,
+              group._id,
+              moduleIdx,
+              sendResult?.error,
+            );
           }
 
           results.push({
@@ -4943,6 +5035,10 @@ export async function checkAndSendModuleOverviewNotifications() {
             groupId: group._id,
             moduleIndex: moduleIdx,
             success: !!sendResult?.success,
+            isAdult,
+            recipientType: isAdult ? "student" : "guardian",
+            skipped: sendResult?.skipped ? sendResult.reason : undefined,
+            error: sendResult?.success ? undefined : sendResult?.error,
           });
         }
       }
@@ -5031,6 +5127,7 @@ export async function checkAndSendGroupCompletionNotifications() {
     status: { $in: ["active", "completed"] },
     "hold.isHeld": { $ne: true },
     "metadata.completionNotification.sent": { $ne: true },
+    isMakeupGroup: { $ne: true },
   })
     .populate({ path: "courseId", select: "title curriculum hasCertificate" })
     .populate("students");
@@ -5041,8 +5138,50 @@ export async function checkAndSendGroupCompletionNotifications() {
 
   for (const group of groups) {
     try {
+      if (group.isMakeupGroup === true) {
+        console.log(
+          `⏭️ [MAKEUP GUARD] Skipping makeup group "${group.name}" (${group._id}) in completion cron`,
+        );
+        results.push({
+          groupId: group._id,
+          groupName: group.name,
+          groupCode: group.code,
+          success: false,
+          skipped: "makeup_group",
+        });
+        continue;
+      }
+
       const fullyCompleted = await isGroupFullyCompleted(group._id);
       if (!fullyCompleted) continue;
+
+      // 🔒 Claim ذري — أول كرون يحجز الجروب، أي كرون تاني (متوازي) يتخطاه
+      const claimed = await Group.findOneAndUpdate(
+        {
+          _id: group._id,
+          "metadata.completionNotification.sent": { $ne: true },
+        },
+        {
+          $set: {
+            "metadata.completionNotification.sent": true,
+            "metadata.completionNotification.sentAt": new Date(),
+          },
+        },
+      );
+
+      if (!claimed) {
+        console.log(
+          `🔒 Group "${group.name}" completion already claimed — skipping`,
+        );
+        results.push({
+          groupId: group._id,
+          groupName: group.name,
+          groupCode: group.code,
+          success: false,
+          skipped: "already_claimed",
+        });
+        continue;
+      }
 
       console.log(
         `\n🎓 Group "${group.name}" is fully completed — sending notifications`,
@@ -5057,10 +5196,12 @@ export async function checkAndSendGroupCompletionNotifications() {
         {},
       );
 
+      // ✅ لو ولا رسالة اتبعتت (فشل كلي) نفك الحجز عشان يحاول تاني.
+      //    لو حتى رسالة واحدة اتبعتت يفضل محجوز → ممنوع التكرار.
       await Group.findByIdAndUpdate(group._id, {
         $set: {
           "metadata.completionNotification": {
-            sent: sendResult.success,
+            sent: !!sendResult.success,
             sentAt: new Date(),
             studentsNotified: sendResult.successCount || 0,
             studentsFailed: sendResult.failCount || 0,
@@ -5068,7 +5209,7 @@ export async function checkAndSendGroupCompletionNotifications() {
             results: sendResult.notificationResults || [],
           },
           "metadata.completionNotifiedAt": new Date(),
-          status: "completed",
+          ...(sendResult.success ? { status: "completed" } : {}),
         },
       });
 
@@ -5081,6 +5222,7 @@ export async function checkAndSendGroupCompletionNotifications() {
         failCount: sendResult.failCount || 0,
       });
     } catch (groupErr) {
+      // ⚠️ مش بنفك الحجز هنا: ممكن رسايل اتبعتت قبل الـ exception، وده أأمن ضد التكرار
       console.error(
         `❌ Error processing group ${group._id}:`,
         groupErr.message,
@@ -5257,6 +5399,7 @@ export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
             mapsLink: locVars.mapsLink,
             placeName: locVars.placeName,
             isAdult,
+            dedupe: metadata?.automatedCron === true,
           },
         });
 
@@ -5392,6 +5535,7 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
             mapsLink: locVars.mapsLink,
             placeName: locVars.placeName,
             isAdult,
+            dedupe: metadata?.automatedCron === true,
           },
         });
 
@@ -5500,6 +5644,7 @@ export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
             sessionTitle: session.title,
             groupId: group._id,
             reminderType: "pre_attendance_ping",
+            dedupe: metadata?.automatedCron === true,
           },
         });
 
@@ -5656,6 +5801,7 @@ export async function sendInstructorOfflineReminder(
             instructorId: instructor._id,
             instructorName: instructor.name,
             status: "sent",
+            language,
           });
         } else {
           throw new Error(sendResult?.error || "Send failed");

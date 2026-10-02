@@ -147,6 +147,7 @@ const whatsappMessageSchema = new mongoose.Schema(
       groupName: String,
       groupCode: String,
       sessionId: { type: mongoose.Schema.Types.ObjectId, ref: "Session" },
+      interviewId: { type: mongoose.Schema.Types.ObjectId, ref: "Interview" },
       sessionTitle: String,
       attendanceStatus: String,
       isCustomMessage: { type: Boolean, default: false },
@@ -458,9 +459,10 @@ const StudentSchema = new mongoose.Schema(
         sentAt: { type: Date, default: Date.now },
         status: {
           type: String,
-          enum: ["sending", "sent"],
+          enum: ["sending", "sent", "failed"], // ✅ أضفنا failed
           default: "sent",
         },
+        error: { type: String, default: "" }, // ✅ سبب الفشل للمراجعة
       },
     ],
 

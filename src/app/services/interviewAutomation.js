@@ -327,9 +327,6 @@ function canSendToStudent(student) {
   return true;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// SEND WELCOME
-// ═══════════════════════════════════════════════════════════════════════════
 export async function sendInterviewWelcome(interviewId, options = {}) {
   await (await import("@/lib/mongodb")).connectDB();
 
@@ -349,6 +346,9 @@ export async function sendInterviewWelcome(interviewId, options = {}) {
   const suffix = isOffline ? "offline" : "online";
   const lang = student.communicationPreferences?.preferredLanguage || "ar";
 
+  // ✅ ممنوع التكرار إلا لو resend صريح
+  const dedupe = options.resend !== true;
+
   const vars = await buildInterviewVariables({
     student,
     interview,
@@ -357,7 +357,7 @@ export async function sendInterviewWelcome(interviewId, options = {}) {
   });
 
   const results = { student: null, guardian: null, instructor: null };
-  const meta = { interviewId: interview._id, title: interview.title };
+  const meta = { interviewId: interview._id, title: interview.title, dedupe };
 
   // ── Student ──
   const studentPhone = student.personalInfo?.whatsappNumber;
@@ -368,7 +368,7 @@ export async function sendInterviewWelcome(interviewId, options = {}) {
     const template = await getTemplate(templateType, lang);
     const content = renderTemplate(template, vars);
 
-    const res = await wapilotService.sendAndLogMessage({
+    results.student = await wapilotService.sendAndLogMessage({
       studentId: student._id,
       phoneNumber: studentPhone,
       messageContent: content,
@@ -376,7 +376,6 @@ export async function sendInterviewWelcome(interviewId, options = {}) {
       language: lang,
       metadata: { ...meta, recipientType: "student", isAdult, isOffline },
     });
-    results.student = res;
   }
 
   // ── Guardian (kids only) ──
@@ -387,7 +386,7 @@ export async function sendInterviewWelcome(interviewId, options = {}) {
       const template = await getTemplate(templateType, lang);
       const content = renderTemplate(template, vars);
 
-      const res = await wapilotService.sendAndLogMessage({
+      results.guardian = await wapilotService.sendAndLogMessage({
         studentId: student._id,
         phoneNumber: guardianPhone,
         messageContent: content,
@@ -395,7 +394,6 @@ export async function sendInterviewWelcome(interviewId, options = {}) {
         language: lang,
         metadata: { ...meta, recipientType: "guardian", isOffline },
       });
-      results.guardian = res;
     }
   }
 
@@ -408,7 +406,7 @@ export async function sendInterviewWelcome(interviewId, options = {}) {
     const template = await getTemplate(templateType, "ar");
     const content = renderTemplate(template, vars);
 
-    const res = await wapilotService.sendAndLogMessage({
+    results.instructor = await wapilotService.sendAndLogMessage({
       studentId: student._id,
       phoneNumber: instructorPhone,
       messageContent: content,
@@ -416,17 +414,15 @@ export async function sendInterviewWelcome(interviewId, options = {}) {
       language: "ar",
       metadata: { ...meta, recipientType: "instructor", isOffline },
     });
-    results.instructor = res;
   } else {
     console.warn(
       `⚠️ [Interview Welcome] Instructor ${instructor.name} has no phone number — skipping instructor message`,
     );
   }
 
-  const anySent =
-    results.student?.success ||
-    results.guardian?.success ||
-    results.instructor?.success;
+  // ✅ duplicate = اتبعتت قبل كده → تتحسب نجاح
+  const ok = (r) => !!(r?.success || r?.duplicate);
+  const anySent = ok(results.student) || ok(results.guardian) || ok(results.instructor);
 
   if (anySent) {
     await Interview.findByIdAndUpdate(interviewId, {
@@ -444,12 +440,11 @@ export async function sendInterviewWelcome(interviewId, options = {}) {
   };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// SEND REMINDER (24h / 15min / 30min / pre-ping)
-// ✅ FIX: guards للـ online/offline، رقم ولي الأمر بـ fallback، ولي الأمر
-//         بيتحسب في النجاح، والـ flag بيتعمل بس لو فيه رسالة اتبعتت فعلاً
-// ═══════════════════════════════════════════════════════════════════════════
-export async function sendInterviewReminder(interviewId, reminderType) {
+export async function sendInterviewReminder(
+  interviewId,
+  reminderType,
+  options = {},
+) {
   await (await import("@/lib/mongodb")).connectDB();
 
   const interview = await Interview.findById(interviewId).lean();
@@ -474,7 +469,9 @@ export async function sendInterviewReminder(interviewId, reminderType) {
   const isOffline = interview.deliveryMode === "offline";
   const lang = student.communicationPreferences?.preferredLanguage || "ar";
 
-  // ✅ guards: 15min للأونلاين بس — 30min و pre_ping للأوفلاين بس
+  // ✅ الافتراضي: ممنوع التكرار. لو إرسال يدوي متعمّد مرر { force: true }
+  const dedupe = options.force !== true;
+
   if (reminderType === "15min" && isOffline) {
     return {
       success: false,
@@ -521,9 +518,10 @@ export async function sendInterviewReminder(interviewId, reminderType) {
   let studentsNotified = 0;
   let guardiansNotified = 0;
   let instructorsNotified = 0;
+  let duplicates = 0;
   const results = { student: null, guardian: null, instructor: null };
 
-  const baseMeta = { interviewId: interview._id, reminderType };
+  const baseMeta = { interviewId: interview._id, reminderType, dedupe };
 
   // ── Student ──
   const studentPhone = isAdult
@@ -545,7 +543,8 @@ export async function sendInterviewReminder(interviewId, reminderType) {
       metadata: { ...baseMeta, recipientType: "student" },
     });
     results.student = res;
-    if (res?.success) studentsNotified++;
+    if (res?.duplicate) duplicates++;
+    else if (res?.success) studentsNotified++;
   }
 
   // ── Guardian (kids only) ──
@@ -565,7 +564,8 @@ export async function sendInterviewReminder(interviewId, reminderType) {
         metadata: { ...baseMeta, recipientType: "guardian" },
       });
       results.guardian = res;
-      if (res?.success) guardiansNotified++;
+      if (res?.duplicate) duplicates++;
+      else if (res?.success) guardiansNotified++;
     }
   }
 
@@ -587,41 +587,47 @@ export async function sendInterviewReminder(interviewId, reminderType) {
       metadata: { ...baseMeta, recipientType: "instructor" },
     });
     results.instructor = res;
-    if (res?.success) instructorsNotified++;
+    if (res?.duplicate) duplicates++;
+    else if (res?.success) instructorsNotified++;
   }
 
-  const anySent =
-    studentsNotified + guardiansNotified + instructorsNotified > 0;
+  const newlySent =
+    studentsNotified + guardiansNotified + instructorsNotified;
+  // ✅ اللي اتبعتله قبل كده يتحسب نجاح (عشان الـ cron مايعملش unlock ويعيد)
+  const anySent = newlySent + duplicates > 0;
 
-  // ── Flag update — بس لو فيه رسالة اتبعتت فعلاً ──
+  // ── Flag update — بس لو فيه رسالة اتبعتت (جديدة أو سابقة) ──
   if (anySent) {
     const flagUpdate = {
       [flagField]: true,
       [`${flagField}At`]: new Date(),
     };
-    // الطالب + ولي الأمر بيتحسبوا مع بعض كـ "students notified"
-    const recipientsNotified = studentsNotified + guardiansNotified;
 
-    if (reminderType === "24h") {
-      flagUpdate["automationEvents.reminder24hStudentsNotified"] =
-        recipientsNotified;
-      flagUpdate["automationEvents.reminder24hInstructorsNotified"] =
-        instructorsNotified;
-    } else if (reminderType === "15min") {
-      flagUpdate["automationEvents.reminder15minStudentsNotified"] =
-        recipientsNotified;
-      flagUpdate["automationEvents.reminder15minInstructorsNotified"] =
-        instructorsNotified;
-    } else if (reminderType === "30min") {
-      flagUpdate["automationEvents.reminder30minOfflineStudentsNotified"] =
-        recipientsNotified;
-      flagUpdate["automationEvents.reminder30minOfflineInstructorsNotified"] =
-        instructorsNotified;
-    } else if (reminderType === "pre_ping") {
-      flagUpdate["automationEvents.prePingOfflineStudentsNotified"] =
-        recipientsNotified;
-      flagUpdate["automationEvents.prePingOfflineInstructorsNotified"] =
-        instructorsNotified;
+    // الإحصائيات بس لو في رسايل جديدة اتبعتت في الدورة دي
+    if (newlySent > 0) {
+      const recipientsNotified = studentsNotified + guardiansNotified;
+
+      if (reminderType === "24h") {
+        flagUpdate["automationEvents.reminder24hStudentsNotified"] =
+          recipientsNotified;
+        flagUpdate["automationEvents.reminder24hInstructorsNotified"] =
+          instructorsNotified;
+      } else if (reminderType === "15min") {
+        flagUpdate["automationEvents.reminder15minStudentsNotified"] =
+          recipientsNotified;
+        flagUpdate["automationEvents.reminder15minInstructorsNotified"] =
+          instructorsNotified;
+      } else if (reminderType === "30min") {
+        flagUpdate["automationEvents.reminder30minOfflineStudentsNotified"] =
+          recipientsNotified;
+        flagUpdate["automationEvents.reminder30minOfflineInstructorsNotified"] =
+          instructorsNotified;
+      } else if (reminderType === "pre_ping") {
+        flagUpdate["automationEvents.prePingOfflineStudentsNotified"] =
+          recipientsNotified;
+        flagUpdate["automationEvents.prePingOfflineInstructorsNotified"] =
+          instructorsNotified;
+      }
     }
 
     await Interview.findByIdAndUpdate(interviewId, { $set: flagUpdate });
@@ -632,6 +638,7 @@ export async function sendInterviewReminder(interviewId, reminderType) {
     studentsNotified,
     guardiansNotified,
     instructorsNotified,
+    duplicates,
     results,
   };
 }

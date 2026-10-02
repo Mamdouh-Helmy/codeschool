@@ -29,6 +29,7 @@ const MessageTemplateSchema = new mongoose.Schema(
         "session_recording",
         "learning_supervisor_intro",
         "module_overview",
+        "module_overview_adult",
         "portfolio_inactivity_reminder",
         "portfolio_update_broadcast",
         "portfolio_contact_form_notification",
@@ -308,7 +309,9 @@ MessageTemplateSchema.statics.getOrFallback = async function (
   }
 
   if (docs.length) {
-    console.warn(`⚠️ Template ${templateType} found but empty — using fallback`);
+    console.warn(
+      `⚠️ Template ${templateType} found but empty — using fallback`,
+    );
   }
 
   const fallbacks = getFallbackTemplates();
@@ -846,6 +849,26 @@ function getFallbackTemplates() {
       en: `{salutation_en},\n\n⏳ Reminder: Your session *{sessionName}* starts in *15 minutes* at {time} ⏰\n\n🔗 Meeting link:\n{meetingLink}\n\nCode School 💻`,
     },
 
+    // ── module_overview_adult (للبالغين — بيتبعت للطالب مباشرة) ──
+    module_overview_adult: {
+      variables: [
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب",
+          example: "عزيزي أحمد",
+        },
+        { key: "studentName", label: "اسم الطالب", example: "أحمد" },
+        {
+          key: "moduleTitle",
+          label: "عنوان الموديول",
+          example: "Real-Life Mobile Solutions",
+        },
+        { key: "supervisorName", label: "اسم المشرف", example: "أحمد علي" },
+      ],
+      ar: `{studentSalutation} 👋\nحابب أشارك معاك لمحة سريعة عن الـ Module الجديد اللي هتبدأه ✨\n\n**Module Title:** {moduleTitle}\n\nخلال الـ Module ده، هتاخد فكرة عملية وممتعة عن إزاي التطبيقات اللي بنستخدمها في حياتنا بتتعمل وبتتجهز بشكل مناسب للمستخدمين 📱\nوهتركز كمان على بناء شاشات بسيطة تشبه تطبيقات الموبايل، مع تدريب عملي يساعدك تفهم الفكرة خطوة بخطوة 🌟\n\nوأنا هكون متابع معاك خلال الـ Module، وهشاركك أي ملاحظات مهمة أو تطور واضح بإذن الله.\n\n{supervisorName} ✨\nLearning Supervisor`,
+      en: `{studentSalutation} 👋\nI would like to share with you a quick overview of the new Module that you will be starting ✨\n\n**Module Title:** {moduleTitle}\n\nDuring this Module, you will get a practical and fun idea about how the applications we use in our daily lives are built and tailored for users 📱\nYou will also focus on building simple screens similar to mobile applications, with practical training to help you understand the concept step by step 🌟\n\nI will be following up with you during the Module and will share any important notes or noticeable progress with you, God willing.\n\n{supervisorName} ✨\nLearning Supervisor`,
+    },
+
     // ── reminder_15min_guardian ───────────────────────────────
     reminder_15min_guardian: {
       variables: [
@@ -1291,17 +1314,33 @@ function getFallbackTemplates() {
       ar: `{studentSalutation}،\n\nتقرير المقابلة 📋✨\n📆 التاريخ : {interviewDate}\n📑 رقم المقابلة : {interviewNumber}\n\n📝 تعليق المُقابِل :\n{instructorComment}\n\n🏆 النتيجة : {evaluationDecision}\n\n🙏 نشكرك على ثقتك في Code School\n📞 للتواصل : +2 011 40 474 129`,
       en: `{studentSalutation},\n\nInterview Report 📋✨\n📆 Date : {interviewDate}\n📑 Interview No. : {interviewNumber}\n\n📝 Interviewer's Comment :\n{instructorComment}\n\n🏆 Result : {evaluationDecision}\n\n🙏 Thank you for trusting Code School\n📞 Contact : +2 011 40 474 129`,
     },
-        // ═══════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════
     // 🎯 INTERVIEW — Welcome (Online)
     // ═══════════════════════════════════════════════════════════
     interview_welcome_child_online: {
       variables: [
-        { key: "salutation_ar", label: "تحية الطالب (عربي)", example: "عزيزي ممدوح" },
-        { key: "salutation_en", label: "تحية الطالب (إنجليزي)", example: "Dear Mamdouh" },
+        {
+          key: "salutation_ar",
+          label: "تحية الطالب (عربي)",
+          example: "عزيزي ممدوح",
+        },
+        {
+          key: "salutation_en",
+          label: "تحية الطالب (إنجليزي)",
+          example: "Dear Mamdouh",
+        },
         { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
-        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        {
+          key: "date",
+          label: "تاريخ المقابلة",
+          example: "الثلاثاء 20 مايو 2024",
+        },
         { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
-        { key: "meetingLink", label: "رابط المقابلة", example: "https://meet.google.com/xxx" },
+        {
+          key: "meetingLink",
+          label: "رابط المقابلة",
+          example: "https://meet.google.com/xxx",
+        },
         { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
       ],
       ar: `{salutation_ar} 👋\n\nأهلاً بيك في Code School! 🎉\n\nبنسعد بإبلاغك إنه تم تحديد ميعاد المقابلة الشخصية بتاعتك (Online):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\n💡 ياريت تجهز قبل الميعاد بخمس دقايق، وتتأكد إن اللاب مشحون، النت مستقر، والكاميرا جاهزة 👍\n\nمتحمسين نشوفك! 💻🚀\nفريق Code School`,
@@ -1309,14 +1348,30 @@ function getFallbackTemplates() {
     },
     interview_welcome_child_offline: {
       variables: [
-        { key: "salutation_ar", label: "تحية الطالب (عربي)", example: "عزيزي ممدوح" },
-        { key: "salutation_en", label: "تحية الطالب (إنجليزي)", example: "Dear Mamdouh" },
+        {
+          key: "salutation_ar",
+          label: "تحية الطالب (عربي)",
+          example: "عزيزي ممدوح",
+        },
+        {
+          key: "salutation_en",
+          label: "تحية الطالب (إنجليزي)",
+          example: "Dear Mamdouh",
+        },
         { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
-        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        {
+          key: "date",
+          label: "تاريخ المقابلة",
+          example: "الثلاثاء 20 مايو 2024",
+        },
         { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
         { key: "placeName", label: "المكان", example: "Code School - المعادي" },
         { key: "address", label: "العنوان", example: "شارع 9، المعادي" },
-        { key: "mapsLink", label: "اللوكيشن", example: "https://maps.google.com/..." },
+        {
+          key: "mapsLink",
+          label: "اللوكيشن",
+          example: "https://maps.google.com/...",
+        },
         { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
       ],
       ar: `{salutation_ar} 👋\n\nأهلاً بيك في Code School! 🎉\n\nبنسعد بإبلاغك إنه تم تحديد ميعاد المقابلة الشخصية بتاعتك (Offline):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\n💡 ياريت تكون في المكان قبل الميعاد بخمس دقايق 👍\n\nمتحمسين نشوفك! 💻🚀\nفريق Code School`,
@@ -1325,12 +1380,24 @@ function getFallbackTemplates() {
 
     interview_welcome_guardian_online: {
       variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
         { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
         { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
-        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        {
+          key: "date",
+          label: "تاريخ المقابلة",
+          example: "الثلاثاء 20 مايو 2024",
+        },
         { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
-        { key: "meetingLink", label: "رابط المقابلة", example: "https://meet.google.com/xxx" },
+        {
+          key: "meetingLink",
+          label: "رابط المقابلة",
+          example: "https://meet.google.com/xxx",
+        },
         { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
       ],
       ar: `{guardianSalutation} 👋\n\nيسرنا إبلاغكم بأنه تم تحديد ميعاد المقابلة الشخصية لـ{childTitle} **{studentName}** (Online):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\nنتمنى من حضرتكم تجهيز {childTitle} للمقابلة في الميعاد، والتأكد من استقرار النت وجاهزية الكاميرا 👍\n\nنتطلع للقائكم قريباً 🌟\nفريق Code School 💻`,
@@ -1338,14 +1405,26 @@ function getFallbackTemplates() {
     },
     interview_welcome_guardian_offline: {
       variables: [
-        { key: "guardianSalutation", label: "تحية ولي الأمر", example: "عزيزي الأستاذ محمد" },
+        {
+          key: "guardianSalutation",
+          label: "تحية ولي الأمر",
+          example: "عزيزي الأستاذ محمد",
+        },
         { key: "childTitle", label: "صلة القرابة", example: "ابنك" },
         { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
-        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        {
+          key: "date",
+          label: "تاريخ المقابلة",
+          example: "الثلاثاء 20 مايو 2024",
+        },
         { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
         { key: "placeName", label: "المكان", example: "Code School - المعادي" },
         { key: "address", label: "العنوان", example: "شارع 9، المعادي" },
-        { key: "mapsLink", label: "اللوكيشن", example: "https://maps.google.com/..." },
+        {
+          key: "mapsLink",
+          label: "اللوكيشن",
+          example: "https://maps.google.com/...",
+        },
         { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
       ],
       ar: `{guardianSalutation} 👋\n\nيسرنا إبلاغكم بأنه تم تحديد ميعاد المقابلة الشخصية لـ{childTitle} **{studentName}** (Offline):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\nنتمنى من حضرتكم تجهيز {childTitle} للوصول في الميعاد 👍\n\nنتطلع للقائكم قريباً 🌟\nفريق Code School 💻`,
@@ -1354,11 +1433,23 @@ function getFallbackTemplates() {
 
     interview_welcome_adult_online: {
       variables: [
-        { key: "studentSalutation", label: "تحية الطالب البالغ", example: "عزيزي أحمد" },
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب البالغ",
+          example: "عزيزي أحمد",
+        },
         { key: "studentName", label: "اسم الطالب", example: "أحمد" },
-        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        {
+          key: "date",
+          label: "تاريخ المقابلة",
+          example: "الثلاثاء 20 مايو 2024",
+        },
         { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
-        { key: "meetingLink", label: "رابط المقابلة", example: "https://meet.google.com/xxx" },
+        {
+          key: "meetingLink",
+          label: "رابط المقابلة",
+          example: "https://meet.google.com/xxx",
+        },
         { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
       ],
       ar: `{studentSalutation} 👋\n\nأهلاً بيك في Code School! 🎉\n\nتم تحديد ميعاد المقابلة الشخصية بتاعتك (Online):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\n💡 ياريت تجهز قبل الميعاد بخمس دقايق 👍\n\nمتحمسين نشوفك! 💻🚀\nفريق Code School`,
@@ -1366,13 +1457,25 @@ function getFallbackTemplates() {
     },
     interview_welcome_adult_offline: {
       variables: [
-        { key: "studentSalutation", label: "تحية الطالب البالغ", example: "عزيزي أحمد" },
+        {
+          key: "studentSalutation",
+          label: "تحية الطالب البالغ",
+          example: "عزيزي أحمد",
+        },
         { key: "studentName", label: "اسم الطالب", example: "أحمد" },
-        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        {
+          key: "date",
+          label: "تاريخ المقابلة",
+          example: "الثلاثاء 20 مايو 2024",
+        },
         { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
         { key: "placeName", label: "المكان", example: "Code School - المعادي" },
         { key: "address", label: "العنوان", example: "شارع 9، المعادي" },
-        { key: "mapsLink", label: "اللوكيشن", example: "https://maps.google.com/..." },
+        {
+          key: "mapsLink",
+          label: "اللوكيشن",
+          example: "https://maps.google.com/...",
+        },
         { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
       ],
       ar: `{studentSalutation} 👋\n\nأهلاً بيك في Code School! 🎉\n\nتم تحديد ميعاد المقابلة الشخصية بتاعتك (Offline):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\n💡 ياريت تكون في المكان قبل الميعاد بخمس دقايق 👍\n\nمتحمسين نشوفك! 💻🚀\nفريق Code School`,
@@ -1381,26 +1484,50 @@ function getFallbackTemplates() {
 
     interview_welcome_instructor_online: {
       variables: [
-        { key: "instructorSalutation", label: "تحية المُقابِل", example: "عزيزي الأستاذ أحمد" },
+        {
+          key: "instructorSalutation",
+          label: "تحية المُقابِل",
+          example: "عزيزي الأستاذ أحمد",
+        },
         { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
         { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
-        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        {
+          key: "date",
+          label: "تاريخ المقابلة",
+          example: "الثلاثاء 20 مايو 2024",
+        },
         { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
-        { key: "meetingLink", label: "رابط المقابلة", example: "https://meet.google.com/xxx" },
+        {
+          key: "meetingLink",
+          label: "رابط المقابلة",
+          example: "https://meet.google.com/xxx",
+        },
       ],
       ar: `{instructorSalutation} 👋\n\nتم تحديد مقابلة شخصية جديدة ليك (Online):\n\n👤 الطالب: {studentName}\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\nياريت تكون جاهز قبل الميعاد بخمس دقايق، وتتأكد من استقرار النت والكاميرا 👍\n\nبالتوفيق! 💻🚀\nفريق Code School`,
       en: `{instructorSalutation} 👋\n\nA new interview has been scheduled for you (Online):\n\n👤 Student: {studentName}\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\nPlease be ready 5 minutes early, with a stable internet connection and working camera 👍\n\nGood luck! 💻🚀\nCode School Team`,
     },
     interview_welcome_instructor_offline: {
       variables: [
-        { key: "instructorSalutation", label: "تحية المُقابِل", example: "عزيزي الأستاذ أحمد" },
+        {
+          key: "instructorSalutation",
+          label: "تحية المُقابِل",
+          example: "عزيزي الأستاذ أحمد",
+        },
         { key: "instructorName", label: "اسم المُقابِل", example: "أحمد" },
         { key: "studentName", label: "اسم الطالب", example: "ممدوح" },
-        { key: "date", label: "تاريخ المقابلة", example: "الثلاثاء 20 مايو 2024" },
+        {
+          key: "date",
+          label: "تاريخ المقابلة",
+          example: "الثلاثاء 20 مايو 2024",
+        },
         { key: "time", label: "وقت المقابلة", example: "07:00 - 08:30 مساءً" },
         { key: "placeName", label: "المكان", example: "Code School - المعادي" },
         { key: "address", label: "العنوان", example: "شارع 9، المعادي" },
-        { key: "mapsLink", label: "اللوكيشن", example: "https://maps.google.com/..." },
+        {
+          key: "mapsLink",
+          label: "اللوكيشن",
+          example: "https://maps.google.com/...",
+        },
       ],
       ar: `{instructorSalutation} 👋\n\nتم تحديد مقابلة شخصية جديدة ليك (Offline):\n\n👤 الطالب: {studentName}\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن:\n{mapsLink}\n\nياريت تكون في المكان قبل الميعاد بخمس دقايق 👍\n\nبالتوفيق! 💻🚀\nفريق Code School`,
       en: `{instructorSalutation} 👋\n\nA new interview has been scheduled for you (Offline):\n\n👤 Student: {studentName}\n📅 Date: {date}\n⏰ Time: {time}\n\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Location:\n{mapsLink}\n\nPlease be at the location 5 minutes early 👍\n\nGood luck! 💻🚀\nCode School Team`,

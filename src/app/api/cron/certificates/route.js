@@ -121,6 +121,58 @@ async function releaseCertificateClaim(studentId, moduleId) {
   }
 }
 
+// ============================================================
+// ✅ حجز الإرسال (Atomic) — يضمن إن الرسالة تتبعت مرة واحدة بس
+//    حتى لو أكتر من كرون اشتغلوا في نفس الوقت
+//    بترجع true بس لو إحنا اللي غيّرنا الحالة من false → true
+// ============================================================
+async function reserveDelivery(studentId, moduleId, who) {
+  const field = who === "student" ? "studentDelivered" : "guardianDelivered";
+  try {
+    const result = await Student.updateOne(
+      {
+        _id: studentId,
+        issuedCertificates: {
+          $elemMatch: { moduleId, [field]: { $ne: true } },
+        },
+      },
+      {
+        $set: {
+          [`issuedCertificates.$.${field}`]: true,
+          [`issuedCertificates.$.${field}At`]: new Date(),
+        },
+      },
+    );
+    return result.modifiedCount === 1;
+  } catch (err) {
+    console.error(
+      `❌ reserveDelivery error [${studentId}/${moduleId}/${who}]:`,
+      err.message,
+    );
+    // لو معرفناش نحجز، الأأمن إننا ما نبعتش
+    return false;
+  }
+}
+
+// ✅ لو الإرسال فشل فعلاً نرجّع الحجز عشان الكرون يحاول تاني
+async function revertDelivery(studentId, moduleId, who) {
+  const field = who === "student" ? "studentDelivered" : "guardianDelivered";
+  try {
+    await Student.updateOne(
+      { _id: studentId, "issuedCertificates.moduleId": moduleId },
+      {
+        $set: { [`issuedCertificates.$.${field}`]: false },
+        $unset: { [`issuedCertificates.$.${field}At`]: "" },
+      },
+    );
+  } catch (err) {
+    console.error(
+      `⚠️ revertDelivery error [${studentId}/${moduleId}/${who}]:`,
+      err.message,
+    );
+  }
+}
+
 // ✅ تنظيف الـ claims القديمة (failover لو السيرفر وقع في النص)
 async function cleanupStaleCertificateClaims() {
   try {
@@ -279,11 +331,6 @@ async function sendCertificateWithFallback(
   }
 }
 
-// ============================================================
-// ✅ GET — نقطة الدخول للكرون
-// ✅ NEW: Kids/Adults Guard — لو الطالب adults → مفيش رسالة لولي الأمر
-//         + نعتبر guardianDelivered = true تلقائيًا للـ adults
-// ============================================================
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   if (!isAuthorizedRequest(request, searchParams)) {
@@ -311,38 +358,46 @@ export async function GET(request) {
       kidsafe: certSettings.kidsafe,
     };
 
-    // ✅ studentType موجود تلقائيًا لأن مفيش .select()
     const students = await Student.find({ isDeleted: false }).lean();
-    const baseUrl =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
     const summary = {
       checked: 0,
       generated: 0,
       studentSent: 0,
       guardianSent: 0,
-      adultGuardianSkipped: 0, // ✅ NEW: عدد الشهادات اللي اتخطى فيها ولي الأمر
+      adultGuardianSkipped: 0,
+      makeupGroupsSkipped: 0,
       pendingNoRecipient: 0,
       cloudinaryUploads: 0,
       portfolioSynced: 0,
       portfolioSkippedNoUser: 0,
       noAttendanceYet: 0,
       alreadyClaimed: 0,
+      alreadyDeliveredDedup: 0, // ✅ NEW: اتمنع تكرارها بالـ dedup
       errors: 0,
     };
 
     for (const student of students) {
-      // ✅ NEW: هل الطالب بالغ؟ (مرة واحدة لكل طالب — أنضف)
       const isAdult = student.studentType === "adults";
 
       const groups = await Group.find({
         students: student._id,
         isDeleted: false,
+        isMakeupGroup: { $ne: true },
       })
         .populate("courseId")
         .lean();
 
       for (const group of groups) {
+        if (group.isMakeupGroup === true) {
+          console.log(
+            `⏭️ [MAKEUP GUARD] Skipping makeup group ${group._id} for ${student.personalInfo?.fullName}`,
+          );
+          summary.makeupGroupsSkipped++;
+          continue;
+        }
+
         const course = group.courseId;
         if (!course || !course.curriculum) continue;
 
@@ -357,29 +412,23 @@ export async function GET(request) {
 
           const moduleId = `${course._id}-${moduleIndex}`;
 
-          // ✅ الكابشن هو المصدر الوحيد — fallback ثابت لو فاضي
           const certCaption =
             module.certificateCaption?.trim() || DEFAULT_CERT_CAPTION;
 
-          const certRecord = student.issuedCertificates?.find(
+          // ✅ فحص أولي سريع من الـ snapshot (بس للتصفية — مش للقرار النهائي)
+          const snapshotRecord = student.issuedCertificates?.find(
             (c) => c.moduleId === moduleId,
           );
-          const studentAlreadyDelivered =
-            certRecord?.studentDelivered === true;
-          const guardianAlreadyDelivered =
-            certRecord?.guardianDelivered === true;
-
-          // ✅ لو adult → نعتبر شهادة ولي الأمر "مسلّمة" عشان الكرون
-          // مايعديش على الطالب كل دورة وهو أصلاً مش محتاج يبعت لولي الأمر
-          const guardianDeliveredEffective = isAdult
-            ? true
-            : guardianAlreadyDelivered;
-
-          if (studentAlreadyDelivered && guardianDeliveredEffective) continue;
+          if (
+            snapshotRecord?.studentDelivered === true &&
+            (isAdult || snapshotRecord?.guardianDelivered === true)
+          ) {
+            continue;
+          }
 
           summary.checked++;
 
-          // ✅ الحجز الـ atomic — قبل أي شغل تقيل
+          // ✅ الحجز الـ atomic للتوليد
           const claimed = await claimCertificateGeneration(
             student._id,
             moduleId,
@@ -395,6 +444,31 @@ export async function GET(request) {
           }
 
           try {
+            // 🔄 نقرا الحالة الحقيقية من الداتابيز بعد الـ claim
+            // (الـ snapshot ممكن يكون قديم لو كرون تاني خلّص في الوقت ده)
+            const freshStudent = await Student.findOne(
+              { _id: student._id, "issuedCertificates.moduleId": moduleId },
+              { "issuedCertificates.$": 1 },
+            ).lean();
+            const freshRecord = freshStudent?.issuedCertificates?.[0];
+
+            let studentAlreadyDelivered =
+              freshRecord?.studentDelivered === true;
+            let guardianAlreadyDelivered =
+              freshRecord?.guardianDelivered === true;
+
+            if (
+              studentAlreadyDelivered &&
+              (isAdult || guardianAlreadyDelivered)
+            ) {
+              summary.alreadyDeliveredDedup++;
+              console.log(
+                `🔒 [DEDUP] Already delivered: ${student.personalInfo?.fullName} - ${certCaption}`,
+              );
+              await releaseCertificateClaim(student._id, moduleId);
+              continue;
+            }
+
             const sessions = await Session.find({
               groupId: group._id,
               moduleIndex: moduleIndex,
@@ -404,8 +478,7 @@ export async function GET(request) {
             let hasAttended = false;
             for (const session of sessions) {
               const attendance = session.attendance.find(
-                (a) =>
-                  a.studentId.toString() === student._id.toString(),
+                (a) => a.studentId.toString() === student._id.toString(),
               );
               if (
                 attendance &&
@@ -427,7 +500,6 @@ export async function GET(request) {
 
             const studentNumber = student.personalInfo?.whatsappNumber;
 
-            // ✅ لو adult → نتخطى رقم ولي الأمر تمامًا (حتى لو موجود)
             const guardianNumber = isAdult
               ? null
               : student.guardianInfo?.whatsappNumber;
@@ -457,8 +529,7 @@ export async function GET(request) {
               {
                 studentName: student.personalInfo.fullName,
                 caption: certCaption,
-                signature:
-                  module.certificateSignatureName || "Aya Elnagar",
+                signature: module.certificateSignatureName || "Aya Elnagar",
                 background: module.certificateBackground || "navy-orange",
                 date: new Date().toLocaleDateString("en-GB"),
                 assets: certAssets,
@@ -467,8 +538,7 @@ export async function GET(request) {
 
             summary.generated++;
 
-            const cloudinaryUrl =
-              await uploadCertificateToCloudinary(filePath);
+            const cloudinaryUrl = await uploadCertificateToCloudinary(filePath);
             if (cloudinaryUrl) {
               summary.cloudinaryUploads++;
             } else {
@@ -476,17 +546,15 @@ export async function GET(request) {
                 `⚠️ Cloudinary upload failed for ${student.personalInfo.fullName}`,
               );
             }
-            const fullImageUrl =
-              cloudinaryUrl || `${baseUrl}${imageUrl}`;
+            const fullImageUrl = cloudinaryUrl || `${baseUrl}${imageUrl}`;
 
-            const portfolioResult =
-              await syncCertificateToStudentPortfolio(
-                student,
-                moduleId,
-                module,
-                fullImageUrl,
-                certCaption,
-              );
+            const portfolioResult = await syncCertificateToStudentPortfolio(
+              student,
+              moduleId,
+              module,
+              fullImageUrl,
+              certCaption,
+            );
             if (portfolioResult?.added) {
               summary.portfolioSynced++;
             } else if (portfolioResult?.reason === "NO_LINKED_USER") {
@@ -501,8 +569,7 @@ export async function GET(request) {
 
             // ── Student message ─────────────────────────────
             if (studentNeedsSend) {
-              // ✅ بنمرر الكابشن كـ caption في wapilot-service
-              const caption =
+              const studentCaption =
                 await wapilotService.prepareCertificateStudentMessage(
                   student.personalInfo.fullName,
                   student.personalInfo.gender,
@@ -511,24 +578,41 @@ export async function GET(request) {
                   student.personalInfo.nickname,
                 );
 
-              const result = await sendCertificateWithFallback(
-                studentNumber,
-                filePath,
-                caption,
-                student.personalInfo.fullName,
+              // 🔒 نحجز قبل الإرسال — لو فشل الحجز يبقى حد بعت بالفعل
+              const reserved = await reserveDelivery(
+                student._id,
+                moduleId,
+                "student",
               );
 
-              studentDelivered = !!result?.success;
-              if (studentDelivered) {
-                summary.studentSent++;
-              } else {
-                console.warn(
-                  `⚠️ فشل إرسال الشهادة للطالب ${student.personalInfo.fullName}: ${result?.error}`,
+              if (!reserved) {
+                summary.alreadyDeliveredDedup++;
+                studentDelivered = true;
+                console.log(
+                  `🔒 [DEDUP] Student cert already sent: ${student.personalInfo.fullName} - ${certCaption}`,
                 );
+              } else {
+                const result = await sendCertificateWithFallback(
+                  studentNumber,
+                  filePath,
+                  studentCaption,
+                  student.personalInfo.fullName,
+                );
+
+                if (result?.success) {
+                  studentDelivered = true;
+                  summary.studentSent++;
+                } else {
+                  // الإرسال فشل فعلاً → نرجّع الحجز عشان يحاول في الدورة الجاية
+                  await revertDelivery(student._id, moduleId, "student");
+                  console.warn(
+                    `⚠️ فشل إرسال الشهادة للطالب ${student.personalInfo.fullName}: ${result?.error}`,
+                  );
+                }
               }
             }
 
-            // ── Guardian message — ✅ يتخطى للـ adults ────────
+            // ── Guardian message — يتخطى للـ adults ────────
             if (guardianNeedsSend) {
               const guardianCaption =
                 await wapilotService.prepareCertificateGuardianMessage(
@@ -542,20 +626,35 @@ export async function GET(request) {
                   certCaption,
                 );
 
-              const result = await sendCertificateWithFallback(
-                guardianNumber,
-                filePath,
-                guardianCaption,
-                student.personalInfo.fullName,
+              const reserved = await reserveDelivery(
+                student._id,
+                moduleId,
+                "guardian",
               );
 
-              guardianDelivered = !!result?.success;
-              if (guardianDelivered) {
-                summary.guardianSent++;
-              } else {
-                console.warn(
-                  `⚠️ فشل إرسال الشهادة لولي أمر ${student.personalInfo.fullName}: ${result?.error}`,
+              if (!reserved) {
+                summary.alreadyDeliveredDedup++;
+                guardianDelivered = true;
+                console.log(
+                  `🔒 [DEDUP] Guardian cert already sent: ${student.personalInfo.fullName} - ${certCaption}`,
                 );
+              } else {
+                const result = await sendCertificateWithFallback(
+                  guardianNumber,
+                  filePath,
+                  guardianCaption,
+                  student.personalInfo.fullName,
+                );
+
+                if (result?.success) {
+                  guardianDelivered = true;
+                  summary.guardianSent++;
+                } else {
+                  await revertDelivery(student._id, moduleId, "guardian");
+                  console.warn(
+                    `⚠️ فشل إرسال الشهادة لولي أمر ${student.personalInfo.fullName}: ${result?.error}`,
+                  );
+                }
               }
             } else if (isAdult) {
               summary.adultGuardianSkipped++;
@@ -564,35 +663,16 @@ export async function GET(request) {
               );
             }
 
-            const now = new Date();
-
-            // ✅ لو adult → نخزّن guardianDelivered = true عشان الكرون
-            // مايرجعش يحاول يبعته لولي الأمر في الدورة الجاية
-            const finalGuardianDelivered = isAdult
-              ? true
-              : guardianDelivered;
-
-            // ✅ تحديث الـ entry الموجودة (اتعملت في claimCertificateGeneration)
+            // ✅ تحديث الـ entry — من غير ما نكتب فوق studentDelivered/guardianDelivered
+            // (اتسجلوا خلاص في reserveDelivery)
             await Student.updateOne(
-              {
-                _id: student._id,
-                "issuedCertificates.moduleId": moduleId,
-              },
+              { _id: student._id, "issuedCertificates.moduleId": moduleId },
               {
                 $set: {
                   "issuedCertificates.$.imageUrl": fullImageUrl,
-                  "issuedCertificates.$.studentDelivered": studentDelivered,
-                  "issuedCertificates.$.guardianDelivered":
-                    finalGuardianDelivered,
-                  ...(studentDelivered && !studentAlreadyDelivered
-                    ? {
-                        "issuedCertificates.$.studentDeliveredAt": now,
-                      }
-                    : {}),
-                  ...(finalGuardianDelivered && !guardianAlreadyDelivered
-                    ? {
-                        "issuedCertificates.$.guardianDeliveredAt": now,
-                      }
+                  // الطالب البالغ: ولي الأمر مش مطلوب، فنعتبره مسلَّم
+                  ...(isAdult
+                    ? { "issuedCertificates.$.guardianDelivered": true }
                     : {}),
                 },
               },
@@ -604,9 +684,7 @@ export async function GET(request) {
             // ✅ تنظيف الملف المحلي
             try {
               await fs.remove(filePath);
-              console.log(
-                `🗑️ Deleted local file: ${path.basename(filePath)}`,
-              );
+              console.log(`🗑️ Deleted local file: ${path.basename(filePath)}`);
             } catch (cleanupError) {
               // مش مشكلة لو متحذفش
             }

@@ -47,6 +47,7 @@ const TEMPLATE_TYPES = [
   { id: "session_recording", label: "رابط التسجيل", icon: Video, color: "sky", emoji: "🎥", category: "evaluation", type: "guardian_with_session", api: "message" },
   { id: "learning_supervisor_intro", label: "تقديم المشرف الأكاديمي", icon: User, color: "primary", emoji: "👨‍🏫", category: "basic", type: "guardian_only", api: "message", isNew: true },
   { id: "module_overview", label: "نظرة عامة على الموديول", icon: BookOpen, color: "secondary", emoji: "📚", category: "basic", type: "guardian_only", api: "message", isNew: true },
+  { id: "module_overview_adult", label: "نظرة عامة على الموديول - البالغ", icon: BookOpen, color: "primary", emoji: "📚", category: "basic", type: "student_only", api: "message", isNew: true },
   { id: "instructor_reminder_24h", label: "تذكير المدرب 24 ساعة (Online)", icon: Clock, color: "sky", emoji: "⏰", category: "instructor", type: "instructor_only", api: "instructor", isNew: true },
   { id: "instructor_reminder_15min", label: "تذكير المدرب 15 دقيقة (Online)", icon: Clock, color: "accent", emoji: "⏳", category: "instructor", type: "instructor_only", api: "instructor", isNew: true },
 
@@ -114,7 +115,7 @@ const TEMPLATE_TYPES = [
   { id: "evaluation_review_adult", label: "تقييم البالغ: يحتاج مراجعة", icon: FileText, color: "accent", emoji: "⚠️", category: "evaluation_adult", type: "student_with_session", api: "message", isNew: true },
   { id: "evaluation_repeat_adult", label: "تقييم البالغ: يحتاج دعم إضافي", icon: RotateCcw, color: "rose", emoji: "🔄", category: "evaluation_adult", type: "student_with_session", api: "message", isNew: true },
 
-    { id: "interview_welcome_child_online", label: "ترحيب المقابلة - الطفل (Online)", icon: Sparkles, color: "primary", emoji: "🎯", category: "interview", type: "student_only", api: "message", isNew: true },
+  { id: "interview_welcome_child_online", label: "ترحيب المقابلة - الطفل (Online)", icon: Sparkles, color: "primary", emoji: "🎯", category: "interview", type: "student_only", api: "message", isNew: true },
   { id: "interview_welcome_child_offline", label: "ترحيب المقابلة - الطفل (Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "interview", type: "student_only", api: "message", isNew: true },
   { id: "interview_welcome_guardian_online", label: "ترحيب المقابلة - ولي الأمر (Online)", icon: Sparkles, color: "secondary", emoji: "🎯", category: "interview", type: "guardian_only", api: "message", isNew: true },
   { id: "interview_welcome_guardian_offline", label: "ترحيب المقابلة - ولي الأمر (Offline)", icon: MapPin, color: "amber", emoji: "📍", category: "interview", type: "guardian_only", api: "message", isNew: true },
@@ -234,6 +235,7 @@ const TEMPLATE_VARS = {
   instructor_pre_attendance_ping: ["instructorSalutation", "sessionName"],
   learning_supervisor_intro: ["guardianSalutation", "childTitle", "studentName", "supervisorName"],
   module_overview: ["guardianSalutation", "childTitle", "studentName", "moduleTitle", "moduleDescription", "supervisorName"],
+  module_overview_adult: ["studentSalutation", "studentName", "moduleTitle", "moduleDescription", "supervisorName"],
   portfolio_inactivity_reminder: ["ownerWelcome", "ownerName", "portfolioLink"],
   portfolio_update_broadcast: ["ownerName", "updateLink"],
   portfolio_contact_form_notification: ["ownerSalutation", "ownerName", "dashboardLink"],
@@ -250,9 +252,9 @@ const TEMPLATE_VARS = {
   // 🎁 Make-up (Offline)
   makeup_session_student_offline: ["studentSalutation", "studentName", "courseName", "groupName", "groupCode", "originalDate", "originalTime", "originalSessionTitle", "newDate", "newTime", "newSessionTitle", "placeName", "address", "mapsLink", "instructorName"],
   makeup_session_guardian_offline: ["guardianSalutation", "guardianName", "childTitle", "studentName", "courseName", "groupName", "groupCode", "originalDate", "originalTime", "newDate", "newTime", "placeName", "address", "mapsLink", "instructorName"],
-    makeup_session_instructor_offline: ["instructorSalutation", "instructorName", "studentName", "courseName", "groupName", "groupCode", "originalDate", "originalTime", "originalSessionTitle", "newDate", "newTime", "placeName", "address", "mapsLink"],
+  makeup_session_instructor_offline: ["instructorSalutation", "instructorName", "studentName", "courseName", "groupName", "groupCode", "originalDate", "originalTime", "originalSessionTitle", "newDate", "newTime", "placeName", "address", "mapsLink"],
 
-    interview_welcome_child_online: ["salutation_ar", "salutation_en", "studentName", "date", "time", "meetingLink", "instructorName"],
+  interview_welcome_child_online: ["salutation_ar", "salutation_en", "studentName", "date", "time", "meetingLink", "instructorName"],
   interview_welcome_child_offline: ["salutation_ar", "salutation_en", "studentName", "date", "time", "placeName", "address", "mapsLink", "instructorName"],
   interview_welcome_guardian_online: ["guardianSalutation", "childTitle", "studentName", "date", "time", "meetingLink", "instructorName"],
   interview_welcome_guardian_offline: ["guardianSalutation", "childTitle", "studentName", "date", "time", "placeName", "address", "mapsLink", "instructorName"],
@@ -338,6 +340,10 @@ const FRONTEND_FALLBACKS = {
   module_overview: {
     ar: `{guardianSalutation} 👋\nحابب أشارك مع حضرتك لمحة سريعة عن الـ Module الجديد اللي هيبدأه {childTitle} **{studentName}** ✨\n\n**Module Title:** {moduleTitle}\n\nخلال الـ Module ده، {studentName} هياخد فكرة ممتعة وبسيطة عن إزاي التطبيقات اللي بنستخدمها في حياتنا بتتعمل وبتتجهز بشكل مناسب للمستخدمين 📱\nوهيركز كمان على بناء شاشات بسيطة تشبه تطبيقات الموبايل، مع تدريب عملي يساعده يفهم الفكرة خطوة بخطوة بشكل سهل ومناسب لسنه 🌟\n\nوأنا هكون متابع مع حضرتك خلال الـ Module، وهشاركك أي ملاحظات مهمة أو تطور واضح بإذن الله.\n\n{supervisorName} ✨\nLearning Supervisor`,
     en: `{guardianSalutation} 👋\nI would like to share with you a quick overview of the new Module that {childTitle} **{studentName}** will be starting ✨\n\n**Module Title:** {moduleTitle}\n\nDuring this Module, {studentName} will get a fun and simple idea about how the applications we use in our daily lives are built and tailored for users 📱\nHe will also focus on building simple screens similar to mobile applications, with practical training to help him understand the concept step by step in an easy and age-appropriate way 🌟\n\nI will be following up with you during the Module and will share any important notes or noticeable progress with you, God willing.\n\n{supervisorName} ✨\nLearning Supervisor`,
+  },
+  module_overview_adult: {
+    ar: `{studentSalutation} 👋\nحابب أشارك معاك لمحة سريعة عن الـ Module الجديد اللي هتبدأه ✨\n\n**Module Title:** {moduleTitle}\n\nخلال الـ Module ده، هتاخد فكرة عملية وممتعة عن إزاي التطبيقات اللي بنستخدمها في حياتنا بتتعمل وبتتجهز بشكل مناسب للمستخدمين 📱\nوهتركز كمان على بناء شاشات بسيطة تشبه تطبيقات الموبايل، مع تدريب عملي يساعدك تفهم الفكرة خطوة بخطوة 🌟\n\nوأنا هكون متابع معاك خلال الـ Module، وهشاركك أي ملاحظات مهمة أو تطور واضح بإذن الله.\n\n{supervisorName} ✨\nLearning Supervisor`,
+    en: `{studentSalutation} 👋\nI would like to share with you a quick overview of the new Module that you will be starting ✨\n\n**Module Title:** {moduleTitle}\n\nDuring this Module, you will get a practical and fun idea about how the applications we use in our daily lives are built and tailored for users 📱\nYou will also focus on building simple screens similar to mobile applications, with practical training to help you understand the concept step by step 🌟\n\nI will be following up with you during the Module and will share any important notes or noticeable progress with you, God willing.\n\n{supervisorName} ✨\nLearning Supervisor`,
   },
   reminder_15min_student: {
     ar: `{salutation_ar}،\n\n⏳ تذكير: حصتك *{sessionName}* هتبدأ خلال *15 دقيقة* الساعة {time} ⏰\n\n🔗 رابط الحصة:\n{meetingLink}\n\nCode School 💻`,
@@ -447,12 +453,12 @@ const FRONTEND_FALLBACKS = {
     ar: `{guardianSalutation} 👋\n\nيسرنا إبلاغكم إنه تم تحديد حصة تعويضية لـ{childTitle} **{studentName}**:\n\n📘 الكورس: {courseName}\n👥 المجموعة الجديدة: {groupName} ({groupCode})\n\n🔄 الحصة الأصلية:\n📅 {originalDate}\n⏰ {originalTime}\n\n✨ الحصة التعويضية الجديدة:\n📅 {newDate}\n⏰ {newTime}\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن: {mapsLink}\n👨‍🏫 المدرس: {instructorName}\n\n🎉 الحصة دي مجانية — مش هتتخصم من رصيد {childTitle}.\n\nفريق Code School 💻`,
     en: `{guardianSalutation} 👋\n\nWe are pleased to inform you that a make-up session has been scheduled for {childTitle} **{studentName}**:\n\n📘 Course: {courseName}\n👥 New Group: {groupName} ({groupCode})\n\n🔄 Original Session:\n📅 {originalDate}\n⏰ {originalTime}\n\n✨ New Make-up Session:\n📅 {newDate}\n⏰ {newTime}\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Maps: {mapsLink}\n👨‍🏫 Instructor: {instructorName}\n\n🎉 This session is free — it won't be deducted from {childTitle}'s balance.\n\nCode School Team 💻`,
   },
-    makeup_session_instructor_offline: {
+  makeup_session_instructor_offline: {
     ar: `{instructorSalutation} 👋\n\nتم تحديد حصة تعويضية جديدة ليك (Offline):\n\n📘 الكورس: {courseName}\n👥 المجموعة: {groupName} ({groupCode})\n👤 الطالب: {studentName}\n\n📅 التاريخ: {newDate}\n⏰ الوقت: {newTime}\n📍 المكان: {placeName}\n📌 العنوان: {address}\n🗺️ اللوكيشن: {mapsLink}\n\n🔄 الحصة الأصلية:\n📅 {originalDate}\n⏰ {originalTime}\n📚 {originalSessionTitle}\n\nملاحظة: الحصة دي تعويضية (مجانية على الطالب)، لكن المدرس بيتحاسب عليها عادي.\n\nفريق Code School 💻`,
     en: `{instructorSalutation} 👋\n\nA new make-up session has been scheduled for you (Offline):\n\n📘 Course: {courseName}\n👥 Group: {groupName} ({groupCode})\n👤 Student: {studentName}\n\n📅 Date: {newDate}\n⏰ Time: {newTime}\n📍 Location: {placeName}\n📌 Address: {address}\n🗺️ Maps: {mapsLink}\n\n🔄 Original Session:\n📅 {originalDate}\n⏰ {originalTime}\n📚 {originalSessionTitle}\n\nNote: This is a make-up session (free for the student), but the instructor is still paid for it.\n\nCode School Team 💻`,
   },
 
-    interview_welcome_child_online: {
+  interview_welcome_child_online: {
     ar: `{salutation_ar} 👋\n\nأهلاً بيك في Code School! 🎉\n\nبنسعد بإبلاغك إنه تم تحديد ميعاد المقابلة الشخصية بتاعتك (Online):\n\n📅 التاريخ: {date}\n⏰ الوقت: {time}\n🔗 رابط المقابلة:\n{meetingLink}\n\n👨‍🏫 المُقابِل: {instructorName}\n\n💡 ياريت تجهز قبل الميعاد بخمس دقايق، وتتأكد إن اللاب مشحون، النت مستقر، والكاميرا جاهزة 👍\n\nمتحمسين نشوفك! 💻🚀\nفريق Code School`,
     en: `{salutation_en} 👋\n\nWelcome to Code School! 🎉\n\nWe're happy to confirm your interview has been scheduled (Online):\n\n📅 Date: {date}\n⏰ Time: {time}\n🔗 Meeting Link:\n{meetingLink}\n\n👨‍🏫 Interviewer: {instructorName}\n\n💡 Please be ready 5 minutes early, make sure your laptop is charged, internet is stable, and camera is ready 👍\n\nExcited to meet you! 💻🚀\nCode School Team`,
   },
