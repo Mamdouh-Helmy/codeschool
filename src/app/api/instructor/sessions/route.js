@@ -134,8 +134,6 @@ async function loadInterviewItems(user, statusFilter) {
           }
         : null,
       isAdult,
-      // ✅ مين هيستلم رسالة التقييم
-      evaluationRecipient: isAdult ? "student" : "guardian",
 
       deliveryMode: iv.deliveryMode || "online",
       isOffline,
@@ -161,7 +159,7 @@ async function loadInterviewItems(user, statusFilter) {
         ? {
             decision: iv.evaluation.decision,
             instructorComment: iv.evaluation.instructorComment || "",
-            // ✅ NEW: تقييم الأداء بالنجوم (زي السيشن)
+            // ✅ تقييم الأداء بالنجوم (زي السيشن)
             ratings: {
               commitment: iv.evaluation.ratings?.commitment ?? 3,
               understanding: iv.evaluation.ratings?.understanding ?? 3,
@@ -172,7 +170,7 @@ async function loadInterviewItems(user, statusFilter) {
             completedAt: iv.evaluation.completedAt || null,
           }
         : null,
-      evaluationSent: !!iv.automationEvents?.evaluationSent,
+
       evaluationEndpoint: `/api/instructor/interviews/${iv._id}/evaluation`,
 
       instructorNotes: iv.instructorNotes || null,
@@ -627,7 +625,7 @@ export async function GET(req) {
       data: {
         sessions: processedSessions,
         stats,
-        // ✅ NEW: مقابلات المدرس (من غير حضور — تقييم على طول)
+        // ✅ مقابلات المدرس (من غير حضور — تقييم على طول)
         interviews,
         interviewStats,
       },

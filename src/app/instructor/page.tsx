@@ -26,7 +26,6 @@ import {
   Star,
 } from "lucide-react";
 import { useLocale } from "@/app/context/LocaleContext";
-import Spline from '@splinetool/react-spline';
 
 // ── Types ──────────────────────────────────────────────
 
@@ -430,10 +429,10 @@ export default function InstructorDashboard() {
                 <div className="relative rounded-3xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300"
                   style={{ height: "400px" }}>
 
-                  {/* Spline 3D */}
-                  <Spline
-                    scene="https://prod.spline.design/USb3ytAkb8CmdhNW/scene.splinecode"
-                    style={{ width: "100%", height: "100%", pointerEvents: "all" }}
+                  {/* Hero background — gradient بألوان البراند (بدل الـ 3D) */}
+                  <div
+                    className="absolute inset-0"
+                    style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}
                   />
 
                   {/* Text Overlay */}

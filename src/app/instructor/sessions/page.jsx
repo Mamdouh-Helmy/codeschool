@@ -19,13 +19,13 @@ import {
   TrendingUp, Award, LayoutGrid, Shield,
   CalendarClock, Hourglass, SkipForward, ArrowRightCircle,
   Send, BadgeCheck, BadgeAlert, MessageSquareWarning,
-  Repeat,
-  MapPin,
-  Navigation,
-  PauseCircle,
-  Gift,
-  Briefcase,
-} from "lucide-react";
+  Repeat, MapPin, Navigation, PauseCircle, Gift, Briefcase,
+  PaperPlaneTilt, Sparkles,
+} from "@/components/icons";
+import {
+  INTERVIEW_DECISIONS, INTERVIEW_RATING_ROWS, dGrad,
+  PaperPlane, PaperPlaneFlight, FlightStyles,
+} from "@/components/interviewShared";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtTime(t) {
@@ -50,6 +50,12 @@ function fmtDateFull(d, isAr) {
   });
 }
 function fmtDateKey(d) { return new Date(d).toISOString().split("T")[0]; }
+function fmtDateTimeShort(d, isAr) {
+  if (!d) return "";
+  return new Date(d).toLocaleString(isAr ? "ar-EG" : "en-US", {
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  });
+}
 function getAttendanceRate(session) {
   if (!session.attendance || session.attendance.length === 0) return null;
   const total = session.attendance.length;
@@ -63,6 +69,25 @@ function deduplicateLessons(lessons = []) {
     seen.add(l.title);
     return true;
   });
+}
+
+// رقم الجلسة المعروض (نفس الحساب في الصف والمودال)
+function getSessionNum(session) {
+  return (session.moduleIndex ?? 0) * 3 + (session.sessionNumber ?? 1);
+}
+
+// تدرج لوني حسب حالة الجلسة (نفس فكرة تدرج نتيجة المقابلة)
+function sessionGradient(session, { isToday = false, locked = false } = {}) {
+  if (locked && session.status !== "completed") return "linear-gradient(135deg, #f59e0b, #d97706)";
+  switch (session.status) {
+    case "completed": return "linear-gradient(135deg, #10b981, #14b8a6)";
+    case "cancelled": return "linear-gradient(135deg, #f87171, #ef4444)";
+    case "postponed": return "linear-gradient(135deg, #feaf00, #f67d00)";
+    default:
+      return isToday
+        ? "linear-gradient(135deg, #ff6700, #feaf00)"
+        : "linear-gradient(135deg, #004d59, #0e7c8c)";
+  }
 }
 
 // ─── Status config ────────────────────────────────────────────────────────────
@@ -110,7 +135,7 @@ function AnimatedCounter({ value, duration = 1200 }) {
   return <span>{count}</span>;
 }
 
-// ─── ✅ Hold Banner ─────────────────────────────────────────────────────────
+// ─── Hold Banner ──────────────────────────────────────────────────────────────
 function HoldBanner({ isAr, lockedSessionsCount, totalActiveSessions }) {
   const t = (ar, en) => (isAr ? ar : en);
 
@@ -126,10 +151,10 @@ function HoldBanner({ isAr, lockedSessionsCount, totalActiveSessions }) {
       );
 
   return (
-    <div className="mb-5 rounded-2xl p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+    <div className="mb-5 rounded-3xl p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-          <PauseCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center flex-shrink-0 shadow-md">
+          <PauseCircle weight="fill" className="w-5 h-5 text-white" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-black text-sm text-amber-900 dark:text-amber-300">
@@ -144,7 +169,7 @@ function HoldBanner({ isAr, lockedSessionsCount, totalActiveSessions }) {
   );
 }
 
-// ─── 🔓 Request Access Modal ───────────────────────────────────────────────────
+// ─── Request Access Modal ─────────────────────────────────────────────────────
 function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
   const t = (ar, en) => isAr ? ar : en;
   const [checking, setChecking] = useState(true);
@@ -219,10 +244,11 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
 
         <div className="relative overflow-hidden flex-shrink-0 p-6" style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59cc 40%, #ff6700 100%)" }}>
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+          <PaperPlane className="absolute top-3 end-14 w-32 opacity-20 -rotate-12 pointer-events-none" />
           <div className="relative z-10 flex items-start justify-between">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center border border-white/20 flex-shrink-0">
-                <CalendarClock className="w-6 h-6 text-white" />
+                <CalendarClock weight="fill" className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h3 className="text-lg font-black text-white leading-snug">
@@ -249,7 +275,7 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
 
           {!checking && success && (
             <div className="text-center py-4">
-              <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center mb-4 border border-emerald-200 dark:border-emerald-800/30">
+              <div className="w-16 h-16 mx-auto rounded-3xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center mb-4 border border-emerald-200 dark:border-emerald-800/30">
                 <Send className="w-8 h-8 text-emerald-500" />
               </div>
               <h4 className="text-base font-black text-gray-900 dark:text-[#e6edf3] mb-2">
@@ -279,7 +305,7 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
 
           {!checking && !success && hasPending && (
             <div className="text-center py-2">
-              <div className="w-16 h-16 mx-auto rounded-2xl bg-[#feaf00]/10 dark:bg-[#feaf00]/10 flex items-center justify-center mb-4 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
+              <div className="w-16 h-16 mx-auto rounded-3xl bg-[#feaf00]/10 dark:bg-[#feaf00]/10 flex items-center justify-center mb-4 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
                 <Hourglass className="w-8 h-8 text-[#f67d00] dark:text-[#feaf00]" />
               </div>
               <h4 className="text-base font-black text-gray-900 dark:text-[#e6edf3] mb-2">
@@ -303,7 +329,7 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
 
           {!checking && !success && wasRejected && (
             <div className="text-center py-2">
-              <div className="w-16 h-16 mx-auto rounded-2xl bg-red-50 dark:bg-red-900/10 flex items-center justify-center mb-4 border border-red-200 dark:border-red-800/30">
+              <div className="w-16 h-16 mx-auto rounded-3xl bg-red-50 dark:bg-red-900/10 flex items-center justify-center mb-4 border border-red-200 dark:border-red-800/30">
                 <BadgeAlert className="w-8 h-8 text-red-500" />
               </div>
               <h4 className="text-base font-black text-gray-900 dark:text-[#e6edf3] mb-2">
@@ -317,7 +343,7 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
               </p>
 
               {statusInfo?.reviewNotes ? (
-                <div className="text-start flex items-start gap-2.5 p-3.5 rounded-xl bg-red-50/70 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 mb-5">
+                <div className="text-start flex items-start gap-2.5 p-3.5 rounded-2xl bg-red-50/70 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 mb-5">
                   <MessageSquareWarning className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-[11px] font-black text-red-500 mb-0.5">
@@ -366,7 +392,7 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
                   <button
                     onClick={() => handleSubmit("swap")}
                     disabled={submitting}
-                    className="w-full text-start p-4 rounded-2xl border-2 border-gray-100 dark:border-[#30363d] hover:border-[#ff6700]/50 dark:hover:border-[#ff6700]/40 transition-all bg-white dark:bg-[#161b22] disabled:opacity-60 group"
+                    className="w-full text-start p-4 rounded-3xl border-2 border-gray-100 dark:border-[#30363d] hover:border-[#ff6700]/50 dark:hover:border-[#ff6700]/40 transition-all bg-white dark:bg-[#161b22] disabled:opacity-60 group"
                   >
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#feaf00] flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
@@ -400,7 +426,7 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
                   <button
                     onClick={() => handleSubmit("single")}
                     disabled={submitting}
-                    className="w-full text-start p-4 rounded-2xl border-2 border-gray-100 dark:border-[#30363d] hover:border-[#ff6700]/50 dark:hover:border-[#ff6700]/40 transition-all bg-white dark:bg-[#161b22] disabled:opacity-60 group"
+                    className="w-full text-start p-4 rounded-3xl border-2 border-gray-100 dark:border-[#30363d] hover:border-[#ff6700]/50 dark:hover:border-[#ff6700]/40 transition-all bg-white dark:bg-[#161b22] disabled:opacity-60 group"
                   >
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#feaf00] flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
@@ -425,10 +451,10 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
                   <button
                     onClick={() => handleSubmit("withNext")}
                     disabled={submitting}
-                    className="w-full text-start p-4 rounded-2xl border-2 border-gray-100 dark:border-[#30363d] hover:border-[#004d59]/50 dark:hover:border-[#004d59]/40 transition-all bg-white dark:bg-[#161b22] disabled:opacity-60 group"
+                    className="w-full text-start p-4 rounded-3xl border-2 border-gray-100 dark:border-[#30363d] hover:border-[#004d59]/50 dark:hover:border-[#004d59]/40 transition-all bg-white dark:bg-[#161b22] disabled:opacity-60 group"
                   >
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#004d59] to-[#004d59]/70 flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#004d59] to-[#0e7c8c] flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
                         {submitting && selectedMode === "withNext"
                           ? <Loader2 className="w-5 h-5 text-white animate-spin" />
                           : <SkipForward className="w-5 h-5 text-white" />}
@@ -467,7 +493,7 @@ function RequestAccessModal({ session, onClose, isAr, onSubmitted }) {
   );
 }
 
-// ─── ✅ Location Card (Offline sessions / interviews) ────────────────────────
+// ─── Location Card (Offline sessions / interviews) ───────────────────────────
 function LocationCard({ session, isAr }) {
   const loc = session.locationInfo;
   if (!loc) return null;
@@ -477,10 +503,10 @@ function LocationCard({ session, isAr }) {
   if (!hasAnyInfo) return null;
 
   return (
-    <div className="rounded-2xl overflow-hidden border border-[#ff6700]/30 dark:border-[#ff6700]/20 bg-gradient-to-br from-orange-50/80 to-amber-50/50 dark:from-[#ff6700]/5 dark:to-[#feaf00]/5">
-      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#ff6700]/20 dark:border-[#ff6700]/10 bg-gradient-to-r from-[#ff6700]/10 to-transparent dark:from-[#ff6700]/10">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#feaf00] flex items-center justify-center shadow-md">
-          <MapPin className="w-4 h-4 text-white" />
+    <div className="rounded-3xl overflow-hidden border border-[#ff6700]/30 dark:border-[#ff6700]/20 bg-gradient-to-br from-orange-50/80 to-amber-50/50 dark:from-[#ff6700]/5 dark:to-[#feaf00]/5">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#ff6700]/20 dark:border-[#ff6700]/10 bg-gradient-to-r from-[#ff6700]/10 to-transparent dark:from-[#ff6700]/10">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#feaf00] flex items-center justify-center shadow-md">
+          <MapPin weight="fill" className="w-5 h-5 text-white" />
         </div>
         <div className="flex-1">
           <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">
@@ -490,8 +516,9 @@ function LocationCard({ session, isAr }) {
             {session.isInterview ? "Offline Interview" : "Offline Session"}
           </p>
         </div>
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/15 text-[#ff6700] border border-[#ff6700]/30 font-black">
-          📍 {t("حضوري", "On-site")}
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/15 text-[#ff6700] border border-[#ff6700]/30 font-black inline-flex items-center gap-1">
+          <MapPin weight="fill" className="w-3 h-3" />
+          {t("حضوري", "On-site")}
         </span>
       </div>
 
@@ -521,7 +548,7 @@ function LocationCard({ session, isAr }) {
             rel="noopener noreferrer"
             className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-black text-sm text-white bg-gradient-to-r from-[#ff6700] to-[#feaf00] shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200"
           >
-            <MapPin className="w-4 h-4" />
+            <MapPin weight="fill" className="w-4 h-4" />
             {t("افتح الموقع على الخريطة", "Open Location on Maps")}
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
@@ -550,10 +577,10 @@ function MeetingCredentials({ session, isAr }) {
   const hasPassword = session.meetingCredentials?.password;
 
   return (
-    <div className="rounded-2xl overflow-hidden border border-[#ff6700]/30 dark:border-[#ff6700]/20 bg-gradient-to-br from-orange-50/80 to-amber-50/50 dark:from-[#ff6700]/5 dark:to-[#feaf00]/5">
-      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#ff6700]/20 dark:border-[#ff6700]/10 bg-gradient-to-r from-[#ff6700]/10 to-transparent dark:from-[#ff6700]/10">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#feaf00] flex items-center justify-center shadow-md">
-          <Video className="w-4 h-4 text-white" />
+    <div className="rounded-3xl overflow-hidden border border-[#ff6700]/30 dark:border-[#ff6700]/20 bg-gradient-to-br from-orange-50/80 to-amber-50/50 dark:from-[#ff6700]/5 dark:to-[#feaf00]/5">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#ff6700]/20 dark:border-[#ff6700]/10 bg-gradient-to-r from-[#ff6700]/10 to-transparent dark:from-[#ff6700]/10">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#feaf00] flex items-center justify-center shadow-md">
+          <Video weight="fill" className="w-5 h-5 text-white" />
         </div>
         <div>
           <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">
@@ -637,7 +664,7 @@ function MeetingCredentials({ session, isAr }) {
           rel="noopener noreferrer"
           className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-black text-sm text-white bg-gradient-to-r from-[#ff6700] to-[#feaf00] shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200"
         >
-          <Video className="w-4 h-4" />
+          <Video weight="fill" className="w-4 h-4" />
           {session.isInterview ? t("ابدأ المقابلة الآن", "Start Interview Now") : t("ابدأ الجلسة الآن", "Start Session Now")}
           <ExternalLink className="w-3.5 h-3.5" />
         </a>
@@ -653,15 +680,15 @@ function SessionDescriptionCard({ session, isAr }) {
   if (!description) return null;
 
   return (
-    <div className="rounded-2xl border border-[#004d59]/20 dark:border-[#004d59]/30 bg-gradient-to-br from-[#004d59]/5 to-[#feaf00]/5 dark:from-[#004d59]/10 dark:to-transparent overflow-hidden">
-      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#004d59]/15 dark:border-[#004d59]/20">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#004d59] to-[#004d59]/70 flex items-center justify-center shadow-md">
-          <FileText className="w-4 h-4 text-white" />
+    <div className="rounded-3xl border border-[#004d59]/20 dark:border-[#004d59]/30 bg-gradient-to-br from-[#004d59]/5 to-[#feaf00]/5 dark:from-[#004d59]/10 dark:to-transparent overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#004d59]/15 dark:border-[#004d59]/20">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#004d59] to-[#0e7c8c] flex items-center justify-center shadow-md">
+          <FileText weight="fill" className="w-5 h-5 text-white" />
         </div>
         <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">
           {t("وصف الجلسة", "Session Description")}
         </span>
-        <span className="mr-auto text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 dark:bg-[#004d59]/20 text-[#004d59] dark:text-teal-400 font-bold border border-[#004d59]/20">
+        <span className="ms-auto text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 dark:bg-[#004d59]/20 text-[#004d59] dark:text-teal-400 font-bold border border-[#004d59]/20">
           {t("ساعتان", "2 hours")}
         </span>
       </div>
@@ -685,10 +712,10 @@ function CourseInfoSection({ session, isAr }) {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-2xl border border-[#004d59]/20 dark:border-[#004d59]/30 bg-gradient-to-br from-[#004d59]/5 to-[#ff6700]/5 dark:from-[#004d59]/10 dark:to-[#ff6700]/5 overflow-hidden">
-        <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#004d59]/15 dark:border-[#004d59]/20">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#004d59] to-[#ff6700] flex items-center justify-center shadow-md">
-            <GraduationCap className="w-4 h-4 text-white" />
+      <div className="rounded-3xl border border-[#004d59]/20 dark:border-[#004d59]/30 bg-gradient-to-br from-[#004d59]/5 to-[#ff6700]/5 dark:from-[#004d59]/10 dark:to-[#ff6700]/5 overflow-hidden">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-[#004d59]/15 dark:border-[#004d59]/20">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#004d59] to-[#ff6700] flex items-center justify-center shadow-md">
+            <GraduationCap weight="fill" className="w-5 h-5 text-white" />
           </div>
           <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">
             {t("معلومات الكورس", "Course Info")}
@@ -699,23 +726,23 @@ function CourseInfoSection({ session, isAr }) {
             <h3 className="font-black text-sm text-gray-900 dark:text-[#e6edf3] mb-2">{course.title}</h3>
             <div className="flex flex-wrap gap-1.5">
               {course.grade && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 dark:bg-[#004d59]/20 text-[#004d59] dark:text-teal-300 font-medium border border-[#004d59]/20 dark:border-[#004d59]/30">
-                  🎒 {course.grade}
+                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-[#004d59]/10 dark:bg-[#004d59]/20 text-[#004d59] dark:text-teal-300 font-medium border border-[#004d59]/20 dark:border-[#004d59]/30">
+                  <GraduationCap className="w-3 h-3" />{course.grade}
                 </span>
               )}
               {course.subject && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/10 dark:bg-[#ff6700]/10 text-[#ff6700] dark:text-[#ff6437] font-medium border border-[#ff6700]/20 dark:border-[#ff6700]/20">
-                  📘 {course.subject}
+                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/10 dark:bg-[#ff6700]/10 text-[#ff6700] dark:text-[#ff6437] font-medium border border-[#ff6700]/20 dark:border-[#ff6700]/20">
+                  <BookOpen className="w-3 h-3" />{course.subject}
                 </span>
               )}
               {course.level && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-medium border border-emerald-200 dark:border-emerald-700/30">
-                  📊 {course.level}
+                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-medium border border-emerald-200 dark:border-emerald-700/30">
+                  <BarChart3 className="w-3 h-3" />{course.level}
                 </span>
               )}
               {course.duration && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#feaf00]/15 dark:bg-[#feaf00]/10 text-[#f67d00] dark:text-[#feaf00] font-medium border border-[#feaf00]/30 dark:border-[#feaf00]/20">
-                  ⏱ {course.duration}
+                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-[#feaf00]/15 dark:bg-[#feaf00]/10 text-[#f67d00] dark:text-[#feaf00] font-medium border border-[#feaf00]/30 dark:border-[#feaf00]/20">
+                  <Timer className="w-3 h-3" />{course.duration}
                 </span>
               )}
             </div>
@@ -727,13 +754,13 @@ function CourseInfoSection({ session, isAr }) {
       </div>
 
       {moduleData && (
-        <div className="rounded-2xl border border-gray-100 dark:border-[#30363d] bg-gray-50 dark:bg-[#0d1117]/60 overflow-hidden">
-          <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 dark:border-[#30363d]">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#004d59] to-[#ff6437] flex items-center justify-center shadow-md">
-              <Layers className="w-4 h-4 text-white" />
+        <div className="rounded-3xl border border-gray-100 dark:border-[#30363d] bg-gray-50 dark:bg-[#0d1117]/60 overflow-hidden">
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-[#30363d]">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#004d59] to-[#ff6437] flex items-center justify-center shadow-md">
+              <Layers weight="fill" className="w-5 h-5 text-white" />
             </div>
             <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">{t("الوحدة الدراسية", "Module")}</span>
-            <span className="mr-auto text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/10 dark:bg-[#ff6700]/10 text-[#ff6700] dark:text-[#ff6437] font-black border border-[#ff6700]/20 dark:border-[#ff6700]/20">
+            <span className="ms-auto text-[10px] px-2 py-0.5 rounded-full bg-[#ff6700]/10 dark:bg-[#ff6700]/10 text-[#ff6700] dark:text-[#ff6437] font-black border border-[#ff6700]/20 dark:border-[#ff6700]/20">
               {t(`الوحدة ${(session.moduleIndex ?? 0) + 1}`, `Module ${(session.moduleIndex ?? 0) + 1}`)}
             </span>
           </div>
@@ -766,11 +793,11 @@ function CourseInfoSection({ session, isAr }) {
       )}
 
       {hasBlog && (
-        <div className="rounded-2xl border border-gray-100 dark:border-[#30363d] overflow-hidden">
+        <div className="rounded-3xl border border-gray-100 dark:border-[#30363d] overflow-hidden">
           <button onClick={() => setShowBlog(!showBlog)}
-            className="w-full flex items-center gap-2 px-4 py-3 bg-gray-50 dark:bg-[#0d1117]/60 hover:bg-gray-100 dark:hover:bg-[#0d1117]/80 transition-colors">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#f67d00] flex items-center justify-center shadow-md">
-              <BookMarked className="w-4 h-4 text-white" />
+            className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-[#0d1117]/60 hover:bg-gray-100 dark:hover:bg-[#0d1117]/80 transition-colors">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#f67d00] flex items-center justify-center shadow-md">
+              <BookMarked weight="fill" className="w-5 h-5 text-white" />
             </div>
             <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3] flex-1 text-start">{t("محتوى الوحدة التفصيلي", "Module Detailed Content")}</span>
             <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showBlog ? "rotate-180" : ""}`} />
@@ -802,8 +829,12 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
   const formatTime = isAr ? fmtTimeAr : fmtTime;
   const lessons = deduplicateLessons(session.lessons || []);
 
-  // ✅ هل السيشن دي مقفولة؟ — الاعتماد على الحقل الجديد
+  // هل السيشن دي مقفولة؟ — الاعتماد على الحقل الجديد
   const sessionIsLocked = !!session.sessionIsLocked;
+  const showLockedState = sessionIsLocked && !isCompleted;
+  const isTodayActive = isActuallyToday && !isPartial && !sessionIsLocked && session.status === "scheduled";
+  const grad = sessionGradient(session, { isToday: isTodayActive, locked: sessionIsLocked });
+  const sessionNum = getSessionNum(session);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -818,7 +849,7 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
     total: session.attendance.length,
   } : null;
 
-  // ✅ زرار الحضور لازم السيشن دي مش مقفولة
+  // زرار الحضور لازم السيشن دي مش مقفولة
   const showAttendanceActions = canManageAttendance && !sessionIsLocked;
 
   return (
@@ -827,79 +858,91 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
 
       <div className="relative w-full sm:max-w-2xl max-h-[94vh] overflow-y-auto bg-white dark:bg-[#0d1117] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col border border-gray-100 dark:border-[#21262d]">
 
+        {/* Hero */}
         <div className="relative overflow-hidden flex-shrink-0" style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59cc 40%, #ff6700 100%)" }}>
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
           <div className="absolute -bottom-10 -right-10 w-48 h-48 rounded-full opacity-20" style={{ background: "#feaf00" }} />
-          <div className="absolute top-0 left-1/2 w-32 h-32 rounded-full opacity-10" style={{ background: "#ff6437", filter: "blur(20px)" }} />
+          <PaperPlane className="absolute top-3 end-14 w-40 opacity-20 -rotate-12 pointer-events-none" />
 
           <div className="relative z-10 p-6">
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start justify-between mb-5">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-black px-3 py-1 rounded-full border border-white/25 flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full ${cfg.dot} animate-pulse`} />
                   {isAr ? cfg.labelAr : cfg.labelEn}
                 </span>
-                {/* ✅ Badge "مقفولة" للسيشن دي */}
-                {sessionIsLocked && !isCompleted && (
+                <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-black px-2.5 py-1 rounded-full border border-white/25 flex items-center gap-1">
+                  <BookOpen weight="fill" className="w-3.5 h-3.5" />{t("جلسة", "Session")}
+                </span>
+                {showLockedState && (
                   <span className="bg-amber-500/30 backdrop-blur-sm text-white text-xs font-black px-2.5 py-1 rounded-full border border-amber-400/40 flex items-center gap-1">
-                    <Lock className="w-3 h-3" />
-                    {t("مقفولة", "Locked")}
+                    <Lock weight="fill" className="w-3.5 h-3.5" />{t("مقفولة", "Locked")}
                   </span>
                 )}
                 {isActuallyToday && !isPartial && !sessionIsLocked && (
-                  <span className="bg-[#feaf00]/30 backdrop-blur-sm text-[#feaf00] text-xs font-black px-2.5 py-1 rounded-full border border-[#feaf00]/40">
-                    ✨ {t("اليوم", "Today")}
+                  <span className="bg-[#feaf00]/30 text-[#feaf00] text-xs font-black px-2.5 py-1 rounded-full border border-[#feaf00]/40 flex items-center gap-1">
+                    <Sparkles weight="fill" className="w-3.5 h-3.5" />{t("اليوم", "Today")}
                   </span>
                 )}
-                {session.isOffline && (
-                  <span className="bg-[#feaf00]/30 backdrop-blur-sm text-[#feaf00] text-xs font-black px-2.5 py-1 rounded-full border border-[#feaf00]/40 flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />{t("Offline", "Offline")}
-                  </span>
-                )}
-                {/* ✅ Badge الحصة التعويضية (بدون خصم رصيد) */}
+                <span className="bg-white/15 text-white text-xs font-black px-2.5 py-1 rounded-full border border-white/25 flex items-center gap-1">
+                  {session.isOffline
+                    ? <><MapPin weight="fill" className="w-3.5 h-3.5" />{t("حضوري", "On-site")}</>
+                    : <><Video weight="fill" className="w-3.5 h-3.5" />{t("أونلاين", "Online")}</>}
+                </span>
+                {/* الحصة التعويضية (بدون خصم رصيد) */}
                 {session.isComplimentary && (
                   <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-black px-2.5 py-1 rounded-full border border-white/25 flex items-center gap-1">
-                    <Gift className="w-3 h-3" />{t("حصة تعويضية", "Make-up")}
+                    <Gift weight="fill" className="w-3.5 h-3.5" />{t("حصة تعويضية", "Make-up")}
                   </span>
                 )}
                 {isPartial && (
                   <span className="bg-white/15 backdrop-blur-sm text-white text-xs font-black px-2.5 py-1 rounded-full border border-white/25 flex items-center gap-1">
-                    <Lock className="w-3 h-3" />{t("معاينة فقط", "Preview Only")}
+                    <Lock weight="fill" className="w-3.5 h-3.5" />{t("معاينة فقط", "Preview Only")}
                   </span>
                 )}
               </div>
-              <button onClick={onClose} className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-all border border-white/20">
+              <button onClick={onClose} className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-all border border-white/20 flex-shrink-0">
                 <X className="w-4 h-4 text-white" />
               </button>
             </div>
 
-            <h2 className="text-xl font-black text-white mb-1 leading-snug">{session.title}</h2>
-            <p className="text-white/60 text-sm font-medium mb-5">
-              {session.group?.name} · {t("الجلسة", "Session")} {session.sessionNumber} ·{" "}
-              {t(`الوحدة ${(session.moduleIndex ?? 0) + 1}`, `Module ${(session.moduleIndex ?? 0) + 1}`)}
-            </p>
-
-            <div className="flex flex-wrap gap-2">
-              {[
-                { icon: Calendar, text: fmtDateFull(session.scheduledDate, isAr) },
-                { icon: Clock, text: `${formatTime(session.startTime)} – ${formatTime(session.endTime)}` },
-                { icon: Timer, text: t("ساعتان", "2 hours") },
-              ].map(({ icon: Icon, text }, i) => (
-                <span key={i} className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full border border-white/15">
-                  <Icon className="w-3 h-3" />{text}
-                </span>
-              ))}
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-white/15 backdrop-blur-sm border border-white/25 flex items-center justify-center text-2xl font-black text-white flex-shrink-0 shadow-lg">
+                {showLockedState ? <Lock weight="fill" className="w-7 h-7" />
+                  : isCompleted ? <CheckCircle weight="fill" className="w-8 h-8" />
+                  : session.status === "cancelled" ? <X className="w-7 h-7" />
+                  : sessionNum}
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-xl font-black text-white leading-snug truncate">{session.title}</h2>
+                <p className="text-white/70 text-sm font-medium truncate">
+                  {session.group?.name} · {t("الجلسة", "Session")} {session.sessionNumber} ·{" "}
+                  {t(`الوحدة ${(session.moduleIndex ?? 0) + 1}`, `Module ${(session.moduleIndex ?? 0) + 1}`)}
+                </p>
+                {session.group?.name && (
+                  <span className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-black text-white/90 bg-white/10 px-2 py-0.5 rounded-full border border-white/15">
+                    <Users className="w-3 h-3" />{session.group.name}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
         <div className="p-5 space-y-4 bg-gray-50/50 dark:bg-[#0d1117]">
 
-          {/* ✅ Hold Notice — بس للسيشن دي لو مقفولة */}
-          {sessionIsLocked && !isCompleted && (
-            <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
-              <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center flex-shrink-0 border border-amber-200 dark:border-amber-500/30">
-                <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+          {/* Info tiles */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            <InfoTile icon={Calendar} label={t("التاريخ", "Date")} value={fmtDateFull(session.scheduledDate, isAr)} />
+            <InfoTile icon={Clock} label={t("الوقت", "Time")} value={`${formatTime(session.startTime)} – ${formatTime(session.endTime)}`} />
+            <InfoTile icon={Timer} label={t("المدة", "Duration")} value={t("ساعتان", "2 hours")} />
+          </div>
+
+          {/* Hold Notice — بس للسيشن دي لو مقفولة */}
+          {showLockedState && (
+            <div className="flex items-start gap-3 p-4 rounded-3xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center flex-shrink-0 shadow-md">
+                <Lock weight="fill" className="w-5 h-5 text-white" />
               </div>
               <div>
                 <p className="text-sm font-black text-amber-800 dark:text-amber-300">
@@ -916,9 +959,9 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
           )}
 
           {isPartial && !sessionIsLocked && (
-            <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#004d59]/5 dark:bg-[#004d59]/10 border border-[#004d59]/20 dark:border-[#004d59]/30">
-              <div className="w-9 h-9 rounded-xl bg-[#004d59]/10 dark:bg-[#004d59]/20 flex items-center justify-center flex-shrink-0 border border-[#004d59]/20">
-                <Lock className="w-4 h-4 text-[#004d59] dark:text-teal-400" />
+            <div className="flex items-start gap-3 p-4 rounded-3xl bg-[#004d59]/5 dark:bg-[#004d59]/10 border border-[#004d59]/20 dark:border-[#004d59]/30">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#004d59] to-[#0e7c8c] flex items-center justify-center flex-shrink-0 shadow-md">
+                <Lock weight="fill" className="w-5 h-5 text-white" />
               </div>
               <div>
                 <p className="text-sm font-black text-[#004d59] dark:text-teal-400">
@@ -935,9 +978,9 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
           )}
 
           {hasPendingReopenRequest && (
-            <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
-              <div className="w-9 h-9 rounded-xl bg-[#feaf00]/20 dark:bg-[#feaf00]/10 flex items-center justify-center flex-shrink-0 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
-                <Hourglass className="w-4 h-4 text-[#f67d00] dark:text-[#feaf00]" />
+            <div className="flex items-start gap-3 p-4 rounded-3xl bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#feaf00] to-[#f67d00] flex items-center justify-center flex-shrink-0 shadow-md">
+                <Hourglass weight="fill" className="w-5 h-5 text-white" />
               </div>
               <div>
                 <p className="text-sm font-black text-[#f67d00] dark:text-[#feaf00]">
@@ -953,16 +996,16 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
           {isPartial && !isCompleted && !hasPendingReopenRequest && !sessionIsLocked && onRequestAccess && (
             <button
               onClick={() => onRequestAccess(session)}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-white dark:bg-[#161b22] text-[#004d59] dark:text-teal-400 border border-[#004d59]/30 dark:border-[#004d59]/30 hover:bg-[#004d59]/5 dark:hover:bg-[#004d59]/10 transition-all"
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-white dark:bg-[#161b22] text-[#004d59] dark:text-teal-400 border border-[#004d59]/30 dark:border-[#004d59]/30 hover:bg-[#004d59]/5 dark:hover:bg-[#004d59]/10 transition-all"
             >
-              <CalendarClock className="w-4 h-4" />
+              <CalendarClock weight="fill" className="w-4 h-4" />
               {t("طلب فتح الجلسة", "Request Session Access")}
             </button>
           )}
 
           <SessionDescriptionCard session={session} isAr={isAr} />
 
-          {/* ✅ Online → Meeting Credentials | Offline → Location Card
+          {/* Online → Meeting Credentials | Offline → Location Card
               — مش بيظهروا لو السيشن دي مقفولة */}
           {!isPartial && isOpenToday && !session.isOffline && session.meetingLink && !sessionIsLocked && (
             <MeetingCredentials session={session} isAr={isAr} />
@@ -972,101 +1015,108 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
             <LocationCard session={session} isAr={isAr} />
           )}
 
-          {/* ✅ زرار الحضور — مش بيظهر لو السيشن دي مقفولة */}
+          {/* زرار الحضور — مش بيظهر لو السيشن دي مقفولة */}
           {showAttendanceActions && (
             session.isOffline ? (
               <Link href={`/instructor/attendance?session=${session._id}`}
-                className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-[#004d59] to-[#ff6700] text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
-                <ClipboardList className="w-5 h-5" />
+                className="group/cta relative overflow-hidden flex items-center justify-center gap-2.5 py-4 rounded-2xl font-black text-sm text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all"
+                style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-10 animate-shimmer" />
+                <ClipboardList weight="fill" className="w-5 h-5 transition-transform duration-300 group-hover/cta:scale-110" />
                 {t(session.attendanceTaken ? "إعادة تسجيل الحضور الآن" : "تسجيل الحضور الآن", session.attendanceTaken ? "Re-take Attendance Now" : "Take Attendance Now")}
               </Link>
             ) : session.meetingLink ? (
               <Link href={`/instructor/attendance?session=${session._id}`}
-                className="flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-white dark:bg-[#161b22] text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all">
-                <ClipboardList className="w-4 h-4" />
+                className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-white dark:bg-[#161b22] text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all">
+                <ClipboardList weight="fill" className="w-4 h-4" />
                 {t(session.attendanceTaken ? "إعادة تسجيل الحضور" : "تسجيل الحضور", session.attendanceTaken ? "Re-take Attendance" : "Take Attendance")}
               </Link>
             ) : (
               <Link href={`/instructor/attendance?session=${session._id}`}
-                className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
-                <ClipboardList className="w-5 h-5" />
+                className="group/cta relative overflow-hidden flex items-center justify-center gap-2.5 py-4 rounded-2xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-10 animate-shimmer" />
+                <ClipboardList weight="fill" className="w-5 h-5 transition-transform duration-300 group-hover/cta:scale-110" />
                 {t(session.attendanceTaken ? "إعادة تسجيل الحضور الآن" : "تسجيل الحضور الآن", session.attendanceTaken ? "Re-take Attendance Now" : "Take Attendance Now")}
               </Link>
             )
           )}
 
-          {/* ✅ زرار إعادة فتح الجلسة — بس لما السيشن مش مقفولة */}
+          {/* زرار إعادة فتح الجلسة — بس لما السيشن مش مقفولة */}
           {isCompleted && !hasEarlyAccess && !hasPendingReopenRequest && !sessionIsLocked && onRequestAccess && (
             <button
               onClick={() => onRequestAccess(session)}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-white dark:bg-[#161b22] text-[#004d59] dark:text-teal-400 border border-[#004d59]/30 dark:border-[#004d59]/30 hover:bg-[#004d59]/5 dark:hover:bg-[#004d59]/10 transition-all"
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-white dark:bg-[#161b22] text-[#004d59] dark:text-teal-400 border border-[#004d59]/30 dark:border-[#004d59]/30 hover:bg-[#004d59]/5 dark:hover:bg-[#004d59]/10 transition-all"
             >
               <RefreshCw className="w-4 h-4" />
               {t("طلب إعادة فتح الجلسة", "Request to Reopen Session")}
             </button>
           )}
 
-          {/* ✅ الـ offline مفيهاش تسجيل (الباك بيرجّع null أصلًا — ده defense-in-depth) */}
+          {/* الـ offline مفيهاش تسجيل (الباك بيرجّع null أصلًا — ده defense-in-depth) */}
           {isCompleted && session.recordingLink && !session.isOffline && (
             <a href={session.recordingLink} target="_blank" rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm border border-[#004d59]/30 dark:border-[#004d59]/30 bg-gradient-to-r from-[#004d59]/10 to-transparent dark:from-[#004d59]/10 text-[#004d59] dark:text-teal-400 hover:from-[#004d59]/15 transition-all">
-              <Play className="w-4 h-4" />{t("مشاهدة التسجيل", "Watch Recording")}
+              className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm border border-[#004d59]/30 dark:border-[#004d59]/30 bg-gradient-to-r from-[#004d59]/10 to-transparent dark:from-[#004d59]/10 text-[#004d59] dark:text-teal-400 hover:from-[#004d59]/15 transition-all">
+              <Play weight="fill" className="w-4 h-4" />{t("مشاهدة التسجيل", "Watch Recording")}
             </a>
           )}
 
+          {/* إحصائيات الحضور */}
           {attBreakdown && (
-            <div className="rounded-2xl border border-gray-100 dark:border-[#30363d] bg-white dark:bg-[#161b22] overflow-hidden shadow-sm">
-              <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 dark:border-[#30363d] bg-gray-50/80 dark:bg-[#0d1117]/40">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff6700] to-[#feaf00] flex items-center justify-center shadow-md">
-                  <BarChart3 className="w-4 h-4 text-white" />
+            <div className="rounded-3xl border bg-white dark:bg-[#161b22] overflow-hidden shadow-sm" style={{ borderColor: "#10b98140" }}>
+              <div className="relative p-4 flex items-center gap-3 text-white overflow-hidden" style={{ background: "linear-gradient(135deg, #10b981, #14b8a6)" }}>
+                <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
+                <div className="relative w-14 h-14 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center shadow-lg flex-shrink-0">
+                  <BarChart3 weight="fill" className="w-8 h-8 text-white" />
                 </div>
-                <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">{t("إحصائيات الحضور", "Attendance Stats")}</span>
+                <div className="relative flex-1 min-w-0">
+                  <p className="text-[11px] font-bold text-white/75">{t("نسبة الحضور", "Attendance rate")}</p>
+                  <p className="text-lg font-black leading-tight">{attBreakdown.total} {t("طالب", "students")}</p>
+                </div>
                 {attRate !== null && (
-                  <span className={`ml-auto text-base font-black ${attRate >= 80 ? "text-emerald-500" : attRate >= 60 ? "text-[#feaf00]" : "text-red-500"}`}>
-                    {attRate}%
-                  </span>
+                  <div className="relative flex items-center gap-1 px-3 py-2 rounded-2xl bg-white/20 border border-white/30 font-black text-base">
+                    <UserCheck weight="fill" className="w-4 h-4" />{attRate}%
+                  </div>
                 )}
               </div>
-              <div className="grid grid-cols-4 divide-x dark:divide-[#30363d] rtl:divide-x-reverse">
-                {[
-                  { key: "present", label: t("حاضر", "Present"), color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50/60 dark:bg-emerald-900/10" },
-                  { key: "absent", label: t("غائب", "Absent"), color: "text-red-600 dark:text-red-400", bg: "bg-red-50/60 dark:bg-red-900/10" },
-                  { key: "late", label: t("متأخر", "Late"), color: "text-[#f67d00] dark:text-[#feaf00]", bg: "bg-[#feaf00]/10 dark:bg-[#feaf00]/5" },
-                  { key: "excused", label: t("معذور", "Excused"), color: "text-[#004d59] dark:text-teal-400", bg: "bg-[#004d59]/5 dark:bg-[#004d59]/10" },
-                ].map(({ key, label, color, bg }) => (
-                  <div key={key} className={`p-3 text-center ${bg}`}>
-                    <div className={`text-2xl font-black ${color}`}>{attBreakdown[key]}</div>
-                    <div className="text-[10px] text-gray-500 dark:text-[#8b949e] font-medium mt-0.5">{label}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="px-4 py-2.5 flex items-center gap-2 bg-gray-50/50 dark:bg-[#0d1117]/20">
-                <div className="flex-1 h-2 bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
+
+              <div className="p-4 space-y-3">
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { key: "present", label: t("حاضر", "Present"), color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50/70 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800/20" },
+                    { key: "absent", label: t("غائب", "Absent"), color: "text-red-600 dark:text-red-400", bg: "bg-red-50/70 dark:bg-red-900/10 border-red-100 dark:border-red-800/20" },
+                    { key: "late", label: t("متأخر", "Late"), color: "text-[#f67d00] dark:text-[#feaf00]", bg: "bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border-[#feaf00]/20" },
+                    { key: "excused", label: t("معذور", "Excused"), color: "text-[#004d59] dark:text-teal-400", bg: "bg-[#004d59]/5 dark:bg-[#004d59]/10 border-[#004d59]/15" },
+                  ].map(({ key, label, color, bg }) => (
+                    <div key={key} className={`p-3 text-center rounded-2xl border ${bg}`}>
+                      <div className={`text-2xl font-black ${color}`}>{attBreakdown[key]}</div>
+                      <div className="text-[10px] text-gray-500 dark:text-[#8b949e] font-bold mt-0.5">{label}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="h-2 bg-gray-100 dark:bg-[#21262d] rounded-full overflow-hidden">
                   <div className="h-full rounded-full transition-all duration-1000"
                     style={{ width: `${attRate || 0}%`, background: "linear-gradient(90deg, #004d59, #ff6700)" }} />
                 </div>
-                <span className="text-xs text-gray-400 dark:text-[#6e7681] font-medium whitespace-nowrap">
-                  {attBreakdown.total} {t("طالب", "students")}
-                </span>
               </div>
             </div>
           )}
 
+          {/* الدروس */}
           {lessons.length > 0 && (
-            <div className="rounded-2xl border border-gray-100 dark:border-[#30363d] bg-white dark:bg-[#161b22] overflow-hidden shadow-sm">
-              <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 dark:border-[#30363d] bg-gray-50/80 dark:bg-[#0d1117]/40">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#004d59] to-[#004d59]/80 flex items-center justify-center shadow-md">
-                  <BookOpen className="w-4 h-4 text-white" />
+            <div className="rounded-3xl border border-gray-100 dark:border-[#30363d] bg-white dark:bg-[#161b22] overflow-hidden shadow-sm">
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-[#30363d] bg-gray-50/80 dark:bg-[#0d1117]/40">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#004d59] to-[#0e7c8c] flex items-center justify-center shadow-md">
+                  <BookOpen weight="fill" className="w-5 h-5 text-white" />
                 </div>
                 <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">{t("الدروس المغطاة", "Lessons Covered")}</span>
-                <span className="mr-auto text-[10px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#21262d] text-gray-500 dark:text-[#8b949e] font-bold border border-gray-200 dark:border-[#30363d]">
+                <span className="ms-auto text-[10px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#21262d] text-gray-500 dark:text-[#8b949e] font-bold border border-gray-200 dark:border-[#30363d]">
                   {lessons.length} {t("درس", "lessons")}
                 </span>
               </div>
               <div className="divide-y divide-gray-50 dark:divide-[#21262d]">
                 {lessons.map((lesson, i) => (
                   <div key={i} className="flex items-start gap-3 px-4 py-3.5 hover:bg-gray-50/60 dark:hover:bg-[#0d1117]/30 transition-colors">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5 shadow-sm
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5 shadow-sm
                       ${isCompleted
                         ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
                         : "bg-gradient-to-br from-[#ff6700]/20 to-[#feaf00]/20 text-[#ff6700]"}`}>
@@ -1085,7 +1135,7 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
                     </div>
                     {isCompleted && (
                       <div className="w-6 h-6 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <CheckCircle className="w-4 h-4 text-emerald-500" />
+                        <CheckCircle weight="fill" className="w-4 h-4 text-emerald-500" />
                       </div>
                     )}
                   </div>
@@ -1097,9 +1147,9 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
           <CourseInfoSection session={session} isAr={isAr} />
 
           {session.instructorNotes && (
-            <div className="bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border border-[#feaf00]/30 dark:border-[#feaf00]/20 rounded-2xl p-4">
+            <div className="bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border border-[#feaf00]/30 dark:border-[#feaf00]/20 rounded-3xl p-4">
               <h4 className="text-xs font-black text-[#f67d00] dark:text-[#feaf00] mb-2 flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5" />{t("ملاحظات الجلسة", "Session Notes")}
+                <Info className="w-4 h-4" />{t("ملاحظات الجلسة", "Session Notes")}
               </h4>
               <p className="text-sm text-[#f67d00]/80 dark:text-[#feaf00]/70 leading-relaxed">{session.instructorNotes}</p>
             </div>
@@ -1126,32 +1176,51 @@ function SessionModal({ session, onClose, isAr, onRequestAccess }) {
   );
 }
 
-// ─── ✅ Interview helpers ─────────────────────────────────────────────────────
-const INTERVIEW_DECISION_LABEL = {
-  pass:   { ar: "مقبول ✅",            en: "Accepted ✅" },
-  review: { ar: "يحتاج مراجعة ⚠️",     en: "Needs Review ⚠️" },
-  repeat: { ar: "يحتاج مقابلة إضافية 🔄", en: "Needs Another Interview 🔄" },
-};
+// ═══════════════════════════════════════════════════════════════════════════
+// INTERVIEWS — helpers + modal + row
+// ═══════════════════════════════════════════════════════════════════════════
 
 function interviewEvalHref(interview) {
   return `/instructor/evaluation?interview=${interview._id}`;
 }
 
-// مين هيستلم رسالة التقييم
-function recipientLabel(interview, isAr) {
-  return interview.isAdult
-    ? (isAr ? "الطالب نفسه (بالغ)" : "The student (adult)")
-    : (isAr ? "ولي الأمر" : "The guardian");
+function ReadOnlyStars({ value = 0, color = "#feaf00" }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star key={n} weight={n <= value ? "fill" : "regular"}
+          className={`w-4 h-4 ${n <= value ? "" : "text-gray-300 dark:text-[#3d444d]"}`}
+          style={n <= value ? { color } : undefined} />
+      ))}
+    </div>
+  );
 }
 
-// ─── ✅ Interview Detail Modal — مفيش حضور: تقييم على طول ───────────────────
-function InterviewModal({ interview, onClose, isAr }) {
+function InfoTile({ icon: Icon, label, value }) {
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-2xl bg-white dark:bg-[#161b22] border border-gray-100 dark:border-[#30363d] shadow-sm">
+      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#004d59] to-[#0e7c8c] flex items-center justify-center flex-shrink-0 shadow-md">
+        <Icon weight="fill" className="w-5 h-5 text-white" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] font-bold text-gray-400 dark:text-[#6e7681]">{label}</p>
+        <p className="text-xs font-black text-gray-900 dark:text-[#e6edf3] truncate">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Interview Detail Modal ──────────────────────────────────────────────────
+function InterviewModal({ interview, onClose, isAr, onEvaluate }) {
   const cfg = STATUS_CFG[interview.status] || STATUS_CFG.scheduled;
-  const t = (ar, en) => isAr ? ar : en;
+  const t = (ar, en) => (isAr ? ar : en);
   const formatTime = isAr ? fmtTimeAr : fmtTime;
-  const decisionLabel = interview.evaluation?.decision
-    ? INTERVIEW_DECISION_LABEL[interview.evaluation.decision]
+  const dec = interview.evaluation?.decision ? INTERVIEW_DECISIONS[interview.evaluation.decision] : null;
+  const ratings = interview.evaluation?.ratings;
+  const avgRating = ratings
+    ? Math.round((INTERVIEW_RATING_ROWS.reduce((s, r) => s + (ratings[r.key] || 0), 0) / INTERVIEW_RATING_ROWS.length) * 10) / 10
     : null;
+  const DecIcon = dec?.icon;
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -1164,76 +1233,62 @@ function InterviewModal({ interview, onClose, isAr }) {
 
       <div className="relative w-full sm:max-w-2xl max-h-[94vh] overflow-y-auto bg-white dark:bg-[#0d1117] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col border border-gray-100 dark:border-[#21262d]">
 
+        {/* Hero */}
         <div className="relative overflow-hidden flex-shrink-0" style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59cc 40%, #ff6700 100%)" }}>
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
           <div className="absolute -bottom-10 -right-10 w-48 h-48 rounded-full opacity-20" style={{ background: "#feaf00" }} />
+          <PaperPlane className="absolute top-3 end-14 w-40 opacity-20 -rotate-12 pointer-events-none" />
 
           <div className="relative z-10 p-6">
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start justify-between mb-5">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-black px-3 py-1 rounded-full border border-white/25 flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full ${cfg.dot} animate-pulse`} />
                   {isAr ? cfg.labelAr : cfg.labelEn}
                 </span>
                 <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-black px-2.5 py-1 rounded-full border border-white/25 flex items-center gap-1">
-                  <Briefcase className="w-3 h-3" />{t("مقابلة", "Interview")}
+                  <Briefcase weight="fill" className="w-3.5 h-3.5" />{t("مقابلة", "Interview")}
                 </span>
                 {interview.isToday && interview.status === "scheduled" && (
-                  <span className="bg-[#feaf00]/30 backdrop-blur-sm text-[#feaf00] text-xs font-black px-2.5 py-1 rounded-full border border-[#feaf00]/40">
-                    ✨ {t("اليوم", "Today")}
+                  <span className="bg-[#feaf00]/30 text-[#feaf00] text-xs font-black px-2.5 py-1 rounded-full border border-[#feaf00]/40 flex items-center gap-1">
+                    <Sparkles weight="fill" className="w-3.5 h-3.5" />{t("اليوم", "Today")}
                   </span>
                 )}
-                {interview.isOffline && (
-                  <span className="bg-[#feaf00]/30 backdrop-blur-sm text-[#feaf00] text-xs font-black px-2.5 py-1 rounded-full border border-[#feaf00]/40 flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />{t("Offline", "Offline")}
-                  </span>
-                )}
+                <span className="bg-white/15 text-white text-xs font-black px-2.5 py-1 rounded-full border border-white/25 flex items-center gap-1">
+                  {interview.isOffline
+                    ? <><MapPin weight="fill" className="w-3.5 h-3.5" />{t("حضوري", "On-site")}</>
+                    : <><Video weight="fill" className="w-3.5 h-3.5" />{t("أونلاين", "Online")}</>}
+                </span>
               </div>
               <button onClick={onClose} className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-all border border-white/20">
                 <X className="w-4 h-4 text-white" />
               </button>
             </div>
 
-            <h2 className="text-xl font-black text-white mb-1 leading-snug">{interview.title}</h2>
-            <p className="text-white/60 text-sm font-medium mb-5">
-              {interview.student?.name || t("بدون اسم", "No name")} ·{" "}
-              {interview.isAdult ? t("بالغ", "Adult") : t("طفل", "Kid")}
-            </p>
-
-            <div className="flex flex-wrap gap-2">
-              {[
-                { icon: Calendar, text: fmtDateFull(interview.scheduledDate, isAr) },
-                { icon: Clock, text: `${formatTime(interview.startTime)} – ${formatTime(interview.endTime)}` },
-              ].map(({ icon: Icon, text }, i) => (
-                <span key={i} className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full border border-white/15">
-                  <Icon className="w-3 h-3" />{text}
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-white/15 backdrop-blur-sm border border-white/25 flex items-center justify-center text-2xl font-black text-white flex-shrink-0 shadow-lg">
+                {(interview.student?.name?.[0] || "?").toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-xl font-black text-white leading-snug truncate">{interview.student?.name || t("بدون اسم", "No name")}</h2>
+                <p className="text-white/70 text-sm font-medium truncate">
+                  {interview.title}
+                  {interview.student?.enrollmentNumber && <span className="opacity-60"> · #{interview.student.enrollmentNumber}</span>}
+                </p>
+                <span className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-black text-white/90 bg-white/10 px-2 py-0.5 rounded-full border border-white/15">
+                  <User className="w-3 h-3" />{interview.isAdult ? t("طالب بالغ", "Adult student") : t("طفل", "Kid")}
                 </span>
-              ))}
+              </div>
             </div>
           </div>
         </div>
 
         <div className="p-5 space-y-4 bg-gray-50/50 dark:bg-[#0d1117]">
-
-          {/* ✅ مفيش حضور + مين هيستلم التقييم */}
-          <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#004d59]/5 dark:bg-[#004d59]/10 border border-[#004d59]/20 dark:border-[#004d59]/30">
-            <div className="w-9 h-9 rounded-xl bg-[#004d59]/10 dark:bg-[#004d59]/20 flex items-center justify-center flex-shrink-0 border border-[#004d59]/20">
-              <Info className="w-4 h-4 text-[#004d59] dark:text-teal-400" />
-            </div>
-            <div>
-              <p className="text-sm font-black text-[#004d59] dark:text-teal-400">
-                {t("المقابلة مفيهاش تسجيل حضور", "No attendance for interviews")}
-              </p>
-              <p className="text-xs text-[#004d59]/70 dark:text-teal-400/70 mt-0.5 leading-relaxed">
-                {t(
-                  `بعد المقابلة روح للتقييم على طول — رسالة التقييم هتروح لـ${recipientLabel(interview, true)}.`,
-                  `After the interview go straight to the evaluation — the result message goes to ${recipientLabel(interview, false).toLowerCase()}.`
-                )}
-              </p>
-            </div>
+          <div className="grid grid-cols-2 gap-2.5">
+            <InfoTile icon={Calendar} label={t("التاريخ", "Date")} value={fmtDateFull(interview.scheduledDate, isAr)} />
+            <InfoTile icon={Clock} label={t("الوقت", "Time")} value={`${formatTime(interview.startTime)} – ${formatTime(interview.endTime)}`} />
           </div>
 
-          {/* Online → credentials | Offline → location */}
           {interview.canViewDetails && !interview.isOffline && interview.meetingLink && (
             <MeetingCredentials session={interview} isAr={isAr} />
           )}
@@ -1241,47 +1296,76 @@ function InterviewModal({ interview, onClose, isAr }) {
             <LocationCard session={interview} isAr={isAr} />
           )}
 
-          {/* ✅ زرار التقييم على طول */}
+          {/* Evaluate CTA */}
           {interview.canEvaluate && (
             <Link href={interviewEvalHref(interview)}
-              className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-gradient-to-r from-[#004d59] to-[#ff6700] text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
-              <Star className="w-5 h-5" />
-              {t("تقييم المقابلة", "Evaluate Interview")}
+              onClick={(e) => onEvaluate(e, interviewEvalHref(interview))}
+              className="group/cta relative overflow-hidden flex items-center justify-center gap-2.5 py-4 rounded-2xl font-black text-sm text-white shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all"
+              style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-10 animate-shimmer" />
+              <PaperPlaneTilt weight="fill" className="w-5 h-5 transition-transform duration-300 group-hover/cta:translate-x-1 group-hover/cta:-translate-y-1" />
+              {t("ابدأ تقييم المقابلة", "Start evaluating")}
             </Link>
           )}
 
           {/* نتيجة التقييم */}
-          {interview.evaluationCompleted && interview.evaluation && (
-            <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/60 dark:bg-emerald-900/10 overflow-hidden">
-              <div className="flex items-center gap-2.5 px-4 py-3 border-b border-emerald-200/60 dark:border-emerald-800/30">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-md">
-                  <CheckCircle className="w-4 h-4 text-white" />
+          {interview.evaluationCompleted && interview.evaluation && dec && (
+            <div className="rounded-3xl border bg-white dark:bg-[#161b22] overflow-hidden shadow-sm" style={{ borderColor: `${dec.c1}40` }}>
+              <div className="relative p-4 flex items-center gap-3 text-white overflow-hidden" style={{ background: dGrad(dec) }}>
+                <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
+                <div className="relative w-14 h-14 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center shadow-lg flex-shrink-0">
+                  <DecIcon weight="fill" className="w-8 h-8 text-white" />
                 </div>
-                <span className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">
-                  {t("تم تقييم المقابلة", "Interview Evaluated")}
-                </span>
-                {decisionLabel && (
-                  <span className="mr-auto text-[11px] px-2.5 py-1 rounded-full bg-white/70 dark:bg-[#161b22] text-emerald-700 dark:text-emerald-400 font-black border border-emerald-200 dark:border-emerald-800/40">
-                    {isAr ? decisionLabel.ar : decisionLabel.en}
-                  </span>
+                <div className="relative flex-1 min-w-0">
+                  <p className="text-[11px] font-bold text-white/75">{t("نتيجة المقابلة", "Interview result")}</p>
+                  <p className="text-lg font-black leading-tight">{isAr ? dec.ar : dec.en}</p>
+                </div>
+                {avgRating !== null && (
+                  <div className="relative flex items-center gap-1 px-3 py-2 rounded-2xl bg-white/20 border border-white/30 font-black text-base">
+                    <Star weight="fill" className="w-4 h-4 text-[#feaf00]" />{avgRating}
+                  </div>
                 )}
               </div>
-              <div className="p-4 space-y-2">
-                {interview.evaluation.instructorComment && (
-                  <p className="text-sm text-gray-700 dark:text-[#c9d1d9] leading-relaxed">
-                    {interview.evaluation.instructorComment}
-                  </p>
+
+              <div className="p-4 space-y-4">
+                {ratings && (
+                  <div className="space-y-2">
+                    {INTERVIEW_RATING_ROWS.map((r) => {
+                      const RIco = r.icon;
+                      return (
+                        <div key={r.key} className="flex items-center gap-3 p-2.5 rounded-xl bg-gray-50 dark:bg-[#21262d] border border-gray-100 dark:border-[#30363d]">
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${dec.c1}1a`, color: dec.c1 }}>
+                            <RIco className="w-5 h-5" />
+                          </div>
+                          <span className="text-xs font-bold text-gray-600 dark:text-[#8b949e] flex-1 truncate">{isAr ? r.ar : r.en}</span>
+                          <ReadOnlyStars value={ratings[r.key] || 0} color={dec.c1} />
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
-                <p className="text-[11px] text-gray-500 dark:text-[#8b949e] flex items-center gap-1.5">
-                  <Send className="w-3 h-3" />
-                  {interview.evaluationSent
-                    ? t(`الرسالة اتبعتت لـ${recipientLabel(interview, true)}`, `Message sent to ${recipientLabel(interview, false).toLowerCase()}`)
-                    : t("الرسالة لسه ماتبعتتش", "Message not sent yet")}
-                </p>
-                <Link href={interviewEvalHref(interview)}
-                  className="inline-flex items-center gap-1.5 text-xs font-black text-[#004d59] dark:text-teal-400 hover:underline">
-                  <RefreshCw className="w-3 h-3" />{t("تعديل التقييم", "Edit evaluation")}
-                </Link>
+
+                {interview.evaluation.instructorComment && (
+                  <div className="p-3.5 rounded-2xl border" style={{ background: `${dec.c1}0d`, borderColor: `${dec.c1}30` }}>
+                    <p className="text-[10px] font-black mb-1 flex items-center gap-1" style={{ color: dec.c1 }}>
+                      <FileText className="w-3.5 h-3.5" />{t("تعليق المُقابِل", "Interviewer comment")}
+                    </p>
+                    <p className="text-sm text-gray-700 dark:text-[#c9d1d9] leading-relaxed">{interview.evaluation.instructorComment}</p>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-1">
+                  {interview.evaluation.completedAt ? (
+                    <span className="text-[11px] text-gray-400 dark:text-[#6e7681] flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5" />{fmtDateTimeShort(interview.evaluation.completedAt, isAr)}
+                    </span>
+                  ) : <span />}
+                  <Link href={interviewEvalHref(interview)}
+                    onClick={(e) => onEvaluate(e, interviewEvalHref(interview))}
+                    className="inline-flex items-center gap-1.5 text-xs font-black hover:underline" style={{ color: dec.c1 }}>
+                    <RefreshCw className="w-3.5 h-3.5" />{t("تعديل التقييم", "Edit evaluation")}
+                  </Link>
+                </div>
               </div>
             </div>
           )}
@@ -1289,7 +1373,7 @@ function InterviewModal({ interview, onClose, isAr }) {
           {interview.instructorNotes && (
             <div className="bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border border-[#feaf00]/30 dark:border-[#feaf00]/20 rounded-2xl p-4">
               <h4 className="text-xs font-black text-[#f67d00] dark:text-[#feaf00] mb-2 flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5" />{t("ملاحظات", "Notes")}
+                <Info className="w-4 h-4" />{t("ملاحظات", "Notes")}
               </h4>
               <p className="text-sm text-[#f67d00]/80 dark:text-[#feaf00]/70 leading-relaxed">{interview.instructorNotes}</p>
             </div>
@@ -1300,95 +1384,107 @@ function InterviewModal({ interview, onClose, isAr }) {
   );
 }
 
-// ─── ✅ Interview Row ─────────────────────────────────────────────────────────
-function InterviewRow({ interview, onOpen, isAr }) {
+// ─── Interview Row ───────────────────────────────────────────────────────────
+function InterviewRow({ interview, onOpen, isAr, onEvaluate }) {
   const cfg = STATUS_CFG[interview.status] || STATUS_CFG.scheduled;
-  const t = (ar, en) => isAr ? ar : en;
+  const t = (ar, en) => (isAr ? ar : en);
   const formatTime = isAr ? fmtTimeAr : fmtTime;
   const isCompleted = interview.status === "completed";
   const isToday = interview.isToday && interview.status === "scheduled";
+  const dec = interview.evaluation?.decision ? INTERVIEW_DECISIONS[interview.evaluation.decision] : null;
+  const DecIcon = dec?.icon;
+
+  const grad = dec ? dGrad(dec)
+    : isToday ? "linear-gradient(135deg, #ff6700, #feaf00)"
+    : "linear-gradient(135deg, #004d59, #0e7c8c)";
 
   return (
     <div
       onClick={() => onOpen(interview)}
-      className={`group flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-2xl border bg-white dark:bg-[#161b22] cursor-pointer
-        transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg
-        ${isToday
-          ? "border-[#ff6700]/40 shadow-md shadow-[#ff6700]/10 ring-1 ring-[#ff6700]/20"
-          : isCompleted
-            ? "border-emerald-200/60 dark:border-emerald-800/30"
-            : "border-gray-100 dark:border-[#30363d] hover:border-[#004d59]/30 dark:hover:border-[#004d59]/40"}`}
+      className={`group relative overflow-hidden flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 ps-5 rounded-3xl border bg-white dark:bg-[#161b22] cursor-pointer
+        transition-all duration-300 hover:-translate-y-1 hover:shadow-xl
+        ${isToday ? "border-[#ff6700]/40 shadow-md shadow-[#ff6700]/10 ring-1 ring-[#ff6700]/20" : "border-gray-100 dark:border-[#30363d]"}`}
+      style={dec ? { borderColor: `${dec.c1}40` } : undefined}
     >
-      <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md bg-gradient-to-br text-white
-        ${isCompleted ? "from-emerald-400 to-teal-500" : isToday ? "from-[#ff6700] to-[#feaf00]" : "from-[#004d59] to-[#004d59]/70"}`}>
-        {isCompleted ? <CheckCircle className="w-5 h-5" /> : <Briefcase className="w-5 h-5" />}
+      {/* شريط جانبي بلون النتيجة */}
+      <div className="absolute top-0 bottom-0 start-0 w-1.5" style={{ background: grad }} />
+      {/* طيارة ورق خفيفة في الخلفية */}
+      <PaperPlane className="absolute -end-3 -top-1 w-24 opacity-[.07] group-hover:opacity-[.16] -rotate-12 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all duration-500 pointer-events-none"
+        style={{ filter: "grayscale(.2) brightness(.55)" }} />
+
+      {/* Avatar */}
+      <div className="relative flex-shrink-0">
+        <div className="w-[52px] h-[52px] sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-black text-lg text-white shadow-md transition-transform duration-300 group-hover:scale-105"
+          style={{ background: grad }}>
+          {isCompleted && !dec ? <CheckCircle weight="fill" className="w-6 h-6" />
+            : (interview.student?.name?.[0] || "?").toUpperCase()}
+        </div>
+        <span className="absolute -bottom-1 -end-1 w-6 h-6 rounded-full bg-white dark:bg-[#161b22] border border-gray-100 dark:border-[#30363d] flex items-center justify-center shadow-sm">
+          {interview.isOffline
+            ? <MapPin weight="fill" className="w-3.5 h-3.5 text-[#f67d00]" />
+            : <Video weight="fill" className="w-3.5 h-3.5 text-[#004d59] dark:text-teal-400" />}
+        </span>
       </div>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-          <span className="text-[10px] font-black text-[#004d59] dark:text-teal-400 flex items-center gap-1">
-            <Briefcase className="w-2.5 h-2.5" />{t("مقابلة", "Interview")}
+      <div className="relative flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+          <span className="text-[10px] font-black text-white px-2 py-0.5 rounded-full flex items-center gap-1"
+            style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
+            <Briefcase weight="fill" className="w-3 h-3" />{t("مقابلة", "Interview")}
           </span>
           {isToday && (
             <span className="text-[10px] font-black text-[#ff6700] flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#ff6700] animate-pulse" />
-              {t("اليوم", "Today")}
+              <span className="w-1.5 h-1.5 rounded-full bg-[#ff6700] animate-pulse" />{t("اليوم", "Today")}
             </span>
           )}
-          {interview.isOffline && (
-            <span className="text-[10px] font-black text-[#f67d00] dark:text-[#feaf00] flex items-center gap-1">
-              <MapPin className="w-2.5 h-2.5" />{t("Offline", "Offline")}
-            </span>
-          )}
-          <h3 className="font-black text-sm truncate text-gray-900 dark:text-[#e6edf3] group-hover:text-[#ff6700] transition-colors duration-200">
-            {interview.title}
-          </h3>
-        </div>
-        <div className="flex items-center gap-2.5 text-xs text-gray-400 dark:text-[#6e7681] flex-wrap">
-          <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{fmtDateShort(interview.scheduledDate, isAr)}</span>
-          <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatTime(interview.startTime)}</span>
-          {interview.student?.name && (
-            <span className="flex items-center gap-1"><User className="w-3 h-3" />{interview.student.name}</span>
-          )}
-          <span className="flex items-center gap-1 text-[#004d59] dark:text-teal-600 font-medium">
+          <span className="text-[10px] font-black text-[#004d59] dark:text-teal-500">
             {interview.isAdult ? t("بالغ", "Adult") : t("طفل", "Kid")}
           </span>
         </div>
+
+        <h3 className="font-black text-sm truncate text-gray-900 dark:text-[#e6edf3] group-hover:text-[#ff6700] transition-colors duration-200">
+          {interview.student?.name || interview.title}
+        </h3>
+
+        <div className="flex items-center gap-2.5 text-xs text-gray-400 dark:text-[#6e7681] flex-wrap mt-0.5">
+          <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{fmtDateShort(interview.scheduledDate, isAr)}</span>
+          <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{formatTime(interview.startTime)}</span>
+        </div>
+
+        {dec && (
+          <span className="inline-flex items-center gap-1.5 mt-2 text-[11px] font-black text-white px-2.5 py-1 rounded-full shadow-sm" style={{ background: dGrad(dec) }}>
+            <DecIcon weight="fill" className="w-3.5 h-3.5" />{isAr ? dec.ar : dec.en}
+          </span>
+        )}
       </div>
 
-      <div className="flex items-center gap-2 flex-shrink-0">
-        {/* ✅ تقييم على طول (مفيش حضور) */}
+      <div className="relative flex items-center gap-2 flex-shrink-0">
         {interview.canEvaluate && (
           <Link href={interviewEvalHref(interview)}
-            onClick={e => e.stopPropagation()}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
+            onClick={(e) => onEvaluate(e, interviewEvalHref(interview))}
+            className="group/btn inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
             style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
-            <Star className="w-3.5 h-3.5" />{t("تقييم", "Evaluate")}
+            <PaperPlaneTilt weight="fill" className="w-4 h-4 transition-transform duration-300 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5" />
+            {t("قيّم", "Evaluate")}
           </Link>
         )}
 
         {interview.showJoinButton && !interview.isOffline && (
           <a href={interview.meetingLink} target="_blank" rel="noopener noreferrer"
-            onClick={e => e.stopPropagation()}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
             style={{ background: "linear-gradient(135deg, #ff6700, #feaf00)" }}>
-            <Video className="w-3.5 h-3.5" />{t("ابدأ", "Start")}
+            <Video weight="fill" className="w-4 h-4" />{t("ابدأ", "Start")}
           </a>
         )}
 
-        {interview.evaluationCompleted && (
-          <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40">
-            <BadgeCheck className="w-3 h-3" />{t("تم التقييم", "Evaluated")}
-          </span>
-        )}
-
-        <span className={`text-[10px] px-2.5 py-1 rounded-full font-black hidden sm:flex items-center gap-1 ${cfg.badge}`}>
+        <span className={`text-[10px] px-2.5 py-1 rounded-full font-black hidden md:flex items-center gap-1 ${cfg.badge}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
           {isAr ? cfg.labelAr : cfg.labelEn}
         </span>
 
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors bg-gray-50 dark:bg-[#21262d] group-hover:bg-[#ff6700]/10">
-          <ChevronRight className="w-4 h-4 transition-colors text-gray-300 dark:text-[#6e7681] group-hover:text-[#ff6700]" />
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors bg-gray-50 dark:bg-[#21262d] group-hover:bg-[#ff6700]/10">
+          <ChevronRight className="w-4 h-4 transition-colors text-gray-300 dark:text-[#6e7681] group-hover:text-[#ff6700] rtl:rotate-180" />
         </div>
       </div>
     </div>
@@ -1404,12 +1500,13 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
   const attRate = getAttendanceRate(session);
   const formatTime = isAr ? fmtTimeAr : fmtTime;
   const t = (ar, en) => isAr ? ar : en;
-  const sessionNum = (session.moduleIndex ?? 0) * 3 + (session.sessionNumber ?? 1);
+  const sessionNum = getSessionNum(session);
 
-  // ✅ هل السيشن دي مقفولة بسبب الـ Hold؟ — الاعتماد على الحقل الجديد
+  // هل السيشن دي مقفولة بسبب الـ Hold؟ — الاعتماد على الحقل الجديد
   const sessionIsLocked = !!session.sessionIsLocked;
+  const showLockedState = sessionIsLocked && !isCompleted;
 
-  // ✅ إخفاء أزرار Join/Attendance لو السيشن دي مقفولة
+  // إخفاء أزرار Join/Attendance لو السيشن دي مقفولة
   const showJoin = session.showJoinButton && !sessionIsLocked;
   const showAttendance = session.showAttendanceButton && !sessionIsLocked;
 
@@ -1422,14 +1519,7 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
     (isToday && !sessionIsLocked);
   const hasPendingReq = session.pendingReschedule?.status === "pending";
 
-  const iconColors = {
-    completed: "from-emerald-400 to-teal-500",
-    scheduled: isToday
-      ? "from-[#ff6700] to-[#feaf00]"
-      : "from-[#004d59] to-[#004d59]/70",
-    cancelled: "from-red-400 to-red-500",
-    postponed: "from-[#feaf00] to-[#f67d00]",
-  };
+  const grad = sessionGradient(session, { isToday: isToday && !sessionIsLocked, locked: sessionIsLocked });
 
   const handleClick = () => {
     if (sessionIsLocked && !isCompleted) {
@@ -1447,39 +1537,54 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
   return (
     <div
       onClick={handleClick}
-      className={`group flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-2xl border bg-white dark:bg-[#161b22]
-        transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg
-        ${isClickable || sessionIsLocked ? "cursor-pointer" : "cursor-pointer opacity-75 hover:opacity-100"}
-        ${sessionIsLocked && !isCompleted
+      className={`group relative overflow-hidden flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 ps-5 rounded-3xl border bg-white dark:bg-[#161b22] cursor-pointer
+        transition-all duration-300 hover:-translate-y-1 hover:shadow-xl
+        ${isClickable || sessionIsLocked ? "" : "opacity-75 hover:opacity-100"}
+        ${showLockedState
           ? "border-amber-300/60 dark:border-amber-500/30 bg-amber-50/30 dark:bg-amber-500/5"
           : isToday
             ? "border-[#ff6700]/40 shadow-md shadow-[#ff6700]/10 ring-1 ring-[#ff6700]/20"
             : isCompleted
-              ? "border-emerald-200/60 dark:border-emerald-800/30 hover:shadow-emerald-500/5"
-              : "border-gray-100 dark:border-[#30363d] hover:border-[#004d59]/30 dark:hover:border-[#004d59]/40"}`}
+              ? "border-emerald-200/60 dark:border-emerald-800/30"
+              : "border-gray-100 dark:border-[#30363d]"}`}
     >
-      <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0 shadow-md bg-gradient-to-br
-        ${sessionIsLocked && !isCompleted
-          ? "from-amber-400 to-amber-500"
-          : iconColors[session.status] || iconColors.scheduled
-        } text-white`}>
-        {sessionIsLocked && !isCompleted ? (
-          <Lock className="w-5 h-5" />
-        ) : isCompleted ? (
-          <CheckCircle className="w-5 h-5" />
-        ) : session.status === "cancelled" ? (
-          <X className="w-5 h-5" />
-        ) : (
-          <span className="text-sm font-black">{sessionNum}</span>
-        )}
+      {/* شريط جانبي بلون الحالة */}
+      <div className="absolute top-0 bottom-0 start-0 w-1.5" style={{ background: grad }} />
+      {/* طيارة ورق خفيفة في الخلفية */}
+      <PaperPlane className="absolute -end-3 -top-1 w-24 opacity-[.07] group-hover:opacity-[.16] -rotate-12 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all duration-500 pointer-events-none"
+        style={{ filter: "grayscale(.2) brightness(.55)" }} />
+
+      {/* Avatar */}
+      <div className="relative flex-shrink-0">
+        <div className="w-[52px] h-[52px] sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-black text-lg text-white shadow-md transition-transform duration-300 group-hover:scale-105"
+          style={{ background: grad }}>
+          {showLockedState ? (
+            <Lock weight="fill" className="w-6 h-6" />
+          ) : isCompleted ? (
+            <CheckCircle weight="fill" className="w-6 h-6" />
+          ) : session.status === "cancelled" ? (
+            <X className="w-6 h-6" />
+          ) : (
+            sessionNum
+          )}
+        </div>
+        <span className="absolute -bottom-1 -end-1 w-6 h-6 rounded-full bg-white dark:bg-[#161b22] border border-gray-100 dark:border-[#30363d] flex items-center justify-center shadow-sm">
+          {session.isOffline
+            ? <MapPin weight="fill" className="w-3.5 h-3.5 text-[#f67d00]" />
+            : <Video weight="fill" className="w-3.5 h-3.5 text-[#004d59] dark:text-teal-400" />}
+        </span>
       </div>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-          {/* ✅ Badge "مقفولة" — بس على السيشنات المقفولة فعلاً */}
-          {sessionIsLocked && !isCompleted && (
+      <div className="relative flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+          <span className="text-[10px] font-black text-white px-2 py-0.5 rounded-full flex items-center gap-1"
+            style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
+            <BookOpen weight="fill" className="w-3 h-3" />{t("جلسة", "Session")}
+          </span>
+          {/* Badge "مقفولة" — بس على السيشنات المقفولة فعلاً */}
+          {showLockedState && (
             <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 flex items-center gap-1">
-              <Lock className="w-2.5 h-2.5" />
+              <Lock weight="fill" className="w-3 h-3" />
               {t("مقفولة", "Locked")}
             </span>
           )}
@@ -1491,86 +1596,81 @@ function SessionRow({ session, onOpen, isAr, onRequestAccess }) {
           )}
           {!isToday && canOpenPartial && !sessionIsLocked && (
             <span className="text-[10px] font-black text-[#004d59] dark:text-teal-400 flex items-center gap-1">
-              <Lock className="w-2.5 h-2.5" />
+              <Lock weight="fill" className="w-3 h-3" />
               {t("معاينة", "Preview")}
             </span>
           )}
           {hasPendingReq && (
             <span className="text-[10px] font-black text-[#f67d00] dark:text-[#feaf00] flex items-center gap-1">
-              <Hourglass className="w-2.5 h-2.5" />
+              <Hourglass weight="fill" className="w-3 h-3" />
               {t("قيد المراجعة", "Pending Review")}
             </span>
           )}
-          {session.isOffline && (
-            <span className="text-[10px] font-black text-[#f67d00] dark:text-[#feaf00] flex items-center gap-1">
-              <MapPin className="w-2.5 h-2.5" />
-              {t("Offline", "Offline")}
-            </span>
-          )}
-          {/* ✅ Badge الحصة التعويضية (بدون خصم رصيد) */}
+          {/* الحصة التعويضية (بدون خصم رصيد) */}
           {session.isComplimentary && (
             <span className="text-[10px] font-black text-[#004d59] dark:text-teal-400 flex items-center gap-1">
-              <Gift className="w-2.5 h-2.5" />
+              <Gift weight="fill" className="w-3 h-3" />
               {t("تعويضية", "Make-up")}
             </span>
           )}
-          <h3 className="font-black text-sm truncate text-gray-900 dark:text-[#e6edf3] group-hover:text-[#ff6700] transition-colors duration-200">
-            {session.title}
-          </h3>
         </div>
-        <div className="flex items-center gap-2.5 text-xs text-gray-400 dark:text-[#6e7681] flex-wrap">
-          <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{fmtDateShort(session.scheduledDate, isAr)}</span>
-          <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatTime(session.startTime)}</span>
-          {session.group?.name && <span className="flex items-center gap-1"><Users className="w-3 h-3" />{session.group.name}</span>}
+
+        <h3 className="font-black text-sm truncate text-gray-900 dark:text-[#e6edf3] group-hover:text-[#ff6700] transition-colors duration-200">
+          {session.title}
+        </h3>
+
+        <div className="flex items-center gap-2.5 text-xs text-gray-400 dark:text-[#6e7681] flex-wrap mt-0.5">
+          <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{fmtDateShort(session.scheduledDate, isAr)}</span>
+          <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{formatTime(session.startTime)}</span>
+          {session.group?.name && <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />{session.group.name}</span>}
           <span className="flex items-center gap-1 text-[#004d59] dark:text-teal-600 font-medium">
-            <Timer className="w-3 h-3" />{t("ساعتان", "2h")}
+            <Timer className="w-3.5 h-3.5" />{t("ساعتان", "2h")}
           </span>
         </div>
+
+        {/* نسبة الحضور / يحتاج حضور — بنفس شكل بادج نتيجة المقابلة */}
+        {isCompleted && attRate !== null && (
+          <span className="inline-flex items-center gap-1.5 mt-2 text-[11px] font-black text-white px-2.5 py-1 rounded-full shadow-sm"
+            style={{ background: attRate >= 80 ? "linear-gradient(135deg, #10b981, #14b8a6)" : attRate >= 60 ? "linear-gradient(135deg, #feaf00, #f67d00)" : "linear-gradient(135deg, #f87171, #ef4444)" }}>
+            <UserCheck weight="fill" className="w-3.5 h-3.5" />{t("الحضور", "Attendance")} {attRate}%
+          </span>
+        )}
+        {isCompleted && !session.attendanceTaken && (
+          <span className="inline-flex items-center gap-1.5 mt-2 text-[11px] font-black px-2.5 py-1 rounded-full bg-[#feaf00]/10 text-[#f67d00] dark:text-[#feaf00] border border-[#feaf00]/30 dark:border-[#feaf00]/20">
+            <ClipboardList weight="fill" className="w-3.5 h-3.5" />{t("يحتاج حضور", "Needs Attendance")}
+          </span>
+        )}
       </div>
 
-      <div className="flex items-center gap-2 flex-shrink-0">
-        {isCompleted && attRate !== null && (
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gray-50 dark:bg-[#21262d] border border-gray-100 dark:border-[#30363d]">
-            <UserCheck className="w-3.5 h-3.5 text-emerald-500" />
-            <span className={`text-xs font-black ${attRate >= 80 ? "text-emerald-600" : attRate >= 60 ? "text-[#f67d00]" : "text-red-600"}`}>
-              {attRate}%
-            </span>
-          </div>
-        )}
-
-        {/* ✅ Attendance button — يظهر بس لو السيشن مش مقفولة */}
+      <div className="relative flex items-center gap-2 flex-shrink-0">
+        {/* Attendance button — يظهر بس لو السيشن مش مقفولة */}
         {showAttendance && (
           <Link href={`/instructor/attendance?session=${session._id}`}
             onClick={e => e.stopPropagation()}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
+            className="group/btn inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
             style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
-            <ClipboardList className="w-3.5 h-3.5" />{t("حضور", "Attendance")}
+            <ClipboardList weight="fill" className="w-4 h-4 transition-transform duration-300 group-hover/btn:scale-110" />
+            {t("حضور", "Attendance")}
           </Link>
         )}
 
-        {/* ✅ Join button — يظهر بس لو السيشن مش مقفولة */}
+        {/* Join button — يظهر بس لو السيشن مش مقفولة */}
         {showJoin && !session.isOffline && (
           <a href={session.meetingLink} target="_blank" rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-black text-white shadow-md hover:shadow-lg hover:scale-105 transition-all"
             style={{ background: "linear-gradient(135deg, #ff6700, #feaf00)" }}>
-            <Video className="w-3.5 h-3.5" />{t("ابدأ", "Start")}
+            <Video weight="fill" className="w-4 h-4" />{t("ابدأ", "Start")}
           </a>
         )}
 
-        {isCompleted && !session.attendanceTaken && (
-          <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black bg-[#feaf00]/10 dark:bg-[#feaf00]/10 text-[#f67d00] dark:text-[#feaf00] border border-[#feaf00]/30 dark:border-[#feaf00]/20">
-            <ClipboardList className="w-3 h-3" />{t("يحتاج حضور", "Needs Attendance")}
-          </span>
-        )}
-
-        <span className={`text-[10px] px-2.5 py-1 rounded-full font-black hidden sm:flex items-center gap-1 ${cfg.badge}`}>
+        <span className={`text-[10px] px-2.5 py-1 rounded-full font-black hidden md:flex items-center gap-1 ${cfg.badge}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
           {isAr ? cfg.labelAr : cfg.labelEn}
         </span>
 
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors bg-gray-50 dark:bg-[#21262d] group-hover:bg-[#ff6700]/10">
-          <ChevronRight className="w-4 h-4 transition-colors text-gray-300 dark:text-[#6e7681] group-hover:text-[#ff6700]" />
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors bg-gray-50 dark:bg-[#21262d] group-hover:bg-[#ff6700]/10">
+          <ChevronRight className="w-4 h-4 transition-colors text-gray-300 dark:text-[#6e7681] group-hover:text-[#ff6700] rtl:rotate-180" />
         </div>
       </div>
     </div>
@@ -1614,12 +1714,12 @@ function DateHeader({ dateKey, sessions, isAr }) {
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({ icon: Icon, value, label, gradient }) {
   return (
-    <div className="group relative bg-white dark:bg-[#161b22] rounded-2xl p-4 sm:p-5 border border-gray-100 dark:border-[#30363d] hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 overflow-hidden">
+    <div className="group relative bg-white dark:bg-[#161b22] rounded-3xl p-4 sm:p-5 border border-gray-100 dark:border-[#30363d] hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 overflow-hidden">
       <div className="absolute top-0 right-0 w-20 h-20 rounded-full opacity-5 -translate-y-4 translate-x-4" style={{ background: gradient }} />
       <div className="flex items-center gap-3">
-        <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300 flex-shrink-0"
+        <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300 flex-shrink-0"
           style={{ background: gradient }}>
-          <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+          <Icon weight="fill" className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
         </div>
         <div>
           <p className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-[#e6edf3]">
@@ -1637,9 +1737,82 @@ function Skeleton() {
   return (
     <div className="space-y-3">
       {[...Array(5)].map((_, i) => (
-        <div key={i} className="h-[72px] bg-white dark:bg-[#161b22] rounded-2xl animate-pulse border border-gray-100 dark:border-[#30363d]"
+        <div key={i} className="h-[84px] bg-white dark:bg-[#161b22] rounded-3xl animate-pulse border border-gray-100 dark:border-[#30363d]"
           style={{ opacity: 1 - i * 0.15 }} />
       ))}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Transition overlay — ورقة بتتطوي وتبقى طيارة وتطير بالصفحة
+//     الدايرة بتتوسع من مكان الضغطة → الورقة تظهر → تتطوي → الطيارة تطير
+//     على منحنى وتخرج من الركن العلوي، وصفحة التقييم بتتفتح من نفس الركن.
+// ═══════════════════════════════════════════════════════════════════════════
+function EvalTransitionOverlay({ data, isAr }) {
+  if (!data) return null;
+  const { x, y, w, h } = data;
+  return (
+    <div className="fixed inset-0 z-[100] overflow-hidden" dir={isAr ? "rtl" : "ltr"}>
+      <FlightStyles />
+      <style>{`
+        @keyframes evalExpand {
+          from { clip-path: circle(0px at var(--x) var(--y)); }
+          to   { clip-path: circle(150vmax at var(--x) var(--y)); }
+        }
+        @keyframes sheetFold {
+          0%   { transform: scale(0) rotate(-24deg); opacity: 0; }
+          30%  { transform: scale(1.12) rotate(7deg); opacity: 1; }
+          55%  { transform: scale(1) rotate(-3deg); opacity: 1; }
+          85%  { transform: scale(.35, .6) rotate(28deg) skewX(-18deg); opacity: .9; }
+          100% { transform: scale(.05) rotate(40deg); opacity: 0; }
+        }
+        @keyframes evalTextIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+        @keyframes evalTextOut { to { opacity: 0; transform: translateY(-10px); } }
+      `}</style>
+
+      <div className="absolute inset-0 overflow-hidden"
+        style={{
+          "--x": `${x}px`, "--y": `${y}px`,
+          background: "linear-gradient(135deg, #004d59 0%, #004d59dd 35%, #ff6700 100%)",
+          animation: "evalExpand .7s cubic-bezier(.7,0,.2,1) forwards",
+        }}>
+        <div className="absolute inset-0 opacity-10"
+          style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+        <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full blur-3xl" style={{ background: "#feaf00", opacity: 0.25 }} />
+        <div className="absolute -bottom-24 -left-24 w-80 h-80 rounded-full blur-3xl" style={{ background: "#ff6437", opacity: 0.2 }} />
+      </div>
+
+      {/* الورقة اللي بتتطوي في مكان الضغطة */}
+      <div className="absolute rounded-xl bg-white shadow-2xl overflow-hidden"
+        style={{
+          left: x, top: y, width: 70, height: 90, marginLeft: -35, marginTop: -45,
+          animation: "sheetFold 1s .15s both cubic-bezier(.3,.7,.3,1)",
+        }}>
+        <div className="absolute top-0 end-0 w-5 h-5 bg-gradient-to-bl from-[#c9e2e6] to-white" style={{ clipPath: "polygon(0 0, 100% 100%, 0 100%)" }} />
+        <div className="p-3 space-y-1.5 pt-5">
+          <div className="h-1.5 rounded-full bg-[#004d59]/80 w-4/5" />
+          <div className="h-1.5 rounded-full bg-gray-200 w-full" />
+          <div className="h-1.5 rounded-full bg-gray-200 w-3/5" />
+          <div className="h-1.5 rounded-full bg-[#ff6700]/70 w-2/5" />
+        </div>
+      </div>
+
+      {/* الطيارة + الأثر */}
+      <PaperPlaneFlight w={w} h={h} startX={x} startY={y} delay={0.85} duration={1.15} size={Math.min(170, w * 0.4)} />
+
+      {/* النص */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-white px-6 text-center pointer-events-none"
+        style={{ animation: "evalTextOut .35s 1.7s both" }}>
+        <div className="w-20 h-20 rounded-3xl bg-white/15 backdrop-blur-sm border border-white/25 flex items-center justify-center shadow-2xl mb-5"
+          style={{ animation: "evalTextIn .5s .5s both" }}>
+          <Star weight="fill" className="w-10 h-10 text-[#feaf00]" />
+        </div>
+        <h3 className="text-2xl font-black mb-1.5" style={{ animation: "evalTextIn .5s .6s both" }}>
+          {isAr ? "جاري فتح التقييم" : "Opening evaluation"}
+        </h3>
+        <p className="text-sm text-white/75 font-medium" style={{ animation: "evalTextIn .5s .75s both" }}>{data.title}</p>
+      </div>
     </div>
   );
 }
@@ -1667,6 +1840,22 @@ export default function InstructorSessionsPage() {
   const [groupByDate, setGroupByDate] = useState(true);
   const [selectedGroup, setSelectedGroup] = useState("all");
   const [groups, setGroups] = useState([]);
+  const [evalTransition, setEvalTransition] = useState(null);
+
+  // انتقال لصفحة التقييم — بنخزّن أبعاد الشاشة، والتنقل بعد ما الطيارة تخلص
+  const startEvalTransition = useCallback((e, href, title = "") => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    if (evalTransition) return;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const hasPoint = e && (e.clientX || e.clientY);
+    const x = hasPoint ? e.clientX : w / 2;
+    const y = hasPoint ? e.clientY : h / 2;
+    try { router.prefetch(href); } catch {}
+    setEvalTransition({ x, y, w, h, href, title });
+    setTimeout(() => router.push(href), 2050);
+  }, [router, evalTransition]);
 
   const fetchData = useCallback(async (showRefresh = false) => {
     try {
@@ -1678,7 +1867,7 @@ export default function InstructorSessionsPage() {
       ]);
       if (sessRes.success) {
         setSessions(sessRes.data.sessions || []);
-        // ✅ المقابلات (مفيهاش حضور — تقييم على طول)
+        // المقابلات (مفيهاش حضور — تقييم على طول)
         setInterviews(sessRes.data.interviews || []);
         setStats(sessRes.data.stats || null);
         const groupMap = {};
@@ -1713,7 +1902,7 @@ export default function InstructorSessionsPage() {
 
   const today = fmtDateKey(new Date());
 
-  // ✅ كل العناصر (جلسات + مقابلات) في قائمة واحدة
+  // كل العناصر (جلسات + مقابلات) في قائمة واحدة
   const allItems = [...sessions, ...interviews];
   const hasInterviews = interviews.length > 0;
 
@@ -1755,26 +1944,27 @@ export default function InstructorSessionsPage() {
 
   const interviewsNeedEval = interviews.filter(i => i.canEvaluate);
 
+  // الفلاتر: "المقابلات" و"تحتاج تقييم" تاني حاجة بعد "الكل"
   const FILTERS = [
     { id: "all", labelAr: "الكل", labelEn: "All", count: allItems.length },
-    { id: "upcoming", labelAr: "القادمة", labelEn: "Upcoming", count: allItems.filter(s => s.status === "scheduled").length },
-    { id: "completed", labelAr: "المكتملة", labelEn: "Completed", count: allItems.filter(s => s.status === "completed").length },
-    { id: "today", labelAr: "اليوم", labelEn: "Today", count: allItems.filter(s => fmtDateKey(s.scheduledDate) === today).length },
-    { id: "needs_att", labelAr: "تحتاج حضور", labelEn: "Need Attendance", count: sessions.filter(s => s.status === "completed" && !s.attendanceTaken).length },
     ...(hasInterviews ? [
       { id: "interviews", labelAr: "المقابلات", labelEn: "Interviews", count: interviews.length },
       { id: "needs_eval", labelAr: "تحتاج تقييم", labelEn: "Need Evaluation", count: interviewsNeedEval.length },
     ] : []),
+    { id: "upcoming", labelAr: "القادمة", labelEn: "Upcoming", count: allItems.filter(s => s.status === "scheduled").length },
+    { id: "completed", labelAr: "المكتملة", labelEn: "Completed", count: allItems.filter(s => s.status === "completed").length },
+    { id: "today", labelAr: "اليوم", labelEn: "Today", count: allItems.filter(s => fmtDateKey(s.scheduledDate) === today).length },
+    { id: "needs_att", labelAr: "تحتاج حضور", labelEn: "Need Attendance", count: sessions.filter(s => s.status === "completed" && !s.attendanceTaken).length },
     { id: "cancelled", labelAr: "ملغاة/مؤجلة", labelEn: "Cancelled", count: allItems.filter(s => s.status === "cancelled" || s.status === "postponed").length },
   ];
 
-  // ✅ اليوم — بنستثني اللي مقفولة
+  // اليوم — بنستثني اللي مقفولة
   const todayJoinable = sessions.filter(
     s => (s.showJoinButton || s.showAttendanceButton) && !s.sessionIsLocked
   );
   const currentUser = user || { name: isAr ? "مدرس" : "Instructor", email: "", role: "instructor" };
 
-  // ✅ إحصائيات الـ Hold — بتحسب السيشنات المقفولة فعلاً
+  // إحصائيات الـ Hold — بتحسب السيشنات المقفولة فعلاً
   const lockedSessionsCount = sessions.filter(
     (s) => s.sessionIsLocked && s.status !== "completed"
   ).length;
@@ -1791,6 +1981,7 @@ export default function InstructorSessionsPage() {
         key={`iv-${s._id}`}
         interview={s}
         onOpen={setInterviewModal}
+        onEvaluate={(e, href) => startEvalTransition(e, href, s.title)}
         isAr={isAr}
       />
     ) : (
@@ -1839,7 +2030,7 @@ export default function InstructorSessionsPage() {
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-md flex-shrink-0"
                   style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
-                  <Calendar className="w-5 h-5 text-white" />
+                  <Calendar weight="fill" className="w-5 h-5 text-white" />
                 </div>
                 <div>
                   <h1 className="text-base font-black text-gray-900 dark:text-[#e6edf3] leading-none">
@@ -1917,14 +2108,14 @@ export default function InstructorSessionsPage() {
           {/* Stat Cards */}
           {!loading && stats && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
-              <StatCard icon={Calendar} value={stats.total} label={t("إجمالي الجلسات", "Total Sessions")} gradient="linear-gradient(135deg, #004d59, #004d59aa)" />
+              <StatCard icon={Calendar} value={stats.total} label={t("إجمالي الجلسات", "Total Sessions")} gradient="linear-gradient(135deg, #004d59, #0e7c8c)" />
               <StatCard icon={CheckCircle} value={stats.completed} label={t("مكتملة", "Completed")} gradient="linear-gradient(135deg, #10b981, #14b8a6)" />
               <StatCard icon={Clock} value={stats.scheduled} label={t("مجدولة", "Scheduled")} gradient="linear-gradient(135deg, #ff6700, #feaf00)" />
               <StatCard icon={ClipboardList} value={stats.needsAttendance || 0} label={t("تحتاج حضور", "Need Attendance")} gradient="linear-gradient(135deg, #feaf00, #ff6437)" />
             </div>
           )}
 
-          {/* ✅ Hold Banner — بيعرض عدد السيشنات المقفولة */}
+          {/* Hold Banner — بيعرض عدد السيشنات المقفولة */}
           {!loading && anySessionLocked && filter === "all" && (
             <HoldBanner
               isAr={isAr}
@@ -1933,14 +2124,15 @@ export default function InstructorSessionsPage() {
             />
           )}
 
-          {/* ✅ Interviews Need Evaluation Banner — مفيش حضور، تقييم على طول */}
+          {/* Interviews Need Evaluation Banner — مفيش حضور، تقييم على طول */}
           {!loading && interviewsNeedEval.length > 0 && filter === "all" && (
-            <div className="mb-5 rounded-2xl p-4 text-white relative overflow-hidden shadow-lg"
+            <div className="mb-5 rounded-3xl p-4 text-white relative overflow-hidden shadow-lg"
               style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59dd 40%, #ff6700 100%)" }}>
               <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
+              <PaperPlane className="absolute -top-2 end-24 w-24 opacity-20 -rotate-12 pointer-events-none" />
               <div className="relative z-10 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0 border border-white/20">
-                  <Briefcase className="w-5 h-5 text-[#feaf00]" />
+                  <Briefcase weight="fill" className="w-5 h-5 text-[#feaf00]" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-white/60 font-bold">{t("مقابلات", "Interviews")}</p>
@@ -1953,9 +2145,10 @@ export default function InstructorSessionsPage() {
                 </div>
                 {interviewsNeedEval.length === 1 ? (
                   <Link href={interviewEvalHref(interviewsNeedEval[0])}
+                    onClick={(e) => startEvalTransition(e, interviewEvalHref(interviewsNeedEval[0]))}
                     className="flex items-center gap-2 bg-white font-black text-xs px-4 py-2.5 rounded-xl hover:bg-orange-50 transition-all shadow-lg flex-shrink-0"
                     style={{ color: "#ff6700" }}>
-                    <Star className="w-4 h-4" />{t("قيّم الآن", "Evaluate Now")}
+                    <PaperPlaneTilt weight="fill" className="w-4 h-4" />{t("قيّم الآن", "Evaluate Now")}
                   </Link>
                 ) : (
                   <button onClick={() => setFilter("needs_eval")}
@@ -1970,13 +2163,14 @@ export default function InstructorSessionsPage() {
 
           {/* Today's Session Banner */}
           {todayJoinable.length > 0 && filter === "all" && (
-            <div className="mb-5 rounded-2xl p-4 text-white relative overflow-hidden shadow-lg"
+            <div className="mb-5 rounded-3xl p-4 text-white relative overflow-hidden shadow-lg"
               style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59dd 40%, #ff6700 100%)" }}>
               <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
               <div className="absolute -top-8 -right-8 w-32 h-32 bg-[#feaf00]/20 rounded-full blur-2xl" />
+              <PaperPlane className="absolute -top-2 end-24 w-24 opacity-20 -rotate-12 pointer-events-none" />
               <div className="relative z-10 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0 border border-white/20">
-                  <Zap className="w-5 h-5 text-[#feaf00]" />
+                  <Zap weight="fill" className="w-5 h-5 text-[#feaf00]" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-white/60 font-bold">
@@ -1986,8 +2180,9 @@ export default function InstructorSessionsPage() {
                   </p>
                   <p className="font-black text-sm truncate">{todayJoinable[0].title}</p>
                   {todayJoinable[0].isOffline && todayJoinable[0].locationInfo?.placeName && (
-                    <p className="text-[11px] text-white/70 truncate mt-0.5">
-                      📍 {todayJoinable[0].locationInfo.placeName}
+                    <p className="text-[11px] text-white/70 truncate mt-0.5 flex items-center gap-1">
+                      <MapPin weight="fill" className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate">{todayJoinable[0].locationInfo.placeName}</span>
                     </p>
                   )}
                 </div>
@@ -1996,14 +2191,14 @@ export default function InstructorSessionsPage() {
                   <a href={todayJoinable[0].meetingLink} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-2 bg-white font-black text-xs px-4 py-2.5 rounded-xl hover:bg-orange-50 transition-all shadow-lg flex-shrink-0"
                     style={{ color: "#ff6700" }}>
-                    <Video className="w-4 h-4" />{t("ابدأ الآن", "Start Now")}
+                    <Video weight="fill" className="w-4 h-4" />{t("ابدأ الآن", "Start Now")}
                   </a>
                 )}
                 {todayJoinable[0].isOffline && (
                   <Link href={`/instructor/attendance?session=${todayJoinable[0]._id}`}
                     className="flex items-center gap-2 bg-white font-black text-xs px-4 py-2.5 rounded-xl hover:bg-orange-50 transition-all shadow-lg flex-shrink-0"
                     style={{ color: "#ff6700" }}>
-                    <ClipboardList className="w-4 h-4" />{t("تسجيل الحضور", "Attendance")}
+                    <ClipboardList weight="fill" className="w-4 h-4" />{t("تسجيل الحضور", "Attendance")}
                   </Link>
                 )}
               </div>
@@ -2012,10 +2207,10 @@ export default function InstructorSessionsPage() {
 
           {/* Needs Attendance Warning */}
           {filter === "all" && !loading && sessions.filter(s => s.status === "completed" && !s.attendanceTaken).length > 0 && (
-            <div className="mb-5 bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border border-[#feaf00]/30 dark:border-[#feaf00]/20 rounded-2xl p-4">
+            <div className="mb-5 bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border border-[#feaf00]/30 dark:border-[#feaf00]/20 rounded-3xl p-4">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#feaf00]/20 dark:bg-[#feaf00]/10 flex items-center justify-center flex-shrink-0 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
-                  <ClipboardList className="w-4 h-4 text-[#f67d00] dark:text-[#feaf00]" />
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#feaf00] to-[#f67d00] flex items-center justify-center flex-shrink-0 shadow-md">
+                  <ClipboardList weight="fill" className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-black text-[#f67d00] dark:text-[#feaf00]">
@@ -2038,7 +2233,7 @@ export default function InstructorSessionsPage() {
 
           {!loading && error && (
             <div className="text-center py-16">
-              <div className="w-16 h-16 rounded-2xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-4 border border-red-200 dark:border-red-800/30">
+              <div className="w-16 h-16 rounded-3xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-4 border border-red-200 dark:border-red-800/30">
                 <AlertCircle className="w-8 h-8 text-red-400" />
               </div>
               <p className="text-gray-500 mb-4">{error}</p>
@@ -2052,7 +2247,7 @@ export default function InstructorSessionsPage() {
 
           {!loading && !error && sorted.length === 0 && (
             <div className="text-center py-20">
-              <div className="w-20 h-20 mx-auto rounded-2xl bg-gray-100 dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] flex items-center justify-center mb-4">
+              <div className="w-20 h-20 mx-auto rounded-3xl bg-gray-100 dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] flex items-center justify-center mb-4">
                 <Calendar className="w-10 h-10 text-gray-300 dark:text-[#6e7681]" />
               </div>
               <p className="text-gray-500 dark:text-[#8b949e] font-bold">
@@ -2094,9 +2289,11 @@ export default function InstructorSessionsPage() {
         <InterviewModal
           interview={interviewModal}
           onClose={() => setInterviewModal(null)}
+          onEvaluate={(e, href) => startEvalTransition(e, href, interviewModal.title)}
           isAr={isAr}
         />
       )}
+      <EvalTransitionOverlay data={evalTransition} isAr={isAr} />
       {requestAccessSession && (
         <RequestAccessModal
           session={requestAccessSession}

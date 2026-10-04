@@ -31,7 +31,6 @@ import {
 } from "lucide-react";
 import { useLocale } from "@/app/context/LocaleContext";
 import { useI18n } from "@/i18n/I18nProvider";
-import Spline from '@splinetool/react-spline';
 
 
 // ============ Type Definitions ============
@@ -471,8 +470,9 @@ export default function StudentDashboard() {
                 <div className="absolute inset-0 rounded-3xl opacity-60 blur-md group-hover:opacity-80 transition-opacity duration-500"
                   style={{ background: "linear-gradient(135deg, #000000, #333333, #666666)" }} />
 
+                {/* 🆕 الخلفية الغامقة اتضافت هنا بدل الـ Spline (كانت هي اللي بتدي الخلفية) */}
                 <div className="relative rounded-3xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300"
-                  style={{ height: "400px" }}>
+                  style={{ height: "400px", background: "linear-gradient(135deg, #000000, #333333, #666666)" }}>
 
                   {/* Dot Pattern Layer - White dots */}
                   <div className="absolute inset-0 opacity-10 z-5 pointer-events-none"
@@ -515,14 +515,6 @@ export default function StudentDashboard() {
                         <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
                       </span>
                     </Link>
-                  </div>
-
-                  {/* Spline 3D */}
-                  <div className="absolute inset-0 z-0">
-                    <Spline
-                      scene="https://prod.spline.design/USb3ytAkb8CmdhNW/scene.splinecode"
-                      style={{ width: "100%", height: "100%", pointerEvents: "all" }}
-                    />
                   </div>
 
                 </div>
