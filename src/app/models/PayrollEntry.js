@@ -1,32 +1,53 @@
 // models/PayrollEntry.js
 import mongoose from "mongoose";
 
-// ✅ سطر واحد لكل (مدرس + سيشن). كل الأرقام هنا snapshot ثابت وقت الإنشاء:
+// ✅ سطر واحد لكل (مدرس + سيشن) أو (مدرس + مقابلة).
+// كل الأرقام هنا snapshot ثابت وقت الإنشاء:
 // السعر، المدة، المبلغ، وبدل المواصلات. مفيش حاجة بتتحسب من تاني وقت العرض.
 //
 // ⛔️ مهم: الـ Refund بتاع الطالب مبيلمسش أي entry هنا خالص — المدرس خد حقه
 // عن الشغل اللي اتعمل، والـ refund بيتسجل كتكلفة على الشركة في نظام الفواتير.
 const PayrollEntrySchema = new mongoose.Schema(
   {
+    // ✅ نوع المصدر: سيشن أو مقابلة
+    sourceType: {
+      type: String,
+      enum: ["session", "interview"],
+      default: "session",
+      index: true,
+    },
+
     instructorId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
       index: true,
     },
+
+    // ✅ sessionId بقى مش required — مطلوب بس لو sourceType = session
+    // (التحقق في pre("validate") تحت)
     sessionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Session",
-      required: true,
+      default: null,
       index: true,
     },
+
+    // ✅ جديد: للمقابلات — مطلوب بس لو sourceType = interview
+    interviewId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Interview",
+      default: null,
+      index: true,
+    },
+
     groupId: { type: mongoose.Schema.Types.ObjectId, ref: "Group", default: null },
     courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", default: null },
 
     sessionTitle: { type: String, default: "" },
     groupName: { type: String, default: "" },
 
-    // ✅ تاريخ السيشن — هو الأساس في حساب "أول سيشن offline في اليوم"
+    // ✅ تاريخ السيشن/المقابلة — هو الأساس في حساب "أول offline في اليوم"
     sessionDate: { type: Date, required: true, index: true },
 
     deliveryMode: {
@@ -75,7 +96,13 @@ const PayrollEntrySchema = new mongoose.Schema(
       createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       source: {
         type: String,
-        enum: ["admin_complete", "instructor_evaluation", "manual", "recalculation"],
+        enum: [
+          "admin_complete",
+          "instructor_evaluation",
+          "interview_evaluation",
+          "manual",
+          "recalculation",
+        ],
         default: "manual",
       },
       approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -89,13 +116,40 @@ const PayrollEntrySchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// ✅ بديل الـ required: كل نوع مصدر لازم يكون معاه الـ id الخاص بيه
+PayrollEntrySchema.pre("validate", function () {
+  if (this.sourceType === "session" && !this.sessionId) {
+    this.invalidate("sessionId", "sessionId is required for session payroll");
+  }
+  if (this.sourceType === "interview" && !this.interviewId) {
+    this.invalidate("interviewId", "interviewId is required for interview payroll");
+  }
+});
+
 // ✅ منع التكرار: سطر واحد بس لكل مدرس في كل سيشن
+// partial على sessionId عشان سطور المقابلات (sessionId = null) مايتصادموش
 PayrollEntrySchema.index(
   { instructorId: 1, sessionId: 1 },
   {
     unique: true,
     name: "unique_payroll_per_instructor_session",
-    partialFilterExpression: { isDeleted: false },
+    partialFilterExpression: {
+      isDeleted: false,
+      sessionId: { $type: "objectId" },
+    },
+  },
+);
+
+// ✅ منع التكرار: سطر واحد بس لكل مدرس في كل مقابلة
+PayrollEntrySchema.index(
+  { instructorId: 1, interviewId: 1 },
+  {
+    unique: true,
+    name: "unique_payroll_per_instructor_interview",
+    partialFilterExpression: {
+      isDeleted: false,
+      interviewId: { $type: "objectId" },
+    },
   },
 );
 
@@ -106,7 +160,7 @@ PayrollEntrySchema.pre("save", function () {
   this.metadata.updatedAt = new Date();
 });
 
-// ✅ ملخص مالي لمدرس في فترة
+// ✅ ملخص مالي لمدرس في فترة (بيشمل السيشنات والمقابلات)
 PayrollEntrySchema.statics.getInstructorSummary = async function (
   instructorId,
   { from, to, status } = {},

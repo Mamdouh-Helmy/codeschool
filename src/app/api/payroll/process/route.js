@@ -1,9 +1,14 @@
 // app/api/payroll/process/route.js
-// بيستخدم لما مدرس مكانش ليه سعر وقت ما السيشن اكتملت، أو لما الأدمن يعدّل
-// الوقت الفعلي للسيشن ويحب يعيد التسجيل.
+// بيستخدم لما مدرس مكانش ليه سعر وقت ما السيشن/المقابلة اكتملت، أو لما الأدمن
+// يعدّل الوقت الفعلي ويحب يعيد التسجيل.
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
-import { processSessionPayroll, cancelSessionPayroll } from "../../../../lib/payroll";
+import {
+  processSessionPayroll,
+  cancelSessionPayroll,
+  processInterviewPayroll,
+  cancelInterviewPayroll,
+} from "../../../../lib/payroll";
 import { requireAdmin } from "@/utils/authMiddleware";
 
 export async function POST(req) {
@@ -11,34 +16,56 @@ export async function POST(req) {
     const authCheck = await requireAdmin(req);
     if (!authCheck.authorized) return authCheck.response;
 
-    const { sessionId, actualStartTime, actualEndTime, recalculate = false } =
-      await req.json();
+    const {
+      sessionId,
+      interviewId,
+      actualStartTime,
+      actualEndTime,
+      recalculate = false,
+    } = await req.json();
 
-    if (!sessionId) {
+    if (!sessionId && !interviewId) {
       return NextResponse.json(
-        { success: false, message: "sessionId مطلوب" },
+        { success: false, message: "sessionId أو interviewId مطلوب" },
         { status: 400 },
       );
     }
 
     await connectDB();
+    const actedBy = authCheck.user.id;
 
-    // ✅ إعادة الحساب = إلغاء السطور القديمة الأول، بعدين تسجيل من جديد
-    if (recalculate) {
-      await cancelSessionPayroll(sessionId, {
-        actedBy: authCheck.user.id,
-        reason: "إعادة حساب من الأدمن",
+    let result;
+
+    if (interviewId) {
+      // ✅ إعادة الحساب = إلغاء السطور القديمة الأول، بعدين تسجيل من جديد
+      if (recalculate) {
+        await cancelInterviewPayroll(interviewId, {
+          actedBy,
+          reason: "إعادة حساب من الأدمن",
+        });
+      }
+      result = await processInterviewPayroll({
+        interviewId,
+        actedBy,
+        source: "manual",
+        force: true,
+      });
+    } else {
+      if (recalculate) {
+        await cancelSessionPayroll(sessionId, {
+          actedBy,
+          reason: "إعادة حساب من الأدمن",
+        });
+      }
+      result = await processSessionPayroll({
+        sessionId,
+        actualStartTime,
+        actualEndTime,
+        actedBy,
+        source: "manual",
+        force: true,
       });
     }
-
-    const result = await processSessionPayroll({
-      sessionId,
-      actualStartTime,
-      actualEndTime,
-      actedBy: authCheck.user.id,
-      source: "manual",
-      force: true,
-    });
 
     return NextResponse.json({ success: true, data: result });
   } catch (error) {

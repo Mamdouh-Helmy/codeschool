@@ -408,9 +408,6 @@ export async function GET(req) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// POST — إنشاء جروب تعويضي + تفعيله + إرسال الرسائل (request واحد)
-// ═══════════════════════════════════════════════════════════════════════════
 export async function POST(req) {
   try {
     const authCheck = await requireAdmin(req);
@@ -486,7 +483,6 @@ export async function POST(req) {
     }
 
     // ─── 1. تحقق من وجود الطالب ─────────────────────────────────────────
-    // ✅ ضفنا studentType عشان نرجّعه في الـ response النهائي
     const student = await Student.findById(studentId).lean();
     if (!student) {
       return NextResponse.json(
@@ -496,6 +492,10 @@ export async function POST(req) {
     }
 
     const isAdultStudent = student.studentType === "adults";
+
+    // ✅ نوع الجروب التعويضي = نوع الطالب (الجروب فيه طالب واحد بس)
+    //    ده بيتحدد صراحةً عشان الـ default بتاع الـ schema ("kids") مايتطبقش غلط
+    const resolvedGroupType = isAdultStudent ? "adults" : "kids";
 
     // ═══════════════════════════════════════════════════════════════════
     // ✅ فحص الرصيد — نرفض لو مفيش باكدج أو الرصيد صفر
@@ -797,6 +797,10 @@ export async function POST(req) {
       code: groupCode,
       courseId: course._id || originalGroup.courseId,
       courseSnapshot,
+
+      // ✅ FIX: نوع الجروب = نوع الطالب (كان بيتساب للـ default "kids")
+      groupType: resolvedGroupType,
+
       instructors: [
         {
           userId: instructorId,
@@ -923,17 +927,14 @@ export async function POST(req) {
     };
 
     console.log(
-      `✅ [Make-up] Group created & activated: ${newGroup.code} for student ${student.personalInfo?.fullName} (${deliveryMode})${isAdultStudent ? " [ADULT — no guardian]" : ""}`,
+      `✅ [Make-up] Group created & activated: ${newGroup.code} for student ${student.personalInfo?.fullName} (${deliveryMode}, ${resolvedGroupType})${isAdultStudent ? " [ADULT — no guardian]" : ""}`,
     );
 
     return NextResponse.json(
       {
         success: true,
         message: "تم إنشاء الحصة التعويضية وتفعيلها بنجاح",
-        // ✅ نرجّع isAdult عشان الفرونت يتأكد
         isAdult: isAdultStudent,
-        // نتيجة كل رسالة: { student | guardian | instructor: { sent, error } }
-        // ✅ للطالب البالغ: guardian = { sent: false, error: "skipped_adult_student" }
         notifications: {
           success: notifications.success,
           reason: notifications.reason || null,
@@ -948,6 +949,8 @@ export async function POST(req) {
             code: populatedGroup.code,
             status: populatedGroup.status,
             isMakeupGroup: true,
+            // ✅ نرجّع النوع الفعلي المتخزّن
+            groupType: populatedGroup.groupType || resolvedGroupType,
             deliveryMode: populatedGroup.deliveryMode,
             course: populatedGroup.courseId,
             instructors: (populatedGroup.instructors || []).map((i) => ({
@@ -964,7 +967,6 @@ export async function POST(req) {
             _id: student._id,
             name: student.personalInfo?.fullName || "",
             enrollmentNumber: student.enrollmentNumber || "",
-            // ✅ نرجّع نوع الطالب
             studentType: student.studentType || "kids",
             isAdult: isAdultStudent,
           },

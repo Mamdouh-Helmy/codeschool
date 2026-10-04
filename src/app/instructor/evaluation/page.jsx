@@ -1006,16 +1006,14 @@ function SessionEvaluationPage() {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ✅ Interview Evaluation — مفيش حضور، تقييم على طول
-//    طفل → الرسالة لولي الأمر | بالغ → الرسالة للطالب نفسه
-// ═══════════════════════════════════════════════════════════════════════════
 function InterviewEvaluation({ interviewId }) {
   const router = useRouter();
   const { locale } = useLocale();
   const isAr = locale === "ar";
   const t = (ar, en) => (isAr ? ar : en);
   const url = `/api/instructor/interviews/${interviewId}/evaluation`;
+
+  const DEFAULT_RATINGS = { commitment: 3, understanding: 3, taskExecution: 3, participation: 3 };
 
   const call = (method, body) =>
     fetch(url, {
@@ -1027,41 +1025,58 @@ function InterviewEvaluation({ interviewId }) {
 
   const [info, setInfo] = useState(null);
   const [decision, setDecision] = useState(null);
+  const [ratings, setRatings] = useState(DEFAULT_RATINGS);
   const [comment, setComment] = useState("");
-  const [preview, setPreview] = useState("");
+  const [recordingLink, setRecordingLink] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [done, setDone] = useState(false);
 
   useEffect(() => {
-    call("GET").then((d) => {
-      if (!d.success) return setErr(d.message || d.error || "Error");
-      setInfo(d.data);
-      if (d.data.evaluation) {
-        setDecision(d.data.evaluation.decision);
-        setComment(d.data.evaluation.instructorComment || "");
-      }
-    }).catch(() => setErr(t("خطأ في الاتصال", "Connection error")));
+    call("GET")
+      .then((d) => {
+        if (!d.success) return setErr(d.message || d.error || "Error");
+        setInfo(d.data);
+        if (d.data.evaluation) {
+          setDecision(d.data.evaluation.decision);
+          setComment(d.data.evaluation.instructorComment || "");
+          const r = d.data.evaluation.ratings;
+          if (r) {
+            setRatings({
+              commitment: r.commitment || 3,
+              understanding: r.understanding || 3,
+              taskExecution: r.taskExecution || 3,
+              participation: r.participation || 3,
+            });
+          }
+        }
+        setRecordingLink(d.data.interview?.recordingLink || "");
+      })
+      .catch(() => setErr(t("خطأ في الاتصال", "Connection error")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interviewId]);
 
-  useEffect(() => {
-    if (!decision || !info?.canEvaluate) { setPreview(""); return; }
-    const id = setTimeout(() => {
-      call("POST", { decision, instructorComment: comment })
-        .then((d) => setPreview(d.success ? d.data.content : ""))
-        .catch(() => setPreview(""));
-    }, 400);
-    return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decision, comment, info]);
+  const handleRatingChange = (key, value) =>
+    setRatings((prev) => ({ ...prev, [key]: value }));
+
+  const iv = info?.interview || {};
+  const isOffline = iv.isOffline === true || iv.deliveryMode === "offline";
 
   const submit = async () => {
+    if (!decision) return;
     setBusy(true);
     setErr("");
     try {
-      const d = await call("PATCH", { decision, instructorComment: comment });
-      if (d.success) router.push("/instructor/sessions");
-      else setErr(d.error || d.message || t("فشل الحفظ", "Failed to save"));
+      const payload = { decision, instructorComment: comment, ratings };
+      if (!isOffline && recordingLink.trim()) payload.recordingLink = recordingLink.trim();
+
+      const d = await call("PATCH", payload);
+      if (d.success) {
+        setDone(true);
+        setTimeout(() => router.push("/instructor/sessions"), 2500);
+      } else {
+        setErr(d.error || d.message || t("فشل الحفظ", "Failed to save"));
+      }
     } catch {
       setErr(t("خطأ في الاتصال", "Connection error"));
     } finally {
@@ -1069,74 +1084,344 @@ function InterviewEvaluation({ interviewId }) {
     }
   };
 
+  // ── Loading / error ──
   if (!info) {
     return (
-      <div className="p-8 text-center text-sm" dir={isAr ? "rtl" : "ltr"}>
-        {err || <Loader2 className="w-5 h-5 animate-spin mx-auto" />}
+      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fb] dark:bg-[#0a0f17]" dir={isAr ? "rtl" : "ltr"}>
+        {err ? (
+          <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 rounded-2xl border border-red-200 dark:border-red-800/40">
+            <AlertCircle className="w-5 h-5 text-red-500" />
+            <p className="text-sm font-bold text-red-700 dark:text-red-400">{err}</p>
+          </div>
+        ) : (
+          <Loader2 className="w-6 h-6 animate-spin text-[#ff6700]" />
+        )}
       </div>
     );
   }
 
-  const who = info.student.isAdult
-    ? t("الطالب", "the student")
-    : t("ولي الأمر", "the guardian");
+  // ── Derived ──
+  const isAdult = !!info.student?.isAdult;
+  const recipientLabel = isAdult ? t("الطالب نفسه", "the student") : t("ولي الأمر", "the guardian");
+  const hasLink = !!recordingLink.trim();
+  const cfg = decision ? DECISIONS[decision] : null;
+  const canSubmit = !!decision && !busy && info.canEvaluate;
+
+  // ── Success ──
+  if (done) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fb] dark:bg-[#0a0f17]" dir={isAr ? "rtl" : "ltr"}>
+        <div className="text-center px-6 max-w-sm w-full">
+          <div className="relative w-24 h-24 mx-auto mb-6">
+            <div className="absolute inset-0 rounded-full opacity-20 blur-xl animate-pulse"
+              style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }} />
+            <div className="relative w-24 h-24 rounded-full flex items-center justify-center shadow-2xl"
+              style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
+              <CheckCheck className="w-12 h-12 text-white" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-black text-gray-900 dark:text-[#e6edf3] mb-2">
+            {t("تم حفظ التقييم 🎉", "Evaluation Saved 🎉")}
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-[#8b949e] mb-1">
+            {t(`الرسالة اتبعتت لـ${recipientLabel}`, `The message was sent to ${recipientLabel}`)}
+          </p>
+          <p className="text-xs text-gray-400 dark:text-[#6e7681]">{t("جاري التحويل...", "Redirecting...")}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f8f9fb] dark:bg-[#0a0f17]" dir={isAr ? "rtl" : "ltr"}>
-      <div className="max-w-2xl mx-auto p-4 space-y-4">
-        <button onClick={() => router.push("/instructor/sessions")}
-          className="text-xs font-bold text-gray-500 hover:text-[#ff6700]">
-          {t("← رجوع", "← Back")}
-        </button>
 
-        <h1 className="font-black text-lg text-gray-900 dark:text-[#e6edf3]">
-          {info.interview.title} — {info.student.name}
-        </h1>
-        <p className="text-xs text-gray-500 dark:text-[#8b949e]">
-          {t(
-            `المقابلة من غير حضور — الرسالة هتروح لـ${who}`,
-            `No attendance for interviews — the message goes to ${who}`
-          )}
-        </p>
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-30 bg-white/95 dark:bg-[#161b22]/95 backdrop-blur-md border-b border-gray-200 dark:border-[#30363d] shadow-sm">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
+          <button onClick={() => router.push("/instructor/sessions")}
+            className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-[#21262d] flex items-center justify-center text-gray-500 transition-all flex-shrink-0 group hover:bg-[#ff670015] hover:text-[#ff6700]">
+            {isAr
+              ? <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+              : <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />}
+          </button>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md"
+            style={{ background: "linear-gradient(135deg, #feaf00, #f67d00)" }}>
+            <Star className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-black text-sm text-gray-900 dark:text-[#e6edf3] truncate leading-none mb-0.5">
+              {t("تقييم المقابلة", "Interview Evaluation")}
+            </h1>
+            <p className="text-xs text-gray-400 dark:text-[#6e7681] truncate">{info.student?.name}</p>
+          </div>
+        </div>
+      </div>
 
-        {!info.canEvaluate && (
-          <p className="text-xs font-bold text-red-600">
-            {t("المقابلة دي مش متاحة للتقييم حاليًا", "This interview can't be evaluated now")}
-          </p>
-        )}
+      <div className="max-w-2xl mx-auto px-4 pt-5 pb-40 space-y-5">
 
-        <div className="grid grid-cols-3 gap-2">
-          {["pass", "review", "repeat"].map((k) => (
-            <button key={k} onClick={() => setDecision(k)}
-              className={`py-3 rounded-xl text-xs font-black border ${decision === k ? "text-white border-transparent" : "bg-white dark:bg-[#161b22] text-gray-700 dark:text-[#c9d1d9]"}`}
-              style={decision === k ? { background: "linear-gradient(135deg,#004d59,#ff6700)" } : {}}>
-              {isAr ? DECISIONS[k].ar : DECISIONS[k].en}
-            </button>
-          ))}
+        {/* Hero */}
+        <div className="relative group">
+          <div className="absolute inset-0 rounded-3xl opacity-60 blur-md group-hover:opacity-80 transition-opacity duration-500"
+            style={{ background: "linear-gradient(135deg, #004d59, #ff6700, #feaf00)" }} />
+          <div className="relative rounded-3xl p-5 overflow-hidden shadow-lg"
+            style={{ background: "linear-gradient(135deg, #004d59 0%, #004d59dd 40%, #ff6700 100%)" }}>
+            <div className="absolute inset-0 opacity-10"
+              style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+            <div className="absolute top-0 right-0 w-48 h-48 rounded-full blur-3xl animate-pulse"
+              style={{ background: "#feaf00", opacity: 0.15 }} />
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <Sparkles className="w-4 h-4 text-[#feaf00] animate-pulse" />
+                <span className="text-[#feaf00] font-medium text-xs">{t("تقييم المقابلة", "Interview Evaluation")}</span>
+                <span className="bg-white/20 backdrop-blur-sm text-white text-[10px] font-black px-2 py-0.5 rounded-full border border-white/30 flex items-center gap-1">
+                  {isOffline
+                    ? <><MapPin className="w-2.5 h-2.5" />{t("Offline", "Offline")}</>
+                    : <><Video className="w-2.5 h-2.5" />{t("Online", "Online")}</>}
+                </span>
+                <span className="bg-white/20 backdrop-blur-sm text-white text-[10px] font-black px-2 py-0.5 rounded-full border border-white/30 flex items-center gap-1">
+                  <User className="w-2.5 h-2.5" />{isAdult ? t("بالغ", "Adult") : t("طفل", "Kid")}
+                </span>
+              </div>
+              <h2 className="text-xl font-black text-white mb-1 truncate">{iv.title}</h2>
+              <p className="text-white/70 text-sm truncate">{info.student?.name}</p>
+              {iv.scheduledDate && (
+                <p className="text-white/50 text-xs mt-1">
+                  {new Date(iv.scheduledDate).toLocaleDateString(isAr ? "ar-EG" : "en-US", {
+                    weekday: "long", year: "numeric", month: "long", day: "numeric",
+                  })}
+                  {iv.startTime && ` · ${iv.startTime}${iv.endTime ? ` – ${iv.endTime}` : ""}`}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
 
-        <textarea
-          value={comment}
-          onChange={(e) => setComment(e.target.value.slice(0, MAX_COMMENT_LENGTH))}
-          rows={5}
-          className="w-full rounded-xl border p-3 text-sm bg-white dark:bg-[#161b22] text-gray-800 dark:text-[#e6edf3]"
-          placeholder={t("تعليق المُقابِل", "Interviewer comment")}
-        />
+        {/* Recipient info */}
+        <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#004d59]/5 dark:bg-[#004d59]/10 border border-[#004d59]/20 dark:border-[#004d59]/30">
+          <div className="w-9 h-9 rounded-xl bg-[#004d59]/10 dark:bg-[#004d59]/20 flex items-center justify-center flex-shrink-0 border border-[#004d59]/20">
+            <Send className="w-4 h-4 text-[#004d59] dark:text-teal-400" />
+          </div>
+          <div>
+            <p className="text-sm font-black text-[#004d59] dark:text-teal-400">
+              {t("مين هيستلم التقييم؟", "Who receives the evaluation?")}
+            </p>
+            <p className="text-xs text-[#004d59]/70 dark:text-teal-400/70 mt-0.5 leading-relaxed">
+              {t(
+                `المقابلة من غير حضور — رسالة النتيجة هتروح لـ${recipientLabel} على طول بعد الحفظ.`,
+                `No attendance for interviews — the result message goes to ${recipientLabel} right after saving.`
+              )}
+            </p>
+          </div>
+        </div>
 
-        {preview && (
-          <pre className="whitespace-pre-wrap text-xs p-3 rounded-xl bg-gray-50 dark:bg-[#21262d] text-gray-700 dark:text-[#c9d1d9]">
-            {preview}
-          </pre>
+        {!info.canEvaluate && (
+          <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 rounded-2xl border border-red-200 dark:border-red-800/40">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+            <p className="text-xs font-bold text-red-700 dark:text-red-400">
+              {t("المقابلة دي مش متاحة للتقييم حاليًا", "This interview can't be evaluated right now")}
+            </p>
+          </div>
         )}
 
-        {err && <p className="text-xs font-bold text-red-600">{err}</p>}
+        {/* Decision */}
+        <div className={`bg-white dark:bg-[#161b22] rounded-2xl border overflow-hidden shadow-sm transition-all
+          ${cfg ? `${cfg.border} shadow-lg` : "border-gray-100 dark:border-[#30363d]"}`}>
+          {cfg && (
+            <div className="h-1 w-full"
+              style={{ background: `linear-gradient(90deg, ${cfg.solidColor}, ${cfg.solidTo})` }} />
+          )}
+          <div className="p-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md"
+                style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
+                <BarChart3 className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">{t("النتيجة", "Result")}</p>
+                <p className="text-[11px] text-gray-400 dark:text-[#6e7681]">{t("اختار نتيجة المقابلة", "Choose the interview outcome")}</p>
+              </div>
+            </div>
 
-        <button disabled={!decision || busy || !info.canEvaluate} onClick={submit}
-          className="w-full py-3 rounded-xl text-white font-black disabled:opacity-50"
-          style={{ background: "linear-gradient(135deg,#004d59,#ff6700)" }}>
-          {busy ? t("جاري الحفظ...", "Saving...") : t("حفظ التقييم وإرسال", "Save & Send")}
-        </button>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {Object.entries(DECISIONS).map(([key, c]) => {
+                const BtnIcon = c.icon;
+                const active = decision === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setDecision(active ? null : key)}
+                    className={`relative flex sm:flex-col items-center sm:text-center gap-3 sm:gap-2 p-3.5 rounded-2xl border text-start transition-all duration-200 overflow-hidden active:scale-95 disabled:opacity-50
+                      ${active
+                        ? "text-white shadow-lg border-transparent"
+                        : `${c.light} ${c.border} ${c.text} hover:shadow-md hover:-translate-y-0.5`}`}
+                    style={active ? { background: `linear-gradient(135deg, ${c.solidColor}, ${c.solidTo})` } : {}}>
+                    {active && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-10 animate-shimmer" />
+                    )}
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${active ? "bg-white/20" : "bg-white/70 dark:bg-white/5"}`}>
+                      <BtnIcon className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 sm:flex-none min-w-0">
+                      <p className="text-xs font-black leading-tight">{isAr ? c.ar : c.en}</p>
+                      <p className={`text-[10px] mt-1 leading-snug ${active ? "text-white/80" : "opacity-70"}`}>
+                        {isAr ? c.descAr : c.descEn}
+                      </p>
+                    </div>
+                    {active && <CheckCircle2 className="w-4 h-4 flex-shrink-0 sm:absolute sm:top-2 sm:end-2" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ⭐ Performance rating — نفس تقييم السيشن العادية */}
+            {cfg && (
+              <div className="mt-3 p-3 bg-gray-50 dark:bg-[#21262d] rounded-xl border border-gray-100 dark:border-[#30363d] space-y-2">
+                <p className="text-[10px] font-black text-gray-500 dark:text-[#6e7681] uppercase tracking-wide mb-2">
+                  {t("تقييم الأداء", "Performance Rating")}
+                </p>
+                {RATING_CRITERIA.map((criterion) => (
+                  <div key={criterion.key} className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold text-gray-600 dark:text-[#8b949e] flex-1 truncate">
+                      {isAr ? criterion.labelAr : criterion.labelEn}
+                    </span>
+                    <StarRating
+                      value={ratings[criterion.key] || 3}
+                      onChange={(val) => handleRatingChange(criterion.key, val)}
+                      disabled={busy}
+                      size="sm"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Comment */}
+        <div className="bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#30363d] p-4 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md"
+              style={{ background: "linear-gradient(135deg, #feaf00, #f67d00)" }}>
+              <MessageSquarePlus className="w-4 h-4 text-white" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">{t("تعليق المُقابِل", "Interviewer Comment")}</p>
+              <p className="text-[11px] text-gray-400 dark:text-[#6e7681]">{t("اختياري — بيظهر في رسالة التقييم", "Optional — included in the evaluation message")}</p>
+            </div>
+          </div>
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value.slice(0, MAX_COMMENT_LENGTH))}
+            rows={5}
+            disabled={busy}
+            dir={isAr ? "rtl" : "ltr"}
+            placeholder={t("اكتب ملاحظاتك عن المقابلة هنا...", "Write your notes about the interview...")}
+            className="w-full text-sm rounded-2xl border-2 px-4 py-3.5 resize-none outline-none transition-all bg-gray-50 dark:bg-[#21262d] text-gray-800 dark:text-[#e6edf3] placeholder-gray-400 font-medium leading-relaxed border-gray-100 dark:border-[#30363d] focus:border-[#ff670060]"
+          />
+          <div className="flex justify-end mt-1.5 px-1">
+            <span className={`text-[11px] font-bold ${MAX_COMMENT_LENGTH - comment.length < 30 ? "text-[#ff6437]" : "text-gray-400 dark:text-[#6e7681]"}`}>
+              {comment.length}/{MAX_COMMENT_LENGTH}
+            </span>
+          </div>
+        </div>
+
+        {/* Recording link — Online only */}
+        {!isOffline ? (
+          <div className={`bg-white dark:bg-[#161b22] rounded-2xl border p-4 shadow-sm transition-all
+            ${hasLink ? "border-[#004d5940] dark:border-[#ff670040]" : "border-gray-100 dark:border-[#30363d]"}`}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md flex-shrink-0"
+                style={{ background: "linear-gradient(135deg, #004d59, #ff6437)" }}>
+                <Link2 className="w-4 h-4 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-black text-gray-900 dark:text-[#e6edf3]">{t("لينك تسجيل المقابلة", "Interview Recording Link")}</p>
+                <p className="text-[11px] text-gray-400 dark:text-[#6e7681]">
+                  {t(`اختياري — بيتبعت لـ${recipientLabel} مع التقييم`, `Optional — sent to ${recipientLabel} with the evaluation`)}
+                </p>
+              </div>
+              {hasLink && (
+                <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-[#004d5910] dark:bg-[#ff670015] text-[#004d59] dark:text-[#ff6700] border border-[#004d5930] dark:border-[#ff670030] flex-shrink-0">
+                  {t("جاهز", "Ready")}
+                </span>
+              )}
+            </div>
+            <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-all
+              ${hasLink ? "border-[#004d5940] dark:border-[#ff670040] bg-[#004d5905] dark:bg-[#ff670005]" : "border-gray-100 dark:border-[#30363d] bg-gray-50 dark:bg-[#21262d]"}`}>
+              <Video className={`w-4 h-4 flex-shrink-0 ${hasLink ? "text-[#ff6700]" : "text-gray-400"}`} />
+              <input
+                type="url"
+                value={recordingLink}
+                onChange={(e) => setRecordingLink(e.target.value)}
+                disabled={busy}
+                dir="ltr"
+                placeholder={t("الصق لينك التسجيل هنا...", "Paste recording link here...")}
+                className="flex-1 bg-transparent text-sm text-gray-700 dark:text-[#c9d1d9] placeholder-gray-400 outline-none min-w-0 font-mono"
+              />
+              {hasLink && (
+                <button onClick={() => setRecordingLink("")} disabled={busy}
+                  className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-[#ff6437] flex-shrink-0">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 p-4 rounded-2xl bg-[#feaf00]/10 dark:bg-[#feaf00]/5 border border-[#feaf00]/30 dark:border-[#feaf00]/20">
+            <div className="w-9 h-9 rounded-xl bg-[#feaf00]/20 flex items-center justify-center flex-shrink-0 border border-[#feaf00]/30">
+              <MapPin className="w-4 h-4 text-[#f67d00] dark:text-[#feaf00]" />
+            </div>
+            <div>
+              <p className="text-sm font-black text-[#f67d00] dark:text-[#feaf00]">{t("مقابلة Offline (حضورية)", "Offline Interview")}</p>
+              <p className="text-xs text-[#f67d00]/80 dark:text-[#feaf00]/70 mt-0.5 leading-relaxed">
+                {t("مفيش لينك تسجيل — التقييم بس.", "No recording link — evaluation only.")}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {err && (
+          <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800/40">
+            <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+            <p className="text-xs font-bold text-red-600 dark:text-red-400">{err}</p>
+          </div>
+        )}
       </div>
+
+      {/* Sticky submit bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 p-3 sm:p-4">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white/95 dark:bg-[#161b22]/95 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-[#30363d] p-4 shadow-xl flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              {cfg ? (
+                <span className={`inline-flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl ${cfg.light} ${cfg.text} border ${cfg.border}`}>
+                  {isAr ? cfg.ar : cfg.en}
+                </span>
+              ) : (
+                <span className="text-sm text-gray-400 dark:text-[#6e7681] font-bold">
+                  {t("اختار النتيجة الأول", "Pick a result first")}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={submit}
+              disabled={!canSubmit}
+              className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-black text-white shadow-lg transition-all flex-shrink-0 hover:shadow-xl hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              style={canSubmit ? { background: "linear-gradient(135deg, #004d59, #ff6700)" } : { background: "#d1d5db" }}>
+              {busy
+                ? <><Loader2 className="w-4 h-4 animate-spin" />{t("جاري الحفظ...", "Saving...")}</>
+                : <><Zap className="w-4 h-4" />{t("حفظ وإرسال", "Save & Send")}</>}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        .animate-shimmer { animation: shimmer 2s infinite; }
+      `}</style>
     </div>
   );
 }

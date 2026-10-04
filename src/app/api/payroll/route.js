@@ -19,6 +19,7 @@ export async function GET(req) {
     const groupId = searchParams.get("groupId");
     const status = searchParams.get("status");
     const deliveryMode = searchParams.get("deliveryMode");
+    const sourceType = searchParams.get("sourceType"); // "session" | "interview" | ""
     const from = searchParams.get("from");
     const to = searchParams.get("to");
     const page = parseInt(searchParams.get("page") || "1");
@@ -34,6 +35,10 @@ export async function GET(req) {
     }
     if (status) query.status = status;
     if (deliveryMode) query.deliveryMode = deliveryMode;
+
+    // ✅ السطور القديمة ملهاش sourceType، فالسيشن بتتفلتر بـ $ne مش بـ "session"
+    if (sourceType === "interview") query.sourceType = "interview";
+    if (sourceType === "session") query.sourceType = { $ne: "interview" };
 
     if (from || to) {
       query.sessionDate = {};
@@ -76,6 +81,9 @@ export async function GET(req) {
         $group: {
           _id: "$instructorId",
           sessionsCount: { $sum: 1 },
+          interviewsCount: {
+            $sum: { $cond: [{ $eq: ["$sourceType", "interview"] }, 1, 0] },
+          },
           totalMinutes: { $sum: "$durationMinutes" },
           totalSessionAmount: { $sum: "$sessionAmount" },
           totalTransportation: { $sum: "$transportationAllowance" },
@@ -98,6 +106,7 @@ export async function GET(req) {
           email: "$instructor.email",
           image: "$instructor.image",
           sessionsCount: 1,
+          interviewsCount: 1,
           totalMinutes: 1,
           totalSessionAmount: 1,
           totalTransportation: 1,

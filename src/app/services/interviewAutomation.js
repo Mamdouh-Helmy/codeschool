@@ -98,7 +98,7 @@ function renderTemplate(template, vars) {
   for (const k of keys) {
     const v = vars[k];
     if (v === undefined || v === null) continue;
-    // ✅ FIX: function replacer — عشان لو القيمة فيها $& أو $1 (مثلاً في تعليق المدرس) ما تتفسرش
+    // function replacer — عشان لو القيمة فيها $& أو $1 (مثلاً في تعليق المدرس) ما تتفسرش
     out = out.replace(new RegExp(`\\{${k}\\}`, "g"), () => String(v));
   }
   return out;
@@ -116,6 +116,19 @@ function formatDate(date, lang = "ar") {
   }
 }
 
+// ✅ نفس صيغة التاريخ القصير بتاعة تقرير السيشن (dd/mm/yyyy)
+function formatShortDate(date, lang = "ar") {
+  if (!date) return "";
+  try {
+    return new Date(date).toLocaleDateString(
+      lang === "ar" ? "ar-EG" : "en-US",
+      { day: "2-digit", month: "2-digit", year: "numeric" },
+    );
+  } catch {
+    return "";
+  }
+}
+
 // ✅ رقم الواتساب (واتساب أولاً ثم الهاتف العادي)
 function pickPhone(obj) {
   return String(obj?.whatsappNumber || obj?.phone || "").trim();
@@ -126,24 +139,42 @@ function getDecisionText(decision, lang = "ar", isMale = true) {
   if (lang === "ar") {
     return (
       {
-        pass: isMale ? "مقبول" : "مقبولة",
+        pass: isMale ? "ممتاز" : "ممتازة",
         review: "يحتاج مراجعة",
-        repeat: "يحتاج مقابلة إضافية",
+        repeat: "يحتاج دعم إضافي",
       }[decision] || ""
     );
   }
   return (
     {
-      pass: "Accepted",
+      pass: "Excellent",
       review: "Needs Review",
-      repeat: "Needs Another Interview",
+      repeat: "Needs Support",
     }[decision] || ""
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// buildInterviewVariables
-// ═══════════════════════════════════════════════════════════════════════════
+// ✅ نجوم — نفس buildStars بتاعة السيشن
+function buildStars(score) {
+  const n = Math.min(5, Math.max(1, Math.round(Number(score) || 3)));
+  return "⭐".repeat(n);
+}
+
+// ✅ تنضيف التقييمات (1..5، الافتراضي 3)
+export function normalizeRatings(r = {}) {
+  const clamp = (v) => {
+    const n = Math.round(Number(v));
+    if (!Number.isFinite(n)) return 3;
+    return Math.min(5, Math.max(1, n));
+  };
+  return {
+    commitment: clamp(r?.commitment ?? 3),
+    understanding: clamp(r?.understanding ?? 3),
+    taskExecution: clamp(r?.taskExecution ?? 3),
+    participation: clamp(r?.participation ?? 3),
+  };
+}
+
 async function buildInterviewVariables({
   student,
   interview,
@@ -163,8 +194,8 @@ async function buildInterviewVariables({
   const genderCtx = { studentGender: gender, guardianType: relationship };
 
   // ── الأسماء ──
-  const studentFirstName =
-    lang === "ar"
+  const studentNameFor = (l) =>
+    l === "ar"
       ? student?.personalInfo?.nickname?.ar?.trim() ||
         student?.personalInfo?.fullName?.split(" ")[0] ||
         "الطالب"
@@ -172,8 +203,8 @@ async function buildInterviewVariables({
         student?.personalInfo?.fullName?.split(" ")[0] ||
         "Student";
 
-  const guardianFirstName =
-    lang === "ar"
+  const guardianNameFor = (l) =>
+    l === "ar"
       ? student?.guardianInfo?.nickname?.ar?.trim() ||
         student?.guardianInfo?.name?.split(" ")[0] ||
         "ولي الأمر"
@@ -181,22 +212,66 @@ async function buildInterviewVariables({
         student?.guardianInfo?.name?.split(" ")[0] ||
         "Guardian";
 
-  // ── Salutations من DB (أو fallback) ──
+  const studentFirstName = studentNameFor(lang);
+  const guardianFirstName = guardianNameFor(lang);
+
+  // ── {salutation_ar} / {salutation_en}: للقوالب القديمة (تذكيرات الطفل...)
+  //    سيبناها زي ما هي عشان مايتكسرش حاجة ──
   const salutationBase_ar =
     resolveVar(dbVars, "salutation_ar", "ar", genderCtx) ||
     (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
-
   const salutationBase_en =
     resolveVar(dbVars, "salutation_en", "en", genderCtx) || "Dear";
 
-  const guardianSalBase_ar =
-    resolveVar(dbVars, "guardianSalutation_ar", "ar", genderCtx) ||
-    (isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة");
+  const salutation_ar = `${salutationBase_ar} ${studentNameFor("ar")}`;
+  const salutation_en = `${salutationBase_en} ${studentNameFor("en")}`;
 
-  const guardianSalBase_en =
-    resolveVar(dbVars, "guardianSalutation_en", "en", genderCtx) ||
-    (isFather ? "Dear Mr." : "Dear Mrs.");
+  // ── {studentSalutation}: بيتقرا من المتغير المحفوظ باسم studentSalutation
+  //    - لو القيمة فيها {studentName} → الاسم يتحط مكانها
+  //    - لو مفيهاش → الاسم يتلزق في الآخر ──
+  const buildStudentSal = (l) => {
+    const name = studentNameFor(l);
+    const fromDb = resolveVar(dbVars, "studentSalutation", l, genderCtx);
 
+    if (fromDb) {
+      return /\{(studentName|name)\}/.test(fromDb)
+        ? fromDb.replace(/\{(studentName|name)\}/g, name)
+        : `${fromDb} ${name}`;
+    }
+
+    // fallback لو المتغير مش موجود في الداتا بيز
+    const base =
+      resolveVar(dbVars, l === "ar" ? "salutation_ar" : "salutation_en", l, genderCtx) ||
+      (l === "ar" ? (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة") : "Dear");
+    return `${base} ${name}`;
+  };
+
+  const studentSalutation_ar = buildStudentSal("ar");
+  const studentSalutation_en = buildStudentSal("en");
+  const studentSalutation =
+    lang === "ar" ? studentSalutation_ar : studentSalutation_en;
+
+  // ── {guardianSalutation}: من المتغير المحفوظ + استبدال {guardianName} ──
+  const buildGuardianSal = (l) => {
+    const name = guardianNameFor(l);
+    const fromDb = resolveVar(dbVars, "guardianSalutation", l, genderCtx);
+    if (fromDb) return fromDb.replace(/\{guardianName\}/g, name);
+
+    return l === "ar"
+      ? `${isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة"} ${name}`
+      : `${isFather ? "Dear Mr." : "Dear Mrs."} ${name}`;
+  };
+
+  const guardianSalutation_ar = buildGuardianSal("ar");
+  const guardianSalutation_en = buildGuardianSal("en");
+
+  const guardianSalutation = isAdult
+    ? ""
+    : lang === "ar"
+      ? guardianSalutation_ar
+      : guardianSalutation_en;
+
+  // ── Child title ──
   const childTitleAr =
     resolveVar(dbVars, "childTitle", "ar", genderCtx) ||
     (isMale ? "ابنك" : "ابنتك");
@@ -205,18 +280,6 @@ async function buildInterviewVariables({
     resolveVar(dbVars, "childTitle", "en", genderCtx) ||
     (isMale ? "your son" : "your daughter");
 
-  const studentSalutation_ar = `${salutationBase_ar} ${studentFirstName}`;
-  const studentSalutation_en = `${salutationBase_en} ${studentFirstName}`;
-  const guardianSalutation_ar = `${guardianSalBase_ar} ${guardianFirstName}`;
-  const guardianSalutation_en = `${guardianSalBase_en} ${guardianFirstName}`;
-
-  const studentSalutation =
-    lang === "ar" ? studentSalutation_ar : studentSalutation_en;
-  const guardianSalutation = isAdult
-    ? ""
-    : lang === "ar"
-      ? guardianSalutation_ar
-      : guardianSalutation_en;
   const childTitle = isAdult ? "" : lang === "ar" ? childTitleAr : childTitleEn;
 
   // ── Instructor ──
@@ -261,16 +324,39 @@ async function buildInterviewVariables({
 
   // ── Evaluation ──
   const evalDecision = interview?.evaluation?.decision || "";
+  const ratings = normalizeRatings(interview?.evaluation?.ratings || {});
+  const interviewNumber = interview?.evaluation?.interviewNumber || 1;
+  const isAr = lang === "ar";
+
+  // المقابلة مفيهاش حضور — التقييم معناه إن الطالب حضر
+  const attendanceStatusText = isAr
+    ? isMale
+      ? "حاضر"
+      : "حاضرة"
+    : "Present";
+
+  // 🎥 لينك التسجيل بيتبعت في رسالة منفصلة — فهنا فاضي عشان مايتكررش
+  const recordingLinkText = "";
+
+  const evaluationDecisionText =
+    getDecisionText(evalDecision, lang, isMale) ||
+    resolveVar(dbVars, "evaluationDecision", lang, genderCtx) ||
+    "";
+
+  const supervisorName =
+    resolveVar(dbVars, "supervisorName", lang, genderCtx) ||
+    (isAr ? "المشرف الأكاديمي" : "Learning Supervisor");
 
   return {
     // ── Student ──
-    salutation_ar: studentSalutation_ar,
-    salutation_en: studentSalutation_en,
+    salutation_ar,
+    salutation_en,
     studentSalutation,
     studentSalutation_ar,
     studentSalutation_en,
     studentName: studentFirstName,
     studentFullName: student?.personalInfo?.fullName || "",
+    enrollmentNumber: student?.enrollmentNumber || "",
 
     // ── Guardian (فاضية للبالغ) ──
     guardianSalutation,
@@ -278,6 +364,7 @@ async function buildInterviewVariables({
     guardianSalutation_en: isAdult ? "" : guardianSalutation_en,
     guardianName: isAdult ? "" : guardianFirstName,
     childTitle,
+    salutation: isAdult ? studentSalutation : guardianSalutation,
 
     // ── Instructor ──
     instructorSalutation,
@@ -288,6 +375,8 @@ async function buildInterviewVariables({
 
     // ── Interview ──
     sessionName: interview?.title || "",
+    sessionDate: formatShortDate(interview?.scheduledDate, lang),
+    sessionNumber: String(interviewNumber),
     date: dateStr,
     time: timeStr,
     meetingLink,
@@ -296,12 +385,21 @@ async function buildInterviewVariables({
     mapsLink: isOffline ? mapsLink : "",
 
     // ── Evaluation ──
-    // ✅ FIX: تاريخ المقابلة الفعلي (مش وقت إكمال التقييم)
-    interviewDate: formatDate(interview?.scheduledDate, lang),
-    interviewNumber: String(interview?.evaluation?.interviewNumber || 1),
+    attendanceStatus: attendanceStatusText,
+    starsCommitment: buildStars(ratings.commitment),
+    starsUnderstanding: buildStars(ratings.understanding),
+    starsTaskExecution: buildStars(ratings.taskExecution),
+    starsParticipation: buildStars(ratings.participation),
     instructorComment: interview?.evaluation?.instructorComment?.trim() || "—",
-    // ✅ FIX: نص مترجم بدل pass/review/repeat الخام
-    evaluationDecision: getDecisionText(evalDecision, lang, isMale),
+    completedSessions: String(interviewNumber),
+    recordingLink: recordingLinkText,
+    evaluationDecision: evaluationDecisionText,
+    decision: evaluationDecisionText,
+    supervisorName,
+
+    // ── خاص بالمقابلة ──
+    interviewDate: dateStr,
+    interviewNumber: String(interviewNumber),
 
     isAdult,
     isOffline,
@@ -643,27 +741,17 @@ export async function sendInterviewReminder(
   };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ✅ INTERVIEW EVALUATION
-// ─────────────────────────────────────────────────────────────────────────
-// - المقابلة مفيهاش تسجيل حضور: المدرس بيروح للتقييم على طول.
-// - طفل (kids)   → الرسالة لولي الأمر بقالب interview_evaluation_guardian
-// - بالغ (adults) → الرسالة للطالب نفسه بقالب interview_evaluation_adult
-// - مرتب المدرس بيتحسب في كل الحالات (حتى لو الرسالة مابعتتش)
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * يبني رسالة التقييم (للمعاينة أو للإرسال) — من غير ما يحفظ أو يبعت حاجة.
- * تحديد القالب والمستلم بيتم من messageRouting (مصدر واحد).
- */
 export async function buildInterviewEvaluationMessage({
   student,
   interview,
   decision,
   comment = "",
   interviewNumber = 1,
+  ratings = null,
   rawContent = null,
 }) {
+  // طفل  → interview_evaluation_guardian (ولي الأمر)
+  // بالغ → interview_evaluation_adult   (الطالب)
   const { isAdult, templateType, recipientType, recipientPhone } = routeMessage(
     { event: "interview_evaluation", student },
   );
@@ -675,6 +763,7 @@ export async function buildInterviewEvaluationMessage({
       decision,
       instructorComment: comment || "",
       interviewNumber: interviewNumber || 1,
+      ratings: normalizeRatings(ratings || interview?.evaluation?.ratings),
       completedAt: interview?.evaluation?.completedAt || new Date(),
     },
   };
@@ -689,9 +778,17 @@ export async function buildInterviewEvaluationMessage({
   let template = rawContent;
   let isFallback = false;
   if (!template) {
-    const result = await MessageTemplate.getOrFallback(templateType, lang);
+    // templateType فريد لكل مستلم، فمش محتاجين نفلتر بـ recipientType
+    // (ده بيمنع أي اختلاف في الحقل ده في الداتا بيز من إنه يوقعنا في الـ fallback)
+    const result = await MessageTemplate.getOrFallback(templateType, lang, null);
     template = result.content;
     isFallback = result.isFallback;
+
+    if (isFallback) {
+      console.warn(
+        `⚠️ [Interview Eval] fallback used: type=${templateType} lang=${lang} — راجع القالب في الداتا بيز (isDefault / isActive / المحتوى)`,
+      );
+    }
   }
 
   return {
@@ -746,6 +843,7 @@ export async function sendInterviewEvaluation(
   const {
     decision,
     instructorComment = "",
+    ratings = null,
     completedBy = null,
     actualStartTime = null,
     actualEndTime = null,
@@ -775,10 +873,13 @@ export async function sendInterviewEvaluation(
     interviewNumber = previousCompleted + 1;
   }
 
+  const cleanRatings = normalizeRatings(ratings || {});
+
   // ── 1) حفظ التقييم (من غير أي حضور) ──
   interview.evaluation = {
     decision,
     instructorComment: instructorComment || "",
+    ratings: cleanRatings,
     interviewNumber,
     completedAt: new Date(),
     completedBy: completedBy || null,
@@ -814,6 +915,7 @@ export async function sendInterviewEvaluation(
     decision,
     comment: instructorComment,
     interviewNumber,
+    ratings: cleanRatings,
     rawContent: options.rawContent || null,
   });
 
@@ -835,6 +937,9 @@ export async function sendInterviewEvaluation(
   }
   if (!canSendToStudent(student)) {
     return { ...base, reason: "whatsapp_disabled" };
+  }
+  if (!built.rendered?.trim()) {
+    return { ...base, reason: "empty_template" };
   }
 
   // ── 3.5) Single-send: claim ذري قبل الإرسال عشان طلبين متزامنين مايبعتوش رسالتين ──
@@ -874,10 +979,12 @@ export async function sendInterviewEvaluation(
       studentId: student._id,
       phoneNumber: built.recipientPhone,
       messageContent: built.rendered,
+      // ✅ evaluation_pass | evaluation_pass_adult ... (نفس السيشن)
       messageType: built.templateType,
       language: built.lang,
       metadata: {
         interviewId: interview._id,
+        sessionTitle: interview.title,
         recipientType: built.recipientType,
         isAdult: built.isAdult,
         decision,

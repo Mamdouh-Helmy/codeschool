@@ -41,6 +41,7 @@ const defaultFilters = () => ({
   instructorId: "",
   status: "",
   deliveryMode: "",
+  sourceType: "",
   from: firstDayOfMonth(),
   to: today(),
   page: 1,
@@ -343,7 +344,12 @@ function InstructorRow({ i, share, onOpen }) {
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:contents">
-        {cell("الجلسات", `${num(i.sessionsCount)} · ${fmtDuration(i.totalMinutes)}`)}
+        {cell(
+          "الجلسات",
+          `${num(i.sessionsCount)}${
+            i.interviewsCount ? ` (منها ${num(i.interviewsCount)} مقابلة)` : ""
+          } · ${fmtDuration(i.totalMinutes)}`
+        )}
         {cell("أجر الجلسات", EGP(i.totalSessionAmount))}
         {cell("المواصلات", EGP(i.totalTransportation))}
         {cell("الإجمالي", EGP(i.totalAmount), true)}
@@ -363,6 +369,9 @@ function InstructorRow({ i, share, onOpen }) {
 // ─── Entry row ────────────────────────────────────────────────────────────────
 function EntryRow({ e, busy, onAction }) {
   const offline = e.deliveryMode === "offline";
+  const isInterview = e.sourceType === "interview";
+  const groupLabel = e.groupId?.name || e.groupName;
+
   return (
     <li
       className={`flex flex-col gap-4 px-4 py-4 transition-colors hover:bg-brand-soft/70 dark:hover:bg-white/[0.03] sm:px-5 ${ENTRY_GRID}`}
@@ -374,8 +383,16 @@ function EntryRow({ e, busy, onAction }) {
           <p className="truncate text-sm font-bold text-slate-900 dark:text-white">
             {e.instructorId?.name || "—"}
           </p>
-          <p className="truncate text-xs text-slate-500 dark:text-darkmuted">
-            {e.sessionTitle} · {e.groupId?.name || e.groupName}
+          <p className="flex items-center gap-1.5 truncate text-xs text-slate-500 dark:text-darkmuted">
+            {isInterview && (
+              <span className="flex-shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                مقابلة
+              </span>
+            )}
+            <span className="truncate">
+              {e.sessionTitle}
+              {!isInterview && groupLabel ? ` · ${groupLabel}` : ""}
+            </span>
           </p>
           <div className="mt-1">
             <DeliveryChip mode={e.deliveryMode} />
@@ -486,7 +503,7 @@ function EmptyState({ filtered, onReset }) {
       <p className="mt-1 max-w-xs text-sm text-slate-500 dark:text-darkmuted">
         {filtered
           ? "جرّب توسّع الفترة أو تشيل فلتر المدرس أو الحالة."
-          : "السطور بتظهر هنا أول ما تتسجّل جلسات منتهية للمدرسين."}
+          : "السطور بتظهر هنا أول ما تتسجّل جلسات ومقابلات منتهية للمدرسين."}
       </p>
       {filtered && (
         <button
@@ -679,6 +696,7 @@ export default function PayrollPage() {
     !!filters.instructorId ||
     !!filters.status ||
     !!filters.deliveryMode ||
+    !!filters.sourceType ||
     filters.from !== DEFAULTS.from ||
     filters.to !== DEFAULTS.to;
 
@@ -700,7 +718,7 @@ export default function PayrollPage() {
             كشف مرتبات المدرسين
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-darkmuted">
-            الحساب بالدقيقة من سعر الساعة وقت الجلسة، مضاف له بدل المواصلات.
+            الحساب بالدقيقة من سعر الساعة وقت الجلسة أو المقابلة، مضاف له بدل المواصلات.
           </p>
         </div>
         <button
@@ -719,7 +737,7 @@ export default function PayrollPage() {
 
       {/* ═══ Filters ═══ */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-dark_border dark:bg-darklight sm:p-5">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Field label="المدرس">
             <select
               value={filters.instructorId}
@@ -735,7 +753,19 @@ export default function PayrollPage() {
             </select>
           </Field>
 
-          <Field label="نوع الجلسة">
+          <Field label="النوع">
+            <select
+              value={filters.sourceType}
+              onChange={(e) => setFilter("sourceType", e.target.value)}
+              className={INPUT}
+            >
+              <option value="">جلسات ومقابلات</option>
+              <option value="session">جلسات فقط</option>
+              <option value="interview">مقابلات فقط</option>
+            </select>
+          </Field>
+
+          <Field label="نوع الحضور">
             <select
               value={filters.deliveryMode}
               onChange={(e) => setFilter("deliveryMode", e.target.value)}

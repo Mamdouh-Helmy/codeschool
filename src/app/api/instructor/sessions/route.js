@@ -5,6 +5,9 @@ import { getUserFromRequest } from "@/lib/auth";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
 import Interview from "../../../models/Interview";
+// ✅ FIX: لازم الموديل يتعمله import عشان يتسجّل في Mongoose قبل الـ populate
+//    (كان بيطلع MissingSchemaError: Schema hasn't been registered for model "Student")
+import Student from "../../../models/Student";
 import MeetingLink from "../../../models/MeetingLink";
 import { isSessionLockedByHold } from "../../../services/holdGuard";
 
@@ -38,6 +41,7 @@ async function loadInterviewItems(user, statusFilter) {
   const interviews = await Interview.find(query)
     .populate({
       path: "studentId",
+      model: Student,
       select:
         "personalInfo.fullName personalInfo.nickname enrollmentNumber studentType",
     })
@@ -157,6 +161,13 @@ async function loadInterviewItems(user, statusFilter) {
         ? {
             decision: iv.evaluation.decision,
             instructorComment: iv.evaluation.instructorComment || "",
+            // ✅ NEW: تقييم الأداء بالنجوم (زي السيشن)
+            ratings: {
+              commitment: iv.evaluation.ratings?.commitment ?? 3,
+              understanding: iv.evaluation.ratings?.understanding ?? 3,
+              taskExecution: iv.evaluation.ratings?.taskExecution ?? 3,
+              participation: iv.evaluation.ratings?.participation ?? 3,
+            },
             interviewNumber: iv.evaluation.interviewNumber || 1,
             completedAt: iv.evaluation.completedAt || null,
           }

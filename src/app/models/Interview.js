@@ -1,6 +1,17 @@
 // /models/Interview.js
 import mongoose from "mongoose";
 
+// ─── Sub: Ratings (نفس تقييم الأداء بتاع السيشن العادية) ─────────────────────
+const ratingsSchema = new mongoose.Schema(
+  {
+    commitment: { type: Number, min: 1, max: 5, default: 3 },
+    understanding: { type: Number, min: 1, max: 5, default: 3 },
+    taskExecution: { type: Number, min: 1, max: 5, default: 3 },
+    participation: { type: Number, min: 1, max: 5, default: 3 },
+  },
+  { _id: false }
+);
+
 // ─── Sub: Evaluation ────────────────────────────────────────────────────────
 const evaluationSchema = new mongoose.Schema(
   {
@@ -10,6 +21,8 @@ const evaluationSchema = new mongoose.Schema(
       default: null,
     },
     instructorComment: { type: String, default: "" },
+    // ✅ NEW: تقييم الأداء بالنجوم (4 معايير)
+    ratings: { type: ratingsSchema, default: () => ({}) },
     interviewNumber: { type: Number, default: 1 },
     completedAt: { type: Date, default: null },
     completedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -88,15 +101,18 @@ const InterviewSchema = new mongoose.Schema(
     evaluation: { type: evaluationSchema, default: null },
 
     actualStartTime: { type: String, default: null },
-actualEndTime: { type: String, default: null },
-payroll: {
-  processed: { type: Boolean, default: false },
-  processedAt: { type: Date },
-  durationMinutes: { type: Number, default: 0 },
-  lastError: { type: String, default: "" },
-},
+    actualEndTime: { type: String, default: null },
+    payroll: {
+      processed: { type: Boolean, default: false },
+      processedAt: { type: Date },
+      durationMinutes: { type: Number, default: 0 },
+      lastError: { type: String, default: "" },
+    },
 
     instructorNotes: { type: String, default: "" },
+
+    // ─── Recording (Online فقط) ─────────────────────────────────────────
+    recordingLink: { type: String, default: "" },
 
     // ─── Automation ─────────────────────────────────────────────────────
     automationEvents: {
@@ -125,6 +141,11 @@ payroll: {
 
       evaluationSent: { type: Boolean, default: false },
       evaluationSentAt: { type: Date, default: null },
+
+      // ✅ لينك التسجيل (Online فقط)
+      recordingSent: { type: Boolean, default: false },
+      recordingSentAt: { type: Date, default: null },
+      recordingSentLink: { type: String, default: "" },
     },
 
     metadata: {
