@@ -147,11 +147,22 @@ async function buildRecordingMessage(student, interview, recordingLink) {
 
   let vars;
   if (isAdult) {
-    const base =
-      resolveVar(dbVars[isAr ? "salutation_ar" : "salutation_en"], lang, ctxFlags) ||
-      (isAr ? (ctxFlags.isMale ? "عزيزي الطالب" : "عزيزتي الطالبة") : "Dear");
+    // ✅ التحية من المتغير المحفوظ studentSalutation
+    const salFromDb = resolveVar(dbVars.studentSalutation, lang, ctxFlags);
+    let studentSalutation;
+    if (salFromDb) {
+      studentSalutation = /\{(studentName|name)\}/.test(salFromDb)
+        ? salFromDb.replace(/\{(studentName|name)\}/g, studentFirstName)
+        : `${salFromDb} ${studentFirstName}`;
+    } else {
+      const base =
+        resolveVar(dbVars[isAr ? "salutation_ar" : "salutation_en"], lang, ctxFlags) ||
+        (isAr ? (ctxFlags.isMale ? "عزيزي الطالب" : "عزيزتي الطالبة") : "Dear");
+      studentSalutation = `${base} ${studentFirstName}`;
+    }
+
     vars = {
-      studentSalutation: `${base} ${studentFirstName}`,
+      studentSalutation,
       studentName: studentFirstName,
       sessionName: interview.title || "",
       recordingLink: recordingLink.trim(),

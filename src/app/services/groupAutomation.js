@@ -1487,10 +1487,6 @@ Session Report 📃✨
   return template[language] || template.ar || "";
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ✅ prepareStudentVariables — EXPORTED (يستخدمها makeupAutomation كمان)
-// ✅ NEW: لو الطالب adults → متغيرات ولي الأمر تطلع فاضية ""
-// ═══════════════════════════════════════════════════════════════════════════
 export async function prepareStudentVariables(
   student,
   group,
@@ -1506,7 +1502,6 @@ export async function prepareStudentVariables(
   const isFather = relationship !== "mother";
   const genderCtx = { studentGender: gender, guardianType: relationship };
 
-  // ✅ NEW: هل الطالب بالغ؟
   const isAdult = student.studentType === "adults";
 
   const dbVars = await fetchDbVars(genderCtx);
@@ -1534,8 +1529,9 @@ export async function prepareStudentVariables(
     return lang === "ar" ? v.valueAr || null : v.valueEn || null;
   }
 
-  const studentFirstName =
-    language === "ar"
+  // ── الأسماء (لكل لغة) ──
+  const studentNameFor = (l) =>
+    l === "ar"
       ? student.personalInfo?.nickname?.ar?.trim() ||
         student.personalInfo?.fullName?.split(" ")[0] ||
         "الطالب"
@@ -1543,8 +1539,8 @@ export async function prepareStudentVariables(
         student.personalInfo?.fullName?.split(" ")[0] ||
         "Student";
 
-  const guardianFirstName =
-    language === "ar"
+  const guardianNameFor = (l) =>
+    l === "ar"
       ? student.guardianInfo?.nickname?.ar?.trim() ||
         student.guardianInfo?.name?.split(" ")[0] ||
         "ولي الأمر"
@@ -1552,42 +1548,71 @@ export async function prepareStudentVariables(
         student.guardianInfo?.name?.split(" ")[0] ||
         "Guardian";
 
+  const studentFirstName = studentNameFor(language);
+  const guardianFirstName = guardianNameFor(language);
+
+  // ── {salutation_ar} / {salutation_en}: للقوالب القديمة (سيبناها زي ما هي) ──
   const salutationBase_ar =
     resolveVar("salutation_ar", "ar") ||
     (isMale ? "عزيزي الطالب" : "عزيزتي الطالبة");
-
   const salutationBase_en = resolveVar("salutation_en", "en") || "Dear";
+  const salutation_ar = `${salutationBase_ar} ${studentNameFor("ar")}`;
+  const salutation_en = `${salutationBase_en} ${studentNameFor("en")}`;
 
-  const guardianSalBase_ar =
-    resolveVar("guardianSalutation_ar", "ar") ||
-    (isFather ? "عزيزي الأستاذ" : "عزيزتي السيدة");
+  // ── {studentSalutation}: من المتغير المحفوظ باسم studentSalutation ──
+  const buildStudentSal = (l) => {
+    const name = studentNameFor(l);
+    const fromDb = resolveVar("studentSalutation", l);
+    if (fromDb) {
+      return /\{(studentName|name)\}/.test(fromDb)
+        ? fromDb.replace(/\{(studentName|name)\}/g, name)
+        : `${fromDb} ${name}`;
+    }
+    const base = l === "ar" ? salutationBase_ar : salutationBase_en;
+    return `${base} ${name}`;
+  };
 
-  const guardianSalBase_en =
-    resolveVar("guardianSalutation_en", "en") ||
-    (isFather ? "Dear Mr." : "Dear Mrs.");
+  // ── {guardianSalutation}: من المتغير المحفوظ باسم guardianSalutation ──
+  const buildGuardianSal = (l) => {
+    const name = guardianNameFor(l);
+    const fromDb = resolveVar("guardianSalutation", l);
+    if (fromDb) {
+      return /\{guardianName\}/.test(fromDb)
+        ? fromDb.replace(/\{guardianName\}/g, name)
+        : `${fromDb} ${name}`;
+    }
+    const base =
+      resolveVar(
+        l === "ar" ? "guardianSalutation_ar" : "guardianSalutation_en",
+        l,
+      ) ||
+      (l === "ar"
+        ? isFather
+          ? "عزيزي الأستاذ"
+          : "عزيزتي السيدة"
+        : isFather
+          ? "Dear Mr."
+          : "Dear Mrs.");
+    return `${base} ${name}`;
+  };
 
-  const childTitleAr =
-    resolveVar("childTitle", "ar") || (isMale ? "ابنك" : "ابنتك");
-
-  const childTitleEn =
-    resolveVar("childTitle", "en") || (isMale ? "your son" : "your daughter");
-
-  const studentSalutation_ar = `${salutationBase_ar} ${studentFirstName}`;
-  const studentSalutation_en = `${salutationBase_en} ${studentFirstName}`;
-  const guardianSalutation_ar = `${guardianSalBase_ar} ${guardianFirstName}`;
-  const guardianSalutation_en = `${guardianSalBase_en} ${guardianFirstName}`;
-
+  const studentSalutation_ar = buildStudentSal("ar");
+  const studentSalutation_en = buildStudentSal("en");
   const studentSalutation =
     language === "ar" ? studentSalutation_ar : studentSalutation_en;
 
-  // ✅ لو الطالب بالغ → نحسب القيم برضه عشان لو احتاجناها في مكان تاني،
-  // لكن في القاموس النهائي هنطلعها فاضية
+  const guardianSalutation_ar = buildGuardianSal("ar");
+  const guardianSalutation_en = buildGuardianSal("en");
   const guardianSalutation = isAdult
     ? ""
     : language === "ar"
       ? guardianSalutation_ar
       : guardianSalutation_en;
 
+  const childTitleAr =
+    resolveVar("childTitle", "ar") || (isMale ? "ابنك" : "ابنتك");
+  const childTitleEn =
+    resolveVar("childTitle", "en") || (isMale ? "your son" : "your daughter");
   const childTitle = isAdult
     ? ""
     : language === "ar"
@@ -1640,16 +1665,13 @@ export async function prepareStudentVariables(
       ? `📍 المكان: ${placeName}\n📌 العنوان: ${address}${mapsLink ? `\n🗺️ اللوكيشن: ${mapsLink}` : ""}`
       : "";
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // ✅ القاموس النهائي — لو isAdult → متغيرات ولي الأمر تتطلع ""
-  // ═══════════════════════════════════════════════════════════════════════
   const variables = {
     // Student
     studentSalutation,
     studentSalutation_ar,
     studentSalutation_en,
-    salutation_ar: studentSalutation_ar,
-    salutation_en: studentSalutation_en,
+    salutation_ar,
+    salutation_en,
     studentName: studentFirstName,
     studentFullName: student.personalInfo?.fullName || "",
     studentGender:
@@ -1661,7 +1683,7 @@ export async function prepareStudentVariables(
           ? "son"
           : "daughter",
 
-    // ✅ Guardian — لو adult → فاضية
+    // Guardian — لو adult → فاضية
     guardianSalutation: isAdult ? "" : guardianSalutation,
     guardianSalutation_ar: isAdult ? "" : guardianSalutation_ar,
     guardianSalutation_en: isAdult ? "" : guardianSalutation_en,
@@ -1689,7 +1711,6 @@ export async function prepareStudentVariables(
     sessionLocationBlock: isOffline ? sessionLocationBlock : "",
     isOffline,
 
-    // ✅ flag إضافي مفيد للقوالب
     isAdult,
   };
 

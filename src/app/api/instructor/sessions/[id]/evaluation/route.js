@@ -143,9 +143,12 @@ function buildRecipientContext(student, dbVars) {
   const isFather = relationship !== 'mother';
   const genderCtx = { studentGender: gender, guardianType: relationship };
 
-  const studentFirstName = isAr
-    ? student.personalInfo?.nickname?.ar?.trim() || student.personalInfo?.fullName?.split(' ')[0] || 'الطالب'
-    : student.personalInfo?.nickname?.en?.trim() || student.personalInfo?.fullName?.split(' ')[0] || 'Student';
+  const studentNameFor = (l) =>
+    l === 'ar'
+      ? student.personalInfo?.nickname?.ar?.trim() || student.personalInfo?.fullName?.split(' ')[0] || 'الطالب'
+      : student.personalInfo?.nickname?.en?.trim() || student.personalInfo?.fullName?.split(' ')[0] || 'Student';
+
+  const studentFirstName = studentNameFor(lang);
 
   const guardianFirstName = isAr
     ? student.guardianInfo?.nickname?.ar?.trim() || student.guardianInfo?.name?.split(' ')[0] || 'ولي الأمر'
@@ -156,12 +159,25 @@ function buildRecipientContext(student, dbVars) {
     ? salutationFromDb.replace(/\{guardianName\}/g, guardianFirstName)
     : buildGuardianSalutation(guardianFirstName, isFather, lang);
 
-  const salutationBaseAr =
-    resolveVar(dbVars, 'salutation_ar', 'ar', genderCtx) ||
-    (isMale ? 'عزيزي الطالب' : 'عزيزتي الطالبة');
-  const salutationBaseEn = resolveVar(dbVars, 'salutation_en', 'en', genderCtx) || 'Dear';
-  const studentSalutationAr = `${salutationBaseAr} ${studentFirstName}`;
-  const studentSalutationEn = `${salutationBaseEn} ${studentFirstName}`;
+  // ✅ {studentSalutation}: من المتغير المحفوظ باسم studentSalutation
+  //    - لو فيه {studentName} → الاسم يتحط مكانها
+  //    - لو مفيهاش → الاسم يتلزق في الآخر
+  const buildStudentSal = (l) => {
+    const name = studentNameFor(l);
+    const fromDb = resolveVar(dbVars, 'studentSalutation', l, genderCtx);
+    if (fromDb) {
+      return /\{(studentName|name)\}/.test(fromDb)
+        ? fromDb.replace(/\{(studentName|name)\}/g, name)
+        : `${fromDb} ${name}`;
+    }
+    const base =
+      resolveVar(dbVars, l === 'ar' ? 'salutation_ar' : 'salutation_en', l, genderCtx) ||
+      (l === 'ar' ? (isMale ? 'عزيزي الطالب' : 'عزيزتي الطالبة') : 'Dear');
+    return `${base} ${name}`;
+  };
+
+  const studentSalutationAr = buildStudentSal('ar');
+  const studentSalutationEn = buildStudentSal('en');
   const studentSalutation = isAr ? studentSalutationAr : studentSalutationEn;
 
   const childTitle =
