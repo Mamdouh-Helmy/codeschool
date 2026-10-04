@@ -1,6 +1,6 @@
 "use client";
 // src/app/components/interviewShared.jsx
-// مشترك بين صفحة الجلسات وصفحة التقييم: ألوان النتائج + الطيارة الورق + أنيميشن الطيران.
+// مشترك بين صفحات المدرس: ألوان النتائج + الطيارة الورق + أنيميشن الطيران + PaperPlaneLoader.
 
 import React from "react";
 import { SealCheck, SealQuestion, ArrowsClockwise, Target, Brain, ListChecks, ChatsCircle } from "./icons";
@@ -37,16 +37,106 @@ export const RATING_WORDS = {
   en: ["", "Weak", "Fair", "Good", "Very good", "Excellent"],
 };
 
-// ─── الطيارة الورق (SVG بتبص يمين) ───────────────────────────────────────────
-export function PaperPlane({ className = "", style }) {
+// ─── الطيارة الورق ───────────────────────────────────────────────────────────
+// أوجه الطيّة: جناح علوي (أفتح) · ظل الطيّة الخلفية · جناح سفلي · كيل (أغمق) · خط الطيّة.
+// palette="white" للخلفيات الغامقة/الجرادينت · palette="brand" للخلفيات الفاتحة.
+const PLANE_PALETTES = {
+  white: { top: "#ffffff", shade: "#e4f1f3", side: "#c9e2e6", keel: "#8fbfc6", crease: "#feaf00" },
+  brand: { top: "#ff8a3d", shade: "#ff6700", side: "#0e7c8c", keel: "#004d59", crease: "#feaf00" },
+};
+
+export function PaperPlane({ className = "", style, palette = "white" }) {
+  const p = PLANE_PALETTES[palette] || PLANE_PALETTES.white;
   return (
-    <svg viewBox="0 0 128 64" className={className} style={style} fill="none" aria-hidden="true">
-      <polygon points="6,8 124,32 50,32" fill="#ffffff" />
-      <polygon points="6,8 50,32 24,32" fill="#e4f1f3" />
-      <polygon points="6,56 124,32 50,32" fill="#c9e2e6" />
-      <polygon points="50,32 124,32 30,47" fill="#8fbfc6" />
-      <path d="M50 32 L124 32" stroke="#feaf00" strokeWidth="1.6" strokeLinecap="round" />
+    <svg viewBox="0 0 128 64" className={className} style={style} fill="none" aria-hidden="true"
+      shapeRendering="geometricPrecision" strokeLinejoin="round">
+      <polygon points="124,30 12,58 48,32" fill={p.side} />
+      <polygon points="6,6 48,32 24,27" fill={p.shade} />
+      <polygon points="124,30 6,6 48,32" fill={p.top} />
+      <polygon points="124,30 48,32 30,46" fill={p.keel} />
+      <path d="M124 30 L48 32" stroke={p.crease} strokeWidth="1.6" strokeLinecap="round" />
     </svg>
+  );
+}
+
+// ─── Loader: طيارة ورق بتعدّي بقوس ومعاها أثر (بديل أي spinner دايري) ─────────
+const LOADER_CSS = `
+@keyframes ppLoadFly {
+  0%   { transform: translate(-120%, 40%) rotate(10deg) scale(.6); opacity: 0; }
+  20%  { opacity: 1; }
+  50%  { transform: translate(0, -30%) rotate(-8deg) scale(1); opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translate(120%, 40%) rotate(10deg) scale(.6); opacity: 0; }
+}
+@keyframes ppLoadTrail {
+  0%   { transform: scaleX(0); transform-origin: left; opacity: 0; }
+  50%  { transform: scaleX(1); transform-origin: left; opacity: .9; }
+  51%  { transform-origin: right; }
+  100% { transform: scaleX(0); transform-origin: right; opacity: 0; }
+}
+@keyframes ppLoadLabel { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+.pp-loader { position: relative; display: inline-block; }
+.pp-loader--inline { overflow: hidden; vertical-align: middle; }
+.pp-loader__plane {
+  position: absolute; left: 50%; top: 50%;
+  width: var(--pp-w); margin-left: calc(var(--pp-w) / -2); margin-top: calc(var(--pp-w) / -4);
+  animation: ppLoadFly 1.6s cubic-bezier(.45,.05,.3,1) infinite;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,.25));
+}
+.pp-loader__trail {
+  position: absolute; left: 10%; right: 10%; bottom: 16%; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--pp-trail), transparent);
+  animation: ppLoadTrail 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pp-loader__plane, .pp-loader__trail { animation: none; }
+  .pp-loader__plane { opacity: 1; }
+}`;
+
+/**
+ * size   : عرض الطيارة بالبكسل
+ * tone   : "brand" للخلفيات الفاتحة · "light" للأزرار/الجرادينت
+ * inline : نسخة صغيرة للأزرار (بتتقص جوه نافذة صغيرة، من غير أثر ولا label)
+ * label  : نص تحت الطيارة (للنسخة الكاملة بس)
+ */
+export function PaperPlaneLoader({ size = 44, tone = "brand", label, inline = false, className = "" }) {
+  const light = tone === "light";
+  const box = {
+    width: size * 2.4,
+    height: inline ? size : size * 1.3,
+    "--pp-w": `${size}px`,
+    "--pp-trail": light ? "rgba(255,255,255,.85)" : "#ff6700",
+  };
+
+  const scene = (
+    <span dir="ltr" aria-hidden="true" className={`pp-loader ${inline ? "pp-loader--inline" : ""}`} style={box}>
+      {!inline && <span className="pp-loader__trail" />}
+      <span className="pp-loader__plane">
+        <PaperPlane palette={light ? "white" : "brand"} className="w-full h-auto block" />
+      </span>
+    </span>
+  );
+
+  if (inline) {
+    return (
+      <span role="status" aria-label={label || "Loading"} className={`inline-flex ${className}`}>
+        <style>{LOADER_CSS}</style>
+        {scene}
+      </span>
+    );
+  }
+
+  return (
+    <span role="status" aria-live="polite" className={`inline-flex flex-col items-center gap-1 ${className}`}>
+      <style>{LOADER_CSS}</style>
+      {scene}
+      {label && (
+        <span className={`text-xs font-black ${light ? "text-white/80" : "text-gray-500 dark:text-[#8b949e]"}`}
+          style={{ animation: "ppLoadLabel 1.6s ease-in-out infinite" }}>
+          {label}
+        </span>
+      )}
+    </span>
   );
 }
 

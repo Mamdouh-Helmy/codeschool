@@ -2,9 +2,10 @@
 // src/app/instructor/evaluation/page.jsx
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
-  CheckCircle2, X, AlertCircle, Loader2, Send,
+  CheckCircle2, X, AlertCircle, Send,
   ChevronRight, ChevronLeft, CheckCheck, Users, Star,
   RotateCcw, BookOpen, Info, User,
   Zap, RefreshCw,
@@ -14,7 +15,7 @@ import {
 } from "@/components/icons";
 import {
   INTERVIEW_DECISIONS, INTERVIEW_RATING_ROWS, RATING_WORDS, dGrad,
-  PaperPlane, PaperPlaneFlight, FlightStyles,
+  PaperPlane, PaperPlaneFlight, FlightStyles, PaperPlaneLoader,
 } from "@/components/interviewShared";
 import { useLocale } from "@/app/context/LocaleContext";
 
@@ -62,11 +63,11 @@ const DECISIONS = {
 };
 
 const ATTENDANCE_BADGE = {
-  present:  { ar: "حاضر",       en: "Present",  color: "text-[#004d59] bg-[#004d5908] border-[#004d5930] dark:bg-[#004d5920] dark:border-[#004d5940]" },
-  late:     { ar: "متأخر",      en: "Late",     color: "text-[#f67d00] bg-[#feaf0008] border-[#feaf0040] dark:bg-[#feaf0020] dark:border-[#feaf0050]" },
-  absent:   { ar: "غائب",       en: "Absent",   color: "text-[#ff6437] bg-[#ff643708] border-[#ff643730] dark:bg-[#ff643720] dark:border-[#ff643750]" },
-  excused:  { ar: "بعذر",       en: "Excused",  color: "text-blue-600 bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800/40" },
-  null:     { ar: "لم يُسجَّل", en: "N/A",      color: "text-gray-500 bg-gray-50 border-gray-200 dark:bg-[#21262d] dark:border-[#30363d]" },
+  present: { ar: "حاضر", en: "Present", color: "text-[#004d59] bg-[#004d5908] border-[#004d5930] dark:bg-[#004d5920] dark:border-[#004d5940]" },
+  late: { ar: "متأخر", en: "Late", color: "text-[#f67d00] bg-[#feaf0008] border-[#feaf0040] dark:bg-[#feaf0020] dark:border-[#feaf0050]" },
+  absent: { ar: "غائب", en: "Absent", color: "text-[#ff6437] bg-[#ff643708] border-[#ff643730] dark:bg-[#ff643720] dark:border-[#ff643750]" },
+  excused: { ar: "بعذر", en: "Excused", color: "text-blue-600 bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800/40" },
+  null: { ar: "لم يُسجَّل", en: "N/A", color: "text-gray-500 bg-gray-50 border-gray-200 dark:bg-[#21262d] dark:border-[#30363d]" },
 };
 
 // نفس معايير المقابلة (بنفس الأيقونات) مع تسمية "داخل الحصة" للمشاركة
@@ -138,7 +139,6 @@ function HoldNotice({ isAr, style }) {
   );
 }
 
-// ─── Comment Editor Modal ─────────────────────────────────────────────────────
 function CommentEditorModal({ student, decision, initialValue, isAr, onClose, onSave }) {
   const [value, setValue] = useState(initialValue || "");
   const textareaRef = useRef(null);
@@ -146,9 +146,10 @@ function CommentEditorModal({ student, decision, initialValue, isAr, onClose, on
   const t = (ar, en) => isAr ? ar : en;
 
   useEffect(() => {
+    const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const id = setTimeout(() => textareaRef.current?.focus(), 150);
-    return () => { document.body.style.overflow = ""; clearTimeout(id); };
+    return () => { document.body.style.overflow = prev; clearTimeout(id); };
   }, []);
 
   const handleKeyDown = (e) => {
@@ -158,11 +159,14 @@ function CommentEditorModal({ student, decision, initialValue, isAr, onClose, on
 
   const remaining = MAX_COMMENT_LENGTH - value.length;
 
-  return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4" dir={isAr ? "rtl" : "ltr"}>
+  if (typeof document === "undefined") return null;
+
+  // Portal على document.body → fixed بالنسبة للشاشة مهما كان الـ parent (transform/animation/filter)
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" dir={isAr ? "rtl" : "ltr"}>
       <EvalKeyframes />
       <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg bg-white dark:bg-[#161b22] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 dark:border-[#30363d]"
+      <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white dark:bg-[#161b22] rounded-3xl shadow-2xl flex flex-col border border-gray-100 dark:border-[#30363d]"
         style={{ animation: "slideUp .25s ease-out" }}>
 
         <div className="relative p-5 overflow-hidden flex-shrink-0" style={{ background: dGrad(cfg) }}>
@@ -218,7 +222,16 @@ function CommentEditorModal({ student, decision, initialValue, isAr, onClose, on
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
+  );
+}
+
+function BusyLabel() {
+  return (
+    <>
+      <PaperPlaneLoader inline tone="light" size={40} />
+    </>
   );
 }
 
@@ -442,7 +455,6 @@ function Skeleton() {
   );
 }
 
-// ─── Session Evaluation Page ──────────────────────────────────────────────────
 function SessionEvaluationPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -451,26 +463,26 @@ function SessionEvaluationPage() {
   const isAr = locale === "ar";
   const t = (ar, en) => isAr ? ar : en;
 
-  const [loading, setLoading]           = useState(true);
-  const [submitting, setSubmitting]     = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   // error = فشل التحميل (بيخفي الفورم) — submitError = فشل الحفظ (بيتعرض فوق زرار الإرسال من غير ما يخفي الفورم)
-  const [error, setError]               = useState("");
-  const [submitError, setSubmitError]   = useState("");
-  const [success, setSuccess]           = useState(false);
-  const [sessionData, setSessionData]   = useState(null);
-  const [students, setStudents]         = useState([]);
-  const [decisions, setDecisions]       = useState({});
+  const [error, setError] = useState("");
+  const [submitError, setSubmitError] = useState("");
+  const [success, setSuccess] = useState(false);
+  const [sessionData, setSessionData] = useState(null);
+  const [students, setStudents] = useState([]);
+  const [decisions, setDecisions] = useState({});
   const [commentModal, setCommentModal] = useState(null);
   const [recordingLink, setRecordingLink] = useState("");
-  const [submitSummary, setSubmitSummary]   = useState(null);
+  const [submitSummary, setSubmitSummary] = useState(null);
   const [animateProgress, setAnimateProgress] = useState(false);
-  const [ratings, setRatings]   = useState({});
+  const [ratings, setRatings] = useState({});
   const [comments, setComments] = useState({});
   const [fly, setFly] = useState({ w: 1200, h: 800 });
 
-  const [moduleTitle, setModuleTitle]           = useState("");
+  const [moduleTitle, setModuleTitle] = useState("");
   const [moduleDescription, setModuleDescription] = useState("");
-  const [supervisorName, setSupervisorName]     = useState("");
+  const [supervisorName, setSupervisorName] = useState("");
 
   // هل السيشن Offline؟ (الباك بيرجّع isOffline + deliveryMode بعد الـ fallback على الجروب)
   const isOfflineSession =
@@ -496,24 +508,24 @@ function SessionEvaluationPage() {
         setSessionData(data.data.session);
         setStudents(data.data.students || []);
 
-        setModuleTitle(data.data.session?.moduleTitle       || "");
+        setModuleTitle(data.data.session?.moduleTitle || "");
         setModuleDescription(data.data.session?.moduleDescription || "");
-        setSupervisorName(data.data.supervisorName           || "");
+        setSupervisorName(data.data.supervisorName || "");
 
         setRecordingLink(data.data.session?.recordingLink || "");
 
         const existingDecisions = {};
-        const existingRatings   = {};
-        const existingComments  = {};
+        const existingRatings = {};
+        const existingComments = {};
         (data.data.students || []).forEach((s) => {
           if (s.currentDecision) existingDecisions[s._id] = s.currentDecision;
-          if (s.currentRatings)  existingRatings[s._id]   = {
-            commitment:    s.currentRatings.commitment    || 3,
+          if (s.currentRatings) existingRatings[s._id] = {
+            commitment: s.currentRatings.commitment || 3,
             understanding: s.currentRatings.understanding || 3,
             taskExecution: s.currentRatings.taskExecution || 3,
             participation: s.currentRatings.participation || 3,
           };
-          if (s.currentComment)  existingComments[s._id]  = s.currentComment;
+          if (s.currentComment) existingComments[s._id] = s.currentComment;
         });
         setDecisions(existingDecisions);
         setRatings(existingRatings);
@@ -566,11 +578,11 @@ function SessionEvaluationPage() {
       setSubmitError("");
       const evaluations = filled.map((studentId) => ({
         studentId,
-        decision:      decisions[studentId],
+        decision: decisions[studentId],
         // الباك بيتجاهله للـ offline، بس مفيش داعي نبعته
         recordingLink: isOfflineSession ? null : (recordingLink?.trim() || null),
-        ratings:       ratings[studentId] || { ...DEFAULT_RATINGS },
-        comment:       comments[studentId] || '',
+        ratings: ratings[studentId] || { ...DEFAULT_RATINGS },
+        comment: comments[studentId] || '',
       }));
       const res = await fetch(`/api/instructor/sessions/${sessionId}/evaluation`, {
         method: "PATCH",
@@ -662,7 +674,7 @@ function SessionEvaluationPage() {
   // ── Main ──
   return (
     <div className="min-h-screen bg-[#f8f9fb] dark:bg-[#0a0f17]" dir={isAr ? "rtl" : "ltr"}
-      style={{ animation: "evalIn .6s both cubic-bezier(.2,.8,.2,1)" }}>
+      style={{ animation: "evalIn .6s backwards cubic-bezier(.2,.8,.2,1)" }}>
       <EvalKeyframes />
 
       {/* Sticky Header */}
@@ -815,8 +827,8 @@ function SessionEvaluationPage() {
                 <div className="text-sm font-black">
                   {filledCount === students.length && students.length > 0
                     ? <span className="flex items-center gap-1" style={{ color: "#ff6700" }}>
-                        <CheckCheck className="w-4 h-4" />{t("مكتمل", "Complete")}
-                      </span>
+                      <CheckCheck className="w-4 h-4" />{t("مكتمل", "Complete")}
+                    </span>
                     : <span style={{ color: "#ff6700" }}>{progressPct}%</span>
                   }
                 </div>
@@ -937,7 +949,7 @@ function SessionEvaluationPage() {
                     className="group/send inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-black text-white shadow-lg hover:shadow-xl hover:scale-[1.03] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                     style={{ background: "linear-gradient(135deg, #004d59, #ff6700)" }}>
                     {submitting
-                      ? <><Loader2 className="w-5 h-5 animate-spin" />{t("جاري الإكمال...", "Completing...")}</>
+                      ? <BusyLabel text={t("جاري الإكمال...", "Completing...")} />
                       : <><CheckCheck className="w-5 h-5" />{t("إكمال الجلسة", "Complete Session")}</>}
                   </button>
                 </>
@@ -997,11 +1009,9 @@ function SessionEvaluationPage() {
                   onClick={handleSubmit}
                   disabled={filledCount === 0 || submitting}
                   className="group/send flex items-center gap-2 px-5 sm:px-6 py-3.5 rounded-2xl text-sm font-black text-white shadow-lg transition-all flex-shrink-0 hover:shadow-xl hover:scale-[1.03] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                  style={filledCount > 0 && !submitting
-                    ? { background: "linear-gradient(135deg, #004d59, #ff6700)" }
-                    : { background: "#d1d5db" }}>
+                  style={{ background: filledCount > 0 ? "linear-gradient(135deg, #004d59, #ff6700)" : "#d1d5db" }}>
                   {submitting
-                    ? <><Loader2 className="w-5 h-5 animate-spin" />{t("جاري الإرسال...", "Sending...")}</>
+                    ? <BusyLabel text={t("جاري الإرسال...", "Sending...")} />
                     : <><PaperPlaneTilt weight="fill" className="w-5 h-5 transition-transform duration-300 group-hover/send:translate-x-1 group-hover/send:-translate-y-1" />{t("إكمال الجلسة وإرسال", "Complete & Send")}</>}
                 </button>
               </div>
@@ -1155,7 +1165,7 @@ function InterviewEvaluation({ interviewId }) {
               <p className="text-sm font-bold text-red-700 dark:text-red-400">{err}</p>
             </div>
           ) : (
-            <Loader2 className="w-7 h-7 animate-spin text-[#ff6700]" />
+            <PaperPlaneLoader />
           )}
         </div>
       </>
@@ -1196,7 +1206,7 @@ function InterviewEvaluation({ interviewId }) {
     <>
       <EvalReveal />
       <div className="min-h-screen bg-[#f8f9fb] dark:bg-[#0a0f17]" dir={isAr ? "rtl" : "ltr"}
-        style={{ animation: "evalIn .7s .45s cubic-bezier(.2,.8,.2,1) both" }}>
+        style={{ animation: "evalIn .7s .45s backwards cubic-bezier(.2,.8,.2,1)" }}>
         <FlightStyles />
 
         {/* Sticky Header */}
@@ -1473,9 +1483,9 @@ function InterviewEvaluation({ interviewId }) {
               </div>
               <button onClick={submit} disabled={!canSubmit}
                 className="group/send flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-black text-white shadow-lg transition-all flex-shrink-0 hover:shadow-xl hover:scale-[1.03] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                style={{ background: canSubmit && cfg ? dGrad(cfg) : "#d1d5db" }}>
+                style={{ background: cfg && !!decision && info.canEvaluate ? dGrad(cfg) : "#d1d5db" }}>
                 {busy
-                  ? <><Loader2 className="w-5 h-5 animate-spin" />{t("جاري الإرسال...", "Sending...")}</>
+                  ? <BusyLabel text={t("جاري الإرسال...", "Sending...")} />
                   : <><PaperPlaneTilt weight="fill" className="w-5 h-5 transition-transform duration-300 group-hover/send:translate-x-1 group-hover/send:-translate-y-1" />{t("حفظ وإرسال التقييم", "Save & send")}</>}
               </button>
             </div>

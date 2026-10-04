@@ -6,6 +6,9 @@
 // فكل اللي هتعمله إنك تغيّر مسار الـ import من "lucide-react" إلى "@/app/components/icons"
 // وكل الأيقونات في الصفحة بتتبدّل مرة واحدة.
 //
+// ملحوظة: مفيش Loader2 / spinner دايري هنا — التحميل كله عن طريق
+// PaperPlaneLoader من "@/components/interviewShared".
+//
 // التنصيب:  npm i @phosphor-icons/react
 // (اختياري في next.config.js)  experimental: { optimizePackageImports: ["@phosphor-icons/react"] }
 
@@ -20,7 +23,7 @@ import {
   InfoIcon, LightningIcon, LinkSimpleIcon, ListChecksIcon, LockKeyIcon, MagnifyingGlassIcon, MapPinIcon,
   MedalIcon, NavigationArrowIcon, PaperPlaneTiltIcon, PauseCircleIcon, PencilSimpleLineIcon, PlayIcon,
   PresentationChartIcon, RepeatIcon, SealCheckIcon, SealQuestionIcon, SealWarningIcon, ShieldCheckIcon,
-  SkipForwardIcon, SparkleIcon, SpinnerGapIcon, SquaresFourIcon, StackIcon, StarIcon, TargetIcon,
+  SkipForwardIcon, SparkleIcon, SquaresFourIcon, StackIcon, StarIcon, TargetIcon,
   TimerIcon, TrendUpIcon, UserCheckIcon, UserCircleIcon, UsersThreeIcon, VideoCameraIcon,
   WarningCircleIcon, XIcon,
 } from "@phosphor-icons/react";
@@ -37,7 +40,6 @@ export const CheckCheck = make(ChecksIcon, "bold");
 export const ChevronRight = make(CaretRightIcon, "bold");
 export const ChevronLeft = make(CaretLeftIcon, "bold");
 export const ChevronDown = make(CaretDownIcon, "bold");
-export const Loader2 = make(SpinnerGapIcon, "bold");
 
 // ── باقي الأيقونات → duotone ──
 export const AlertCircle = make(WarningCircleIcon);
