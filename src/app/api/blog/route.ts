@@ -25,13 +25,22 @@ function generateSlug(title: string): string {
   return slug;
 }
 
+function stripCode(content: string): string {
+  return content
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function generateExcerpt(content: string, maxLength: number = 150): string {
   if (!content || typeof content !== "string") {
     return "";
   }
 
   try {
-    const plain = content.replace(/<[^>]*>/g, "").trim();
+    const plain = stripCode(content);
     return plain.length <= maxLength
       ? plain
       : plain.substring(0, maxLength).trim() + "...";
@@ -46,8 +55,9 @@ function calculateReadTime(content: string): number {
   }
 
   try {
-    const plain = content.replace(/<[^>]*>/g, "").trim();
-    const words = plain.split(/\s+/).filter((word) => word.length > 0);
+    const words = stripCode(content)
+      .split(/\s+/)
+      .filter((word) => word.length > 0);
     return Math.max(1, Math.ceil(words.length / 200));
   } catch {
     return 5;

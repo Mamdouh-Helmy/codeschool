@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import EmailSubscription from "./EmailSubscription";
 import SocialSharing from "./SocialSharing";
 import TagsSystem from "./TagsSystem";
+import HtmlContentFrame from "./HtmlContentFrame";
 import { useLocale } from "@/app/context/LocaleContext";
 
 // ✅ أنواع TypeScript
@@ -158,7 +159,6 @@ export function PostContent({ slug }: { slug: string }) {
   const excerpt = locale === 'ar' ? post.excerpt_ar : post.excerpt_en;
   const tags = locale === 'ar' ? post.tags_ar : post.tags_en;
   const authorName = locale === 'ar' ? post.author?.name_ar : post.author?.name_en;
-  const category = locale === 'ar' ? post.category_ar : post.category_en;
   const imageAlt = locale === 'ar' ? post.imageAlt_ar : post.imageAlt_en;
 
   const formattedDate = post.publishDate
@@ -180,8 +180,6 @@ export function PostContent({ slug }: { slug: string }) {
     ? window.location.href
     : `${process.env.NEXT_PUBLIC_BASE_URL}/blog/${slug}`;
 
-  console.log("📊 Post data:", post);
-
   return (
     <>
       {/* ===== Header Section ===== */}
@@ -193,7 +191,6 @@ export function PostContent({ slug }: { slug: string }) {
                 <span className="text-sm md:text-base text-midnight_text font-medium dark:text-white pr-4 sm:pr-7 border-r border-solid border-gray dark:border-white w-fit">
                   {formattedDate}
                 </span>
-                {/* 🔥 إصلاح: استخدام viewCount مباشرة كما في الموديل */}
                 <span className="text-sm md:text-base text-midnight_text font-medium dark:text-white sm:pl-7 pl-0 w-fit">
                   {post.viewCount || 0} {t("blog.views") || "views"}
                 </span>
@@ -285,44 +282,20 @@ export function PostContent({ slug }: { slug: string }) {
                   {title || t("blog.untitled") || "Untitled"}
                 </h2>
 
-                {/* 🔥 الحل: إضافة custom CSS classes مع prose */}
-                <div className="blog-content prose prose-sm sm:prose-base lg:prose-lg dark:prose-invert max-w-none
-                  prose-headings:text-midnight_text dark:prose-headings:text-white
-                  prose-headings:font-bold
-                  prose-h1:text-2xl sm:prose-h1:text-3xl md:prose-h1:text-4xl
-                  prose-h1:mb-4 prose-h1:mt-6
-                  prose-h2:text-xl sm:prose-h2:text-2xl md:prose-h2:text-3xl
-                  prose-h2:mb-3 prose-h2:mt-5
-                  prose-h3:text-lg sm:prose-h3:text-xl md:prose-h3:text-2xl
-                  prose-h3:mb-3 prose-h3:mt-4
-                  prose-p:text-gray-700 dark:prose-p:text-gray-300
-                  prose-p:leading-relaxed
-                  prose-p:mb-4
-                  prose-strong:text-midnight_text dark:prose-strong:text-white
-                  prose-strong:font-semibold
-                  prose-a:text-primary dark:prose-a:text-primary
-                  prose-a:no-underline hover:prose-a:underline
-                  prose-img:rounded-lg
-                  prose-img:w-full
-                  prose-img:h-auto
-                  prose-img:my-6
-                  prose-ul:list-disc prose-ul:list-inside
-                  prose-ol:list-decimal prose-ol:list-inside
-                  prose-li:text-gray-700 dark:prose-li:text-gray-300
-                  prose-li:mb-2
-                  prose-blockquote:border-l-4 prose-blockquote:border-primary
-                  prose-blockquote:pl-4 prose-blockquote:italic
-                  prose-blockquote:text-gray-600 dark:prose-blockquote:text-gray-400
-                  prose-code:bg-gray-100 dark:prose-code:bg-gray-800
-                  prose-code:px-1 prose-code:py-0.5 prose-code:rounded
-                  prose-code:text-sm
-                  prose-pre:bg-gray-100 dark:prose-pre:bg-gray-800
-                  prose-pre:p-4 prose-pre:rounded-lg">
+                {/*
+                  ✅ المحتوى بيتعرض جوه iframe معزول (sandbox):
+                  - الـ HTML والـ CSS والـ JS بتشتغل مع بعض
+                  - الـ CSS مش بيبوّظ تصميم الموقع والعكس
+                  - بيتبع الدارك/لايت مود بتاع الموقع تلقائياً
+                  (الـ prose classes اتشالت لأن الـ iframe ليه ستايل أساسي خاص بيه)
+                */}
+                <div className="blog-content max-w-none">
                   {body ? (
-                    <div
-                      dangerouslySetInnerHTML={{
-                        __html: body,
-                      }}
+                    <HtmlContentFrame
+                      html={body}
+                      dir={locale === "ar" ? "rtl" : "ltr"}
+                      lang={locale}
+                      title={title || "Blog content"}
                     />
                   ) : (
                     <p className="text-center text-gray-500 text-sm md:text-base">

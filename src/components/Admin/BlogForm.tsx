@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "@/i18n/I18nProvider";
 import RichTextEditor from "../Blog/RichTextEditor";
+import { useNotify } from "./useNotify";
 import s from "./BlogForm.module.css";
 
 interface Props {
@@ -30,8 +31,15 @@ function formatDateForInput(dateString: string): string {
   try { return new Date(dateString).toISOString().split("T")[0]; } catch { return ""; }
 }
 
+// ✅ بيشيل <style> و <script> قبل ما يشيل باقي الـ tags
+// عشان كود CSS/JS ميدخلش في الملخص
 function generateExcerpt(body: string, maxLength = 150): string {
-  const plain = body.replace(/<[^>]*>/g, "").trim();
+  const plain = (body || "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
   return plain.length > maxLength ? plain.substring(0, maxLength) + "..." : plain;
 }
 
@@ -66,6 +74,9 @@ const buildInitialForm = (initial?: any) => ({
 export default function BlogForm({ initial, onClose, onSaved }: Props) {
   const { t } = useI18n();
 
+  // ✅ إشعارات شيك بدل alert
+  const { notify, notifyHost } = useNotify();
+
   const [form, setForm]                         = useState(() => buildInitialForm(initial));
   const [activeLanguage, setActiveLanguage]     = useState<"ar" | "en">("ar");
   const [loading, setLoading]                   = useState(false);
@@ -91,14 +102,18 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { alert("حجم الملف كبير جداً. الحد الأقصى 5MB"); return; }
+    if (file.size > 5 * 1024 * 1024) {
+      notify({ type: "warning", title: "حجم الملف كبير جداً", message: "الحد الأقصى لحجم الصورة 5MB" });
+      e.target.value = "";
+      return;
+    }
     setImagePreview(URL.createObjectURL(file));
     setUploadingImage(true);
     try {
       const url = await uploadImage(file, "blog-posts");
       onChange("image", url); setImagePreview(url);
     } catch (err: any) {
-      alert(`خطأ في رفع الصورة: ${err.message}`);
+      notify({ type: "error", title: "فشل رفع الصورة", message: err.message });
       setImagePreview(initial?.image || ""); onChange("image", initial?.image || "");
     } finally { setUploadingImage(false); e.target.value = ""; }
   };
@@ -106,14 +121,18 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { alert("حجم الملف كبير جداً. الحد الأقصى 2MB"); return; }
+    if (file.size > 2 * 1024 * 1024) {
+      notify({ type: "warning", title: "حجم الملف كبير جداً", message: "الحد الأقصى لحجم صورة الكاتب 2MB" });
+      e.target.value = "";
+      return;
+    }
     setAuthorAvatarPreview(URL.createObjectURL(file));
     setUploadingAvatar(true);
     try {
       const url = await uploadImage(file, "blog-authors");
       onChangeAuthor("avatar", url); setAuthorAvatarPreview(url);
     } catch (err: any) {
-      alert(`خطأ في رفع الصورة: ${err.message}`);
+      notify({ type: "error", title: "فشل رفع الصورة", message: err.message });
       const fallback = initial?.author?.avatar || "/images/default-avatar.jpg";
       setAuthorAvatarPreview(fallback); onChangeAuthor("avatar", fallback);
     } finally { setUploadingAvatar(false); e.target.value = ""; }
@@ -151,8 +170,21 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.title_ar && !form.title_en) { alert("الرجاء إدخال عنوان المقال بالعربية أو الإنجليزية"); return; }
-    if (!form.body_ar  && !form.body_en)  { alert("الرجاء إدخال محتوى المقال بالعربية أو الإنجليزية"); return; }
+
+    // ✅ حماية: الحفظ مسموح بس لما يجي من زرار الحفظ الحقيقي (اللي عليه data-save-button).
+    // أي زرار تاني جوه الفورم (زي أزرار الـ editor أو زرار الثيم) لو اتعمله submit بالغلط
+    // هيتتجاهل ومش هيبعت أي request للـ API.
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLElement | null;
+    if (!submitter || !submitter.hasAttribute("data-save-button")) return;
+
+    if (!form.title_ar && !form.title_en) {
+      notify({ type: "warning", title: "العنوان مطلوب", message: "الرجاء إدخال عنوان المقال بالعربية أو الإنجليزية" });
+      return;
+    }
+    if (!form.body_ar && !form.body_en) {
+      notify({ type: "warning", title: "المحتوى مطلوب", message: "الرجاء إدخال محتوى المقال بالعربية أو الإنجليزية" });
+      return;
+    }
     setLoading(true);
     try {
       const payload = {
@@ -169,10 +201,16 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
       }
       const result = await res.json();
       if (!result.success) throw new Error(result.message || "Operation failed");
-      alert(result.message || "تم حفظ المقال بنجاح!");
-      onSaved(); onClose();
+
+      // ✅ إشعار النجاح، وبعد ما يتقفل (تلقائي أو بالضغط) بنقفل الفورم ونحدّث القايمة
+      notify({
+        type: "success",
+        title: initial?._id ? "تم تحديث المقال" : "تم نشر المقال",
+        message: result.message || "تم حفظ المقال بنجاح!",
+        onClose: () => { onSaved(); onClose(); },
+      });
     } catch (err: any) {
-      alert(`خطأ: ${err.message || "حدث خطأ غير معروف"}`);
+      notify({ type: "error", title: "حصل خطأ", message: err.message || "حدث خطأ غير معروف" });
     } finally { setLoading(false); }
   };
 
@@ -330,6 +368,7 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           value={lang === "ar" ? form.body_ar : form.body_en}
           onChange={(v) => handleBodyChange(v, lang)}
           placeholder={lang === "ar" ? "اكتب محتوى المقال هنا..." : "Write your blog post content here..."}
+          dir={lang === "ar" ? "rtl" : "ltr"}
         />
       </Section>
 
@@ -488,7 +527,8 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
         <button type="button" onClick={onClose} disabled={isDisabled} className={s.cancelBtn}>
           <X size={16} /> {t("common.cancel") || "إلغاء"}
         </button>
-        <button type="submit" disabled={isDisabled} className={s.submitBtn}>
+        {/* ✅ data-save-button: العلامة اللي الـ submit handler بيدوّر عليها */}
+        <button type="submit" data-save-button="true" disabled={isDisabled} className={s.submitBtn}>
           {loading ? (
             <><Loader2 size={16} className="animate-spin" /> {t("common.saving") || "جاري الحفظ..."}</>
           ) : initial ? (
@@ -498,6 +538,9 @@ export default function BlogForm({ initial, onClose, onSaved }: Props) {
           )}
         </button>
       </div>
+
+      {/* ✅ نافذة الإشعارات (portal على document.body) */}
+      {notifyHost}
     </form>
   );
 }

@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Slider from "react-slick";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -7,7 +7,6 @@ import LeadersModal from "../LeadersModal";
 import ProjectModal from "../ProjectModal";
 import { useI18n } from "@/i18n/I18nProvider";
 
-// تعريف نوع Project موحد
 export type Project = {
   _id: string;
   title: string;
@@ -20,65 +19,238 @@ export type Project = {
   featured?: boolean;
 };
 
-// تسجيل plugin
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
 }
 
+/* ================= Helpers ================= */
+
+const MAX_SLIDES = 8;
+const AUTO_SLIDE_MS = 6000;
+const YOUTUBE_ID_REGEX =
+  /(?:youtu\.be\/|youtube\.com\/(?:shorts\/|embed\/|watch\?v=))([\w-]{11})/;
+
+const getYouTubeId = (url?: string) => url?.match(YOUTUBE_ID_REGEX)?.[1] ?? null;
+
+// iOS مبيعرضش أول فريم من غير الـ fragment ده
+const withFirstFrame = (url: string) =>
+  url.includes("#") ? url : `${url}#t=0.001`;
+
+// صورة المشروع، أو thumbnail اليوتيوب لو مفيش صورة
+const getPoster = ({ image, video }: Pick<Project, "image" | "video">) => {
+  if (image) return image;
+  const id = getYouTubeId(video);
+  return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : undefined;
+};
+
+const triggerConfig = (trigger: Element | null, start: string) => ({
+  trigger,
+  start,
+  end: "bottom 20%",
+  toggleActions: "play none none reverse",
+});
+
+/* ================= Sub components ================= */
+
+const PlayIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M8 5v14l11-7z" />
+  </svg>
+);
+
+// فيديو صامت بيشتغل لوحده، وبيتوقف لما paused = true
+const AutoPlayVideo = ({
+  src,
+  poster,
+  paused,
+  className,
+}: {
+  src: string;
+  poster?: string;
+  paused: boolean;
+  className?: string;
+}) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // لازم يتحط يدوي: React مبيحطش attribute الـ muted وiOS محتاجه للـ autoplay
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.defaultMuted = true;
+    video.muted = true;
+  }, [src]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (paused) video.pause();
+    else video.play().catch(() => {});
+  }, [paused, src]);
+
+  return (
+    <video
+      ref={videoRef}
+      src={withFirstFrame(src)}
+      poster={poster}
+      className={className}
+      autoPlay
+      loop
+      muted
+      playsInline
+      preload="auto"
+    />
+  );
+};
+
+const MeetButton = ({
+  label,
+  onClick,
+  buttonRef,
+  fullOnMobile,
+}: {
+  label: string;
+  onClick: () => void;
+  buttonRef?: React.Ref<HTMLButtonElement>;
+  fullOnMobile?: boolean;
+}) => (
+  <button
+    ref={buttonRef}
+    onClick={onClick}
+    className={`group relative inline-flex transform items-center justify-center gap-3 overflow-hidden rounded-2xl bg-primary px-8 py-4 font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-1 hover:scale-105 hover:shadow-2xl active:scale-95 ${
+      fullOnMobile ? "w-full sm:w-auto" : ""
+    }`}
+  >
+    <span className="relative z-10">{label}</span>
+    <div className="absolute inset-0 origin-left scale-x-0 transform bg-gradient-to-r from-primary to-secondary transition-transform duration-300 group-hover:scale-x-100" />
+  </button>
+);
+
+const Thumbnail = ({
+  project,
+  active,
+  onClick,
+}: {
+  project: Project;
+  active: boolean;
+  onClick: () => void;
+}) => {
+  const poster = getPoster(project);
+
+  return (
+    <div className="thumbnail-item">
+      <div
+        data-thumb={project._id}
+        onClick={onClick}
+        className={`transform cursor-pointer overflow-hidden rounded-lg border-2 transition-all duration-300 hover:scale-105 ${
+          active
+            ? "scale-105 border-primary shadow-lg ring-2 ring-primary/50"
+            : "border-transparent hover:border-primary/30"
+        }`}
+      >
+        {poster ? (
+          <img
+            src={poster}
+            alt={project.title}
+            className="h-20 w-full transform rounded-lg object-cover transition-transform duration-300 hover:scale-110"
+          />
+        ) : (
+          <div className="group flex h-20 w-full items-center justify-center rounded-lg bg-gray-200 dark:bg-gray-700">
+            <PlayIcon className="h-8 w-8 text-gray-400 transition-colors duration-300 group-hover:text-primary" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ميديا الكارت الرئيسي. يوتيوب بيظهر كصورة، والتشغيل الفعلي في المودال
+const CardMedia = ({
+  project,
+  paused,
+}: {
+  project: Project;
+  paused: boolean;
+}) => {
+  const poster = getPoster(project);
+  const mediaClass = "h-64 w-full rounded-2xl object-cover sm:h-80";
+  const isYouTube = !!getYouTubeId(project.video);
+
+  if (project.video && !isYouTube) {
+    return (
+      <AutoPlayVideo
+        src={project.video}
+        poster={poster}
+        paused={paused}
+        className={mediaClass}
+      />
+    );
+  }
+
+  if (poster) {
+    return (
+      <img
+        src={poster}
+        alt={project.title}
+        className={`${mediaClass} md:transform md:transition-transform md:duration-500 md:hover:scale-110`}
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-64 w-full items-center justify-center text-sm text-gray-500">
+      No media
+    </div>
+  );
+};
+
+/* ================= Main ================= */
+
 const YoungStars = () => {
   const { t } = useI18n();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [leadersOpen, setLeadersOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  // آخر فيديو المستخدم داس عليه: الـ slideshow بيفضل واقف عليه
+  const [videoPressedId, setVideoPressedId] = useState<string | null>(null);
 
-  // Refs للأنيميشن
   const sectionRef = useRef<HTMLElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const descriptionRef = useRef<HTMLParagraphElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const sliderRef = useRef<HTMLDivElement>(null);
   const thumbnailsRef = useRef<HTMLDivElement>(null);
+  const touchStartX = useRef<number | null>(null);
 
-  const thumbnails = projects.slice(0, 8);
+  const slides = projects.slice(0, MAX_SLIDES);
+  const count = slides.length;
+  const activeProject = slides[currentIndex];
+  const activeId = activeProject?._id;
 
-  // ===== Auto Slide Change for Mobile =====
-  useEffect(() => {
-    if (thumbnails.length === 0 || !activeId) return;
+  const modalOpen = !!selectedProject || leadersOpen;
+  const slideshowPaused =
+    modalOpen || (!!activeId && videoPressedId === activeId);
 
-    const interval = setInterval(() => {
-      if (window.innerWidth < 768) {
-        const currentIndex = thumbnails.findIndex(p => p._id === activeId);
-        const nextIndex = (currentIndex + 1) % thumbnails.length;
-        setActiveId(thumbnails[nextIndex]._id);
-        setCurrentIndex(nextIndex);
-      }
-    }, 6000);
+  const goTo = (index: number, manual = false) => {
+    if (!count) return;
+    setCurrentIndex(((index % count) + count) % count);
+    if (manual) setVideoPressedId(null);
+  };
 
-    return () => clearInterval(interval);
-  }, [thumbnails, activeId]);
+  const openProject = (project: Project) => {
+    if (project.video) setVideoPressedId(project._id);
+    setSelectedProject(project);
+  };
 
-  // ===== Fetch Projects =====
+  /* ----- Fetch ----- */
   useEffect(() => {
     const fetchProjects = async () => {
-      setLoading(true);
       try {
         const res = await fetch("/api/projects?limit=50");
         const data = await res.json();
-
         if (data?.success && Array.isArray(data.data)) {
-          const featuredProjects = data.data.filter(
-            (p: Project) => p.featured === true
-          );
-
-          setProjects(featuredProjects);
-
-          if (featuredProjects.length > 0) {
-            setActiveId(featuredProjects[0]._id);
-            setCurrentIndex(0);
-          }
+          setProjects(data.data.filter((p: Project) => p.featured === true));
         }
       } catch (err) {
         console.error("Failed to load projects:", err);
@@ -87,200 +259,150 @@ const YoungStars = () => {
         setLoading(false);
       }
     };
-
     fetchProjects();
   }, []);
 
-  // ===== GSAP Animations =====
+  /* ----- Auto slide (موبايل فقط) ----- */
+  useEffect(() => {
+    if (count < 2 || slideshowPaused) return;
+
+    const interval = setInterval(() => {
+      if (window.innerWidth < 768) {
+        setCurrentIndex((prev) => (prev + 1) % count);
+      }
+    }, AUTO_SLIDE_MS);
+
+    return () => clearInterval(interval);
+  }, [count, slideshowPaused]);
+
+  /* ----- GSAP: ظهور الـ section ----- */
   useEffect(() => {
     if (loading || !sectionRef.current) return;
 
     const ctx = gsap.context(() => {
-      // أنيميشن للعنوان
-      gsap.fromTo(titleRef.current,
+      const isDesktop = window.innerWidth >= 1024;
+
+      gsap.fromTo(
+        titleRef.current,
+        { opacity: 0, y: 50, rotationX: -45 },
         {
-          opacity: 0,
-          y: 50,
-          rotationX: -45
-        },
-        {
-          opacity: 1,
-          y: 0,
-          rotationX: 0,
-          duration: 1.2,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: titleRef.current,
-            start: "top 80%",
-            end: "bottom 20%",
-            toggleActions: "play none none reverse"
-          }
+          opacity: 1, y: 0, rotationX: 0, duration: 1.2, ease: "power3.out",
+          scrollTrigger: triggerConfig(titleRef.current, "top 80%"),
         }
       );
 
-      // أنيميشن للوصف
-      gsap.fromTo(descriptionRef.current,
+      gsap.fromTo(
+        descriptionRef.current,
+        { opacity: 0, x: -30 },
         {
-          opacity: 0,
-          x: -30
-        },
-        {
-          opacity: 1,
-          x: 0,
-          duration: 1,
-          delay: 0.3,
-          ease: "back.out(1.7)",
-          scrollTrigger: {
-            trigger: descriptionRef.current,
-            start: "top 85%",
-            end: "bottom 20%",
-            toggleActions: "play none none reverse"
-          }
+          opacity: 1, x: 0, duration: 1, delay: 0.3, ease: "back.out(1.7)",
+          scrollTrigger: triggerConfig(descriptionRef.current, "top 85%"),
         }
       );
 
-      // أنيميشن للزر
-      gsap.fromTo(buttonRef.current,
+      gsap.fromTo(
+        buttonRef.current,
+        { opacity: 0, scale: 0.8, rotationY: 90 },
         {
-          opacity: 0,
-          scale: 0.8,
-          rotationY: 90
-        },
-        {
-          opacity: 1,
-          scale: 1,
-          rotationY: 0,
-          duration: 0.8,
-          delay: 0.6,
-          ease: "elastic.out(1, 0.8)",
-          scrollTrigger: {
-            trigger: buttonRef.current,
-            start: "top 90%",
-            end: "bottom 20%",
-            toggleActions: "play none none reverse"
-          }
+          opacity: 1, scale: 1, rotationY: 0, duration: 0.8, delay: 0.6, ease: "elastic.out(1, 0.8)",
+          scrollTrigger: triggerConfig(buttonRef.current, "top 90%"),
         }
       );
 
-      // أنيميشن للسلايدر الرئيسي
-      gsap.fromTo(sliderRef.current,
+      // على الموبايل fade من تحت، لأن x:100 كان بيعمل scroll أفقي
+      gsap.fromTo(
+        sliderRef.current,
+        isDesktop ? { opacity: 0, x: 100, rotationY: 15 } : { opacity: 0, y: 40 },
         {
-          opacity: 0,
-          x: 100,
-          rotationY: 15
-        },
-        {
-          opacity: 1,
-          x: 0,
-          rotationY: 0,
-          duration: 1.4,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: sliderRef.current,
-            start: "top 75%",
-            end: "bottom 20%",
-            toggleActions: "play none none reverse"
-          }
+          opacity: 1, x: 0, y: 0, rotationY: 0, duration: 1.2, ease: "power3.out",
+          scrollTrigger: triggerConfig(sliderRef.current, "top 85%"),
         }
       );
 
-      // أنيميشن للثمبنيلز (للشاشات الكبيرة فقط)
-      if (window.innerWidth >= 768) {
-        gsap.fromTo(thumbnailsRef.current,
+      if (window.innerWidth >= 768 && thumbnailsRef.current) {
+        gsap.fromTo(
+          thumbnailsRef.current,
+          { opacity: 0, y: 40 },
           {
-            opacity: 0,
-            y: 40
-          },
-          {
-            opacity: 1,
-            y: 0,
-            duration: 1,
-            delay: 0.8,
-            ease: "bounce.out",
-            scrollTrigger: {
-              trigger: thumbnailsRef.current,
-              start: "top 95%",
-              end: "bottom 20%",
-              toggleActions: "play none none reverse"
-            }
+            opacity: 1, y: 0, duration: 1, delay: 0.8, ease: "bounce.out",
+            scrollTrigger: triggerConfig(thumbnailsRef.current, "top 95%"),
           }
         );
 
-        // أنيميشن للعناصر الداخلية في الثمبنيلز
-        if (thumbnailsRef.current) {
-          const thumbnailItems = thumbnailsRef.current.querySelectorAll(".thumbnail-item");
-          gsap.fromTo(thumbnailItems,
-            {
-              opacity: 0,
-              scale: 0.5,
-              rotation: -180
-            },
-            {
-              opacity: 1,
-              scale: 1,
-              rotation: 0,
-              duration: 0.6,
-              stagger: 0.1,
-              ease: "back.out(1.7)",
-              scrollTrigger: {
-                trigger: thumbnailsRef.current,
-                start: "top 85%",
-                end: "bottom 20%",
-                toggleActions: "play none none reverse"
-              }
-            }
-          );
-        }
+        gsap.fromTo(
+          thumbnailsRef.current.querySelectorAll(".thumbnail-item"),
+          { opacity: 0, scale: 0.5, rotation: -180 },
+          {
+            opacity: 1, scale: 1, rotation: 0, duration: 0.6, stagger: 0.1, ease: "back.out(1.7)",
+            scrollTrigger: triggerConfig(thumbnailsRef.current, "top 85%"),
+          }
+        );
       }
 
-      // أنيميشن للخلفية
-      gsap.fromTo(sectionRef.current,
+      gsap.fromTo(
+        sectionRef.current,
+        { backgroundPosition: "100% 0%" },
         {
-          backgroundPosition: "100% 0%"
-        },
-        {
-          backgroundPosition: "0% 100%",
-          duration: 2,
-          ease: "sine.inOut",
+          backgroundPosition: "0% 100%", duration: 2, ease: "sine.inOut",
           scrollTrigger: {
             trigger: sectionRef.current,
             start: "top bottom",
             end: "bottom top",
-            scrub: 1
-          }
+            scrub: 1,
+          },
         }
       );
-
     }, sectionRef);
 
     return () => ctx.revert();
-  }, [loading, projects.length]);
+  }, [loading, count]);
 
-  // أنيميشن عند تغيير المشروع النشط
+  /* ----- GSAP: عند تغيير المشروع النشط ----- */
   useEffect(() => {
     if (!sliderRef.current || !activeId) return;
+    const isMobile = window.innerWidth < 768;
 
-    gsap.fromTo(sliderRef.current,
-      {
-        scale: 0.95,
-        rotationX: -10
-      },
-      {
-        scale: 1,
-        rotationX: 0,
-        duration: 0.6,
-        ease: "back.out(1.7)"
-      }
+    gsap.fromTo(
+      sliderRef.current,
+      isMobile ? { opacity: 0.4 } : { scale: 0.95, rotationX: -10 },
+      isMobile
+        ? { opacity: 1, duration: 0.4, ease: "power1.out" }
+        : { scale: 1, rotationX: 0, duration: 0.6, ease: "back.out(1.7)" }
     );
   }, [activeId]);
 
-  // ===== Slick Settings =====
+  /* ----- Handlers ----- */
+  const handleThumbnailClick = (index: number) => {
+    const el = document.querySelector(`[data-thumb="${slides[index]._id}"]`);
+    if (el) {
+      gsap.fromTo(el, { scale: 1 }, { scale: 0.9, duration: 0.1, yoyo: true, repeat: 1 });
+    }
+    goTo(index, true);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(dx) < 50) return;
+
+    const isRtl = document.documentElement.dir === "rtl";
+    const forward = isRtl ? dx > 0 : dx < 0;
+    goTo(currentIndex + (forward ? 1 : -1), true);
+  };
+
+  /* ----- Slick settings ----- */
   const settingsMain = {
     slidesToShow: 1,
     slidesToScroll: 1,
     arrows: false,
     fade: false,
     infinite: false,
+    swipe: false, // السوايب مخصص فوق
   };
 
   const settingsThumbs = {
@@ -297,202 +419,146 @@ const YoungStars = () => {
     ],
   };
 
-  const handleThumbnailClick = (projectId: string) => {
-    const clickedThumb = document.querySelector(`[data-thumb="${projectId}"]`);
-    if (clickedThumb) {
-      gsap.fromTo(clickedThumb,
-        {
-          scale: 1
-        },
-        {
-          scale: 0.9,
-          duration: 0.1,
-          yoyo: true,
-          repeat: 1
-        }
+  /* ----- Render ----- */
+  const renderSlider = () => {
+    if (loading) {
+      return (
+        <div className="py-20 text-center text-SlateBlueText">
+          <div className="animate-pulse">Loading...</div>
+        </div>
       );
     }
 
-    setActiveId(projectId);
-    setCurrentIndex(thumbnails.findIndex(p => p._id === projectId));
-  };
+    if (!activeProject) {
+      return <div className="py-8 text-center text-SlateBlueText">No projects yet.</div>;
+    }
 
-  const handleDotClick = (index: number) => {
-    setActiveId(thumbnails[index]._id);
-    setCurrentIndex(index);
-  };
+    return (
+      <>
+        <Slider {...settingsMain} key={activeId} className="pb-3">
+          <div>
+            <div
+              className="relative cursor-pointer overflow-hidden rounded-2xl border border-PowderBlueBorder bg-white shadow-lg dark:border-dark_border dark:bg-darkmode md:transform md:transition-transform md:duration-300 md:hover:scale-105"
+              onClick={() => openProject(activeProject)}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
+              <CardMedia project={activeProject} paused={modalOpen} />
 
-  const activeProject = thumbnails.find((p) => p._id === activeId);
+              {/* كابشن + عداد + أيقونة فيديو (موبايل فقط) */}
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent px-4 pb-4 pt-12 text-start md:hidden">
+                {activeProject.student?.name && (
+                  <p className="text-xs font-medium text-white/80">
+                    {activeProject.student.name}
+                  </p>
+                )}
+                <p className="line-clamp-1 text-base font-semibold text-white">
+                  {activeProject.title}
+                </p>
+              </div>
+
+              <span className="pointer-events-none absolute start-3 top-3 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-medium tabular-nums text-white backdrop-blur-sm md:hidden">
+                {currentIndex + 1} / {count}
+              </span>
+
+              {activeProject.video && (
+                <span className="pointer-events-none absolute end-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-white text-neutral-900 md:hidden">
+                  <PlayIcon className="h-4 w-4 translate-x-px" />
+                </span>
+              )}
+            </div>
+          </div>
+        </Slider>
+
+        {/* Thumbnails: شاشات كبيرة */}
+        <div ref={thumbnailsRef} className="hidden md:block">
+          <Slider {...settingsThumbs} className="thumb mt-4">
+            {slides.map((project, index) => (
+              <Thumbnail
+                key={`thumb-${project._id}`}
+                project={project}
+                active={index === currentIndex}
+                onClick={() => handleThumbnailClick(index)}
+              />
+            ))}
+          </Slider>
+        </div>
+
+        {/* Dots: موبايل */}
+        <div className="mt-4 flex items-center justify-center gap-2 md:hidden">
+          {slides.map((project, index) => (
+            <button
+              key={`dot-${project._id}`}
+              onClick={() => goTo(index, true)}
+              aria-label={`Go to slide ${index + 1}`}
+              className={`h-2 rounded-full transition-all duration-300 ${
+                index === currentIndex
+                  ? "w-6 bg-primary"
+                  : "w-2 bg-gray-300 dark:bg-gray-600"
+              }`}
+            />
+          ))}
+        </div>
+      </>
+    );
+  };
 
   return (
     <section
       ref={sectionRef}
-      className="bg-white/20 dark:bg-darkmode relative overflow-hidden"
+      className="relative overflow-hidden bg-white/20 dark:bg-darkmode"
     >
-      <div className="container mx-auto px-4 py-8 lg:py-16">
-        <div className="grid lg:grid-cols-2 grid-cols-1 items-center gap-12 lg:gap-16 xl:gap-24">
-          {/* ===== Main Slider ===== */}
-          <div ref={sliderRef} className="w-full relative">
-            {loading ? (
-              <div className="py-20 text-center text-SlateBlueText">
-                <div className="animate-pulse">Loading...</div>
-              </div>
-            ) : !activeProject ? (
-              <div className="py-8 text-center text-SlateBlueText">No projects yet.</div>
-            ) : (
-              <>
-                <Slider {...settingsMain} key={activeId} className="pb-3">
-                  <div>
-                    <div
-                      className="rounded-2xl overflow-hidden shadow-lg bg-white dark:bg-darkmode border border-PowderBlueBorder dark:border-dark_border cursor-pointer transform transition-transform duration-300 hover:scale-105"
-                      onClick={() => {
-                        setSelectedProject(activeProject);
-                        gsap.fromTo(".project-modal",
-                          { scale: 0.8, opacity: 0 },
-                          { scale: 1, opacity: 1, duration: 0.5 }
-                        );
-                      }}
-                    >
-                      {activeProject.video ? (
-                        activeProject.video.includes("youtube.com") || activeProject.video.includes("youtu.be") ? (
-                          <div className="relative rounded-2xl overflow-hidden bg-black">
-                            <iframe
-                              src={activeProject.video
-                                .replace("youtube.com/shorts/", "www.youtube.com/embed/")
-                                .replace("watch?v=", "embed/")
-                                .replace("youtu.be/", "www.youtube.com/embed/")}
-                              title={activeProject.title || "Project Video"}
-                              className="w-full h-80 rounded-2xl"
-                              allow="autoplay; encrypted-media"
-                              allowFullScreen
-                              loading="lazy"
-                            />
-                          </div>
-                        ) : (
-                          <video
-                            src={activeProject.video}
-                            className="w-full h-80 object-cover rounded-2xl"
-                            loop
-                            autoPlay
-                            playsInline
-                            muted
-                          />
-                        )
-                      ) : activeProject.image ? (
-                        <img
-                          src={activeProject.image}
-                          alt={activeProject.title}
-                          className="w-full h-80 object-cover rounded-2xl transform transition-transform duration-500 hover:scale-110"
-                        />
-                      ) : (
-                        <div className="w-full h-64 flex items-center justify-center text-sm text-gray-500">
-                          No media
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </Slider>
-
-                {/* ===== Thumbnail Slider للشاشات الكبيرة ===== */}
-                <div ref={thumbnailsRef} className="hidden md:block">
-                  <Slider {...settingsThumbs} className="thumb mt-4">
-                    {thumbnails.map((p) => (
-                      <div key={`thumb-${p._id}`} className="thumbnail-item">
-                        <div
-                          data-thumb={p._id}
-                          className={`rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-300 transform hover:scale-105 ${p._id === activeId
-                            ? "border-primary shadow-lg scale-105 ring-2 ring-primary/50"
-                            : "border-transparent hover:border-primary/30"
-                            }`}
-                          onClick={() => handleThumbnailClick(p._id)}
-                        >
-                          {p.image ? (
-                            <img
-                              src={p.image}
-                              alt={p.title}
-                              className="w-full h-20 object-cover rounded-lg transform transition-transform duration-300 hover:scale-110"
-                            />
-                          ) : p.video ? (
-                            <div className="w-full h-20 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center group">
-                              <svg className="w-8 h-8 text-gray-400 group-hover:text-primary transition-colors duration-300" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M8 5v14l11-7z" />
-                              </svg>
-                            </div>
-                          ) : (
-                            <div className="w-full h-20 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center text-xs text-gray-500">
-                              No thumbnail
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </Slider>
-                </div>
-
-                {/* ===== Dots Navigation للشاشات الصغيرة ===== */}
-                <div className="md:hidden flex justify-center mt-6 gap-3">
-                  {thumbnails.map((_, index) => (
-                    <button
-                      key={`dot-${index}`}
-                      onClick={() => handleDotClick(index)}
-                      className={`w-3 h-3 rounded-full transition-all duration-300 ${index === currentIndex
-                          ? 'bg-primary scale-125'
-                          : 'bg-gray-300 hover:bg-gray-400'
-                        }`}
-                      aria-label={`Go to slide ${index + 1}`}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* ===== Right Section ===== */}
-          <div className="lg:pt-0 pt- w-full">
+      <div className="container mx-auto px-4 py-10 lg:py-16">
+        <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-16 xl:gap-24">
+          {/* Text: فوق السلايدر على الموبايل */}
+          <div className="order-1 w-full text-center lg:order-2 lg:text-start">
             <h2
               ref={titleRef}
-              className="text-4xl lg:text-5xl font-bold text-MidnightNavyText dark:text-white leading-tight"
+              className="text-3xl font-bold leading-tight text-MidnightNavyText dark:text-white sm:text-4xl lg:text-5xl"
             >
               {t("youngStars.title")}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/70 block transform transition-transform duration-300 hover:scale-105">
+              <span className="block bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent lg:transform lg:transition-transform lg:duration-300 lg:hover:scale-105">
                 {t("youngStars.highlighted")}
               </span>
             </h2>
 
             <p
               ref={descriptionRef}
-              className="text-xl font-normal text-SlateBlueText dark:text-gray-300 max-w-2xl lg:pt-8 pt-6 lg:pb-12 pb-8 leading-relaxed"
+              className="mx-auto max-w-2xl pb-6 pt-4 text-base font-normal leading-relaxed text-SlateBlueText dark:text-gray-300 sm:text-lg lg:mx-0 lg:pb-12 lg:pt-8 lg:text-xl"
             >
               {t("youngStars.description")}
             </p>
 
-            <div className="flex gap-4">
-              <button
-                ref={buttonRef}
-                onClick={() => {
-                  setLeadersOpen(true);
-                  gsap.fromTo(".leaders-modal",
-                    { y: 100, opacity: 0 },
-                    { y: 0, opacity: 1, duration: 0.5 }
-                  );
-                }}
-                className="relative inline-flex items-center gap-3 bg-primary text-white font-semibold px-8 py-4 rounded-2xl shadow-lg hover:shadow-2xl transform transition-all duration-300 hover:scale-105 hover:-translate-y-1 active:scale-95 group overflow-hidden"
-              >
-                <span className="relative z-10">{t("youngStars.meetMoreLeaders")}</span>
-                <div className="absolute inset-0 bg-gradient-to-r from-primary to-secondary transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
-              </button>
+            <div className="hidden gap-4 lg:flex">
+              <MeetButton
+                buttonRef={buttonRef}
+                label={t("youngStars.meetMoreLeaders")}
+                onClick={() => setLeadersOpen(true)}
+              />
+            </div>
+          </div>
+
+          {/* Slider */}
+          <div ref={sliderRef} className="relative order-2 w-full lg:order-1">
+            {renderSlider()}
+
+            <div className="mt-6 flex justify-center lg:hidden">
+              <MeetButton
+                label={t("youngStars.meetMoreLeaders")}
+                onClick={() => setLeadersOpen(true)}
+                fullOnMobile
+              />
             </div>
           </div>
         </div>
       </div>
 
-      {/* ===== Modals ===== */}
       <LeadersModal
         open={leadersOpen}
         onClose={() => setLeadersOpen(false)}
         projects={projects}
-        onSelect={(p: Project) => {
-          setSelectedProject(p);
+        onSelect={(project: Project) => {
+          openProject(project);
           setLeadersOpen(false);
         }}
       />

@@ -1,0 +1,188 @@
+/* ───────────────────────────────────────────────────────────
+   Notify — مبني على Brand Palette بتاع المشروع
+   primary #ff6700 • secondary #004d59 • amber #feaf00
+   Dark: darkmode #0a0f17 • darklight #161b22 • dark_border #30363d
+   الدارك بيشتغل مع Tailwind (.dark) وكمان html[data-theme="dark"]
+   ─────────────────────────────────────────────────────────── */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 26, 31, 0.55); /* teal-deeper */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.card {
+  /* الافتراضي = info (برتقالي البراند) */
+  --accent: #ff6700;
+  --accent-2: #feaf00;
+  --accent-soft: rgba(255, 103, 0, 0.12);
+
+  /* Light surfaces */
+  --surface: #ffffff;
+  --title: #004d59;
+  --text: #4a5568;
+  --border: rgba(0, 77, 89, 0.14);
+  --close: #718096;
+
+  position: relative;
+  width: min(92vw, 400px);
+  padding: 38px 26px 26px;
+  text-align: center;
+  font-family: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  box-shadow: 0 25px 60px -12px rgba(0, 77, 89, 0.35);
+  overflow: hidden;
+}
+
+/* شريط البراند في الأعلى (brand-full) */
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background: linear-gradient(90deg, #004d59 0%, #ff6700 50%, #feaf00 100%);
+}
+
+/* ── الأنواع ── */
+.success { --accent: #004d59; --accent-2: #0a7f91; --accent-soft: rgba(0, 77, 89, 0.1); }
+.error   { --accent: #e5484d; --accent-2: #ff6437; --accent-soft: rgba(229, 72, 77, 0.12); }
+.warning { --accent: #e69500; --accent-2: #feaf00; --accent-soft: rgba(254, 175, 0, 0.18); }
+.info    { --accent: #ff6700; --accent-2: #feaf00; --accent-soft: rgba(255, 103, 0, 0.12); }
+
+.closeX {
+  position: absolute;
+  top: 16px;
+  inset-inline-end: 14px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--close);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.closeX:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.iconWrap {
+  position: relative;
+  width: 78px;
+  height: 78px;
+  margin: 0 auto 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  opacity: 0;
+  animation: pulseRing 1.6s ease-out infinite;
+}
+
+@keyframes pulseRing {
+  0%   { transform: scale(0.9); opacity: 0.55; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+.title {
+  margin: 0 0 8px;
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1.5;
+  color: var(--title);
+}
+
+.message {
+  margin: 0 0 22px;
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.okBtn {
+  width: 100%;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  cursor: pointer;
+  box-shadow: 0 8px 20px -8px var(--accent);
+  transition: transform 0.15s ease, filter 0.2s ease, box-shadow 0.2s ease;
+}
+.okBtn:hover  { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 12px 24px -8px var(--accent); }
+.okBtn:active { transform: translateY(0) scale(0.98); }
+.okBtn:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 2px; }
+
+/* شريط العد التنازلي للإغلاق التلقائي */
+.progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  width: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transform-origin: left center;
+  animation: shrink linear forwards;
+}
+[dir="rtl"] .progress { transform-origin: right center; }
+
+@keyframes shrink {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+/* ═════════════ Dark ═════════════ */
+:global(.dark) .backdrop,
+:global(html[data-theme="dark"]) .backdrop {
+  background: rgba(10, 15, 23, 0.72); /* darkmode */
+}
+
+:global(.dark) .card,
+:global(html[data-theme="dark"]) .card {
+  --surface: #161b22;  /* darklight */
+  --title: #f0f6fc;
+  --text: #a8b3bf;
+  --border: #30363d;   /* dark_border */
+  --close: #8b949e;    /* darkmuted */
+  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.75);
+}
+
+:global(.dark) .success,
+:global(html[data-theme="dark"]) .success { --accent: #2bb5c8; --accent-2: #0a7f91; --accent-soft: rgba(43, 181, 200, 0.16); }
+:global(.dark) .error,
+:global(html[data-theme="dark"]) .error   { --accent: #ff6b6b; --accent-2: #ff6437; --accent-soft: rgba(255, 107, 107, 0.16); }
+:global(.dark) .warning,
+:global(html[data-theme="dark"]) .warning { --accent: #feaf00; --accent-2: #f67d00; --accent-soft: rgba(254, 175, 0, 0.16); }
+:global(.dark) .info,
+:global(html[data-theme="dark"]) .info    { --accent: #ff7a1f; --accent-2: #feaf00; --accent-soft: rgba(255, 122, 31, 0.16); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ring, .progress { animation: none; }
+}
