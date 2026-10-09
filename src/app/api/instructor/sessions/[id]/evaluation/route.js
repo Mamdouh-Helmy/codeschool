@@ -355,16 +355,10 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ─── Recording message ─────────────────────────────────────────────────────
-// ✅ NEW:
-//   - Child  → قالب session_recording (موجّه لولي الأمر) + الرقم اللي في recipientPhone
-//   - Adult  → قالب session_recording_adult (موجّه للطالب) + رقم الطالب
-//   - sessionIsOffline → مفيش تسجيل (ما بيتحسبش مشكلة، بس بيتخطى)
-//
-// ⚠️ المستلم (recipientPhone) بيتحدد مسبقًا في buildEvaluationMessage
-//    عن طريق routeMessage — نفس المنطق:
-//      kids  → رقم ولي الأمر
-//      adults → رقم الطالب
-//    فبنستخدم نفس المستلم هنا عشان يفضل "تناسق كامل" بين التقييم والتسجيل.
+//   - Child  → قالب session_recording (موجّه لولي الأمر)
+//   - Adult  → قالب session_recording_adult (موجّه للطالب)
+//   - المستلم (recipientPhone) بيتحدد في buildEvaluationMessage عن طريق
+//     routeMessage — نفس المستلم بيتستخدم هنا عشان يفضل تناسق كامل.
 // ────────────────────────────────────────────────────────────────────────────
 async function buildRecordingMessage(student, session, recordingLink) {
   const dbVars = await loadDbVars();
@@ -411,17 +405,33 @@ async function buildRecordingMessage(student, session, recordingLink) {
 
 // ─── Session blog message (للكل: الطفل → ولي الأمر | البالغ → الطالب) ─────
 // ✅ مشترك بين الأونلاين والأوفلاين
-async function buildBlogMessage(student, session, blogInfo) {
+// ✅ بيتبعت لو الملخص موجود بأي لغة (مش لغة الطالب المفضلة بس)
+// ✅ isAdult بيتمرر من routeMessage عشان يفضل نفس مصدر الحقيقة بتاع التقييم
+async function buildBlogMessage(student, session, blogInfo, opts = {}) {
+  if (!blogInfo || (!blogInfo.hasAr && !blogInfo.hasEn)) return null;
+
   const lang = student.communicationPreferences?.preferredLanguage || 'ar';
-  const hasContentForLang = lang === 'ar' ? blogInfo?.hasAr : blogInfo?.hasEn;
-  if (!hasContentForLang) return null;
+  const isAdult =
+    typeof opts.isAdult === 'boolean'
+      ? opts.isAdult
+      : student.studentType === 'adults';
+
+  const baseUrl = (
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    ''
+  ).replace(/\/+$/, '');
+
+  if (!baseUrl) {
+    console.error('❌ [Blog] No base URL env configured — blog link would be relative, skipping');
+    return null;
+  }
 
   const dbVars = await loadDbVars();
   const ctx = buildRecipientContext(student, dbVars);
-  const isAdult = student.studentType === 'adults';
   const salutation = isAdult ? ctx.studentSalutation : ctx.guardianSalutation;
 
-  const baseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
   const blogUrl = `${baseUrl}/session-blog/${session._id}`;
 
   const rendered =
@@ -651,8 +661,8 @@ export async function POST(req, { params }) {
         moduleDescription,
       });
 
-    // ✅ الملخص للكل (طفل → ولي أمر | بالغ → الطالب)
-    const blogMessage = await buildBlogMessage(student, session, blogInfo);
+    // ✅ الملخص للكل (طفل → ولي أمر | بالغ → الطالب) — isAdult من نفس مصدر التقييم
+    const blogMessage = await buildBlogMessage(student, session, blogInfo, { isAdult });
 
     return json({
       success: true,
@@ -863,6 +873,7 @@ export async function PATCH(req, { params }) {
       let messageSent = false;
       let recordingLinkSent = false;
       let blogSent = false;
+      let blogSkipReason = null;
       let duplicate = false;
       let sendError = null;
 
@@ -911,50 +922,53 @@ export async function PATCH(req, { params }) {
           }),
         );
 
-        if (!duplicate) {
-          // ═══════════════════════════════════════════════════════════════════════
-          // ✅ Recording link — للطالب وولي الأمر (على حسب النوع)
-          //    - Online فقط (الـ Offline مفيش تسجيل)
-          //    - نفس المستلم بتاع التقييم (recipientPhone):
-          //        kids   → رقم ولي الأمر
-          //        adults → رقم الطالب
-          // ═══════════════════════════════════════════════════════════════════════
-          if (recordingLink?.trim() && !sessionIsOffline) {
-            try {
-              const recBuilt = await buildRecordingMessage(
-                student,
-                session,
-                recordingLink,
-              );
+        // ═══════════════════════════════════════════════════════════════════════
+        // ✅ Recording link — أونلاين فقط، ونفس مستلم التقييم
+        //    (متربط بالتقييم: لو التقييم duplicate مفيش تسجيل)
+        //        kids   → رقم ولي الأمر
+        //        adults → رقم الطالب
+        // ═══════════════════════════════════════════════════════════════════════
+        if (!duplicate && recordingLink?.trim() && !sessionIsOffline) {
+          try {
+            const recBuilt = await buildRecordingMessage(student, session, recordingLink);
 
-              if (recBuilt?.rendered?.trim()) {
-                const linkResult = await wapilotService.sendAndLogMessage({
-                  studentId,
-                  phoneNumber: recipientPhone,
-                  messageContent: recBuilt.rendered,
-                  // ✅ session_recording للطفل | session_recording_adult للبالغ
-                  messageType: recBuilt.templateType,
-                  language: lang,
-                  metadata: {
-                    ...baseMeta,
-                    isAdult: recBuilt.isAdult,
-                    isFallback: recBuilt.isFallback,
-                  },
-                });
-                recordingLinkSent = linkResult?.success || false;
-              }
-            } catch (recErr) {
-              console.error('❌ RECORDING SEND ERROR:', recErr);
+            if (recBuilt?.rendered?.trim()) {
+              const linkResult = await wapilotService.sendAndLogMessage({
+                studentId,
+                phoneNumber: recipientPhone,
+                messageContent: recBuilt.rendered,
+                // ✅ session_recording للطفل | session_recording_adult للبالغ
+                messageType: recBuilt.templateType,
+                language: lang,
+                metadata: {
+                  ...baseMeta,
+                  isAdult: recBuilt.isAdult,
+                  isFallback: recBuilt.isFallback,
+                },
+              });
+              recordingLinkSent = linkResult?.success || false;
             }
+          } catch (recErr) {
+            console.error('❌ RECORDING SEND ERROR:', recErr);
           }
+        }
 
-          // ═══════════════════════════════════════════════════════════════════════
-          // ✅ Session blog (ملخص الجلسة) — مشترك بين الأطفال والبالغين
-          //    يتبعت للأونلاين والأوفلاين — نفس المستلم (recipientPhone)
-          // ═══════════════════════════════════════════════════════════════════════
-          const blogMessage = await buildBlogMessage(student, session, blogInfo);
-          if (blogMessage?.rendered) {
-            try {
+        // ═══════════════════════════════════════════════════════════════════════
+        // ✅ Session blog (ملخص الجلسة) — طفل → ولي الأمر | بالغ → الطالب
+        //    - أونلاين وأوفلاين
+        //    - مستقل عن dedupe التقييم: له dedupe خاص بيه (messageType = session_blog)
+        //      فلو التقييم كان duplicate والملخص عمره ما اتبعت، هيتبعت دلوقتي
+        //      ولو اتبعت قبل كده، الـ dedupe هيمنع التكرار
+        // ═══════════════════════════════════════════════════════════════════════
+        if (!blogInfo) {
+          blogSkipReason = 'no_blog_content';
+        } else {
+          try {
+            const blogMessage = await buildBlogMessage(student, session, blogInfo, { isAdult });
+
+            if (!blogMessage?.rendered) {
+              blogSkipReason = 'blog_message_not_built';
+            } else {
               const blogResult = await wapilotService.sendAndLogMessage({
                 studentId,
                 phoneNumber: recipientPhone,
@@ -964,9 +978,12 @@ export async function PATCH(req, { params }) {
                 metadata: baseMeta,
               });
               blogSent = blogResult?.success || false;
-            } catch (blogErr) {
-              console.error('❌ BLOG SEND ERROR:', blogErr);
+              if (blogResult?.duplicate) blogSkipReason = 'blog_already_sent';
+              else if (!blogSent) blogSkipReason = blogResult?.error || 'blog_send_failed';
             }
+          } catch (blogErr) {
+            console.error('❌ BLOG SEND ERROR:', blogErr);
+            blogSkipReason = blogErr.message;
           }
         }
       } catch (err) {
@@ -983,6 +1000,7 @@ export async function PATCH(req, { params }) {
         messageSent,
         recordingLinkSent,
         blogSent,
+        ...(blogSkipReason ? { blogSkipReason } : {}),
         ...(duplicate ? { duplicate: true } : {}),
         ...(sendError ? { error: sendError } : {}),
       });
