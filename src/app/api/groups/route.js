@@ -17,6 +17,16 @@ import { getSessionsLinkHealthForGroups } from "@/utils/checkMeetingLinks";
 // ✅ الجروب إما أطفال أو بالغين (مفيش mixed)
 const VALID_GROUP_TYPES = ["kids", "adults"];
 
+// ✅ FIX: escape لأي special characters في الاسم (زي | ( ) . + * ?)
+// من غيره الاسم "Code School | Robotics912" كان بيتحول لـ regex فيه OR
+const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// ✅ بناء شرط البحث عن اسم مطابق تمامًا (case-insensitive) بشكل آمن
+const exactNameQuery = (name) => ({
+  $regex: `^${escapeRegex(name.trim())}$`,
+  $options: "i",
+});
+
 // ─── Helper: Check instructor schedule conflicts ──────────────────────────
 async function checkInstructorConflicts(
   instructors,
@@ -109,9 +119,11 @@ export async function GET(req) {
     const query = { isDeleted: false };
 
     if (search) {
+      // ✅ FIX: escape للبحث كمان عشان حروف زي | ( متكسرش الـ regex
+      const safeSearch = escapeRegex(search);
       query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { code: { $regex: search, $options: "i" } },
+        { name: { $regex: safeSearch, $options: "i" } },
+        { code: { $regex: safeSearch, $options: "i" } },
       ];
     }
     if (courseId) query.courseId = courseId;
@@ -332,7 +344,10 @@ export async function POST(req) {
     await connectDB();
 
     const body = await req.json();
-    console.log("📥 Received group data:", JSON.stringify(body, null, 2));
+    // ✅ بنطبع بس في الـ development (بيانات الطلب مش المفروض تظهر في production)
+    if (process.env.NODE_ENV === "development") {
+      console.log("📥 Received group data:", JSON.stringify(body, null, 2));
+    }
 
     const {
       name,
@@ -377,8 +392,9 @@ export async function POST(req) {
     }));
     const instructorUserIds = normalizedInstructors.map((i) => i.userId);
 
+    // ✅ FIX: فحص الاسم المكرر بعد escape للـ special characters
     const existingGroupName = await Group.findOne({
-      name: { $regex: `^${name.trim()}$`, $options: "i" },
+      name: exactNameQuery(name),
       isDeleted: false,
     });
     if (existingGroupName) {
@@ -531,7 +547,7 @@ export async function POST(req) {
       .toUpperCase()}`;
 
     const groupData = {
-      name,
+      name: name.trim(),
       code: groupCode,
       courseId,
       courseSnapshot,
@@ -713,8 +729,9 @@ export async function PUT(req, { params }) {
     const instructorUserIds = normalizedInstructors.map((i) => i.userId);
 
     if (name) {
+      // ✅ FIX: escape للاسم هنا كمان
       const duplicateGroup = await Group.findOne({
-        name: { $regex: `^${name.trim()}$`, $options: "i" },
+        name: exactNameQuery(name),
         isDeleted: false,
         _id: { $ne: id },
       });
