@@ -2,87 +2,19 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Group from "../../models/Group";
-import Student from "../../models/Student";
-import Session from "../../models/Session";
 import Course from "../../models/Course";
-import Tag from "../../models/Tag";
 import { requireAdmin } from "@/utils/authMiddleware";
-import {
-  calculateTotalSessions,
-  getSessionDistributionSummary,
-} from "@/utils/sessionGenerator";
+import { getSessionDistributionSummary } from "@/utils/sessionGenerator";
 import { getSessionsLinkHealthForGroups } from "@/utils/checkMeetingLinks";
+import {
+  VALID_GROUP_TYPES,
+  findDuplicateGroupName,
+  checkInstructorConflicts,
+  buildConflictResponseBody,
+} from "@/utils/groupValidation";
 
-// ─── Group types ──────────────────────────────────────────────────────────
-// ✅ الجروب إما أطفال أو بالغين (مفيش mixed)
-const VALID_GROUP_TYPES = ["kids", "adults"];
-
-// ✅ FIX: escape لأي special characters في الاسم (زي | ( ) . + * ?)
-// من غيره الاسم "Code School | Robotics912" كان بيتحول لـ regex فيه OR
+// regex escape للبحث (search) بس — فحص الاسم المكرر بقى من غير regex
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-// ✅ بناء شرط البحث عن اسم مطابق تمامًا (case-insensitive) بشكل آمن
-const exactNameQuery = (name) => ({
-  $regex: `^${escapeRegex(name.trim())}$`,
-  $options: "i",
-});
-
-// ─── Helper: Check instructor schedule conflicts ──────────────────────────
-async function checkInstructorConflicts(
-  instructors,
-  schedule,
-  excludeGroupId = null,
-) {
-  if (!instructors || instructors.length === 0 || !schedule) return [];
-  const scheduleDays = schedule.daysOfWeek || [];
-  const timeFrom = schedule.timeFrom;
-  const timeTo = schedule.timeTo;
-  const conflicts = [];
-
-  for (const instructorId of instructors) {
-    const userId = instructorId?.userId || instructorId;
-    const query = {
-      "instructors.userId": userId,
-      isDeleted: false,
-      status: { $in: ["draft", "active"] },
-    };
-    if (excludeGroupId) query._id = { $ne: excludeGroupId };
-    const conflictingGroups = await Group.find(query)
-      .populate("instructors.userId", "name")
-      .lean();
-
-    for (const existingGroup of conflictingGroups) {
-      const es = existingGroup.schedule;
-      if (!es) continue;
-      const dayOverlap = scheduleDays.some((day) =>
-        es.daysOfWeek?.includes(day),
-      );
-      if (!dayOverlap) continue;
-      const newFrom = timeFrom.replace(":", "");
-      const newTo = timeTo.replace(":", "");
-      const existFrom = es.timeFrom?.replace(":", "") || "0000";
-      const existTo = es.timeTo?.replace(":", "") || "2359";
-      const hasTimeConflict = !(newTo <= existFrom || newFrom >= existTo);
-      if (!hasTimeConflict) continue;
-      const instructorEntry = existingGroup.instructors?.find(
-        (i) => (i.userId?._id || i.userId)?.toString() === userId.toString(),
-      );
-      const instructorName = instructorEntry?.userId?.name || "المدرب";
-      const overlapDays = scheduleDays.filter((day) =>
-        es.daysOfWeek?.includes(day),
-      );
-      conflicts.push({
-        instructorId: userId,
-        instructorName,
-        conflictGroupName: existingGroup.name,
-        conflictGroupCode: existingGroup.code,
-        conflictDays: overlapDays,
-        conflictTime: `${es.timeFrom} - ${es.timeTo}`,
-      });
-    }
-  }
-  return conflicts;
-}
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
 export async function GET(req) {
@@ -111,15 +43,12 @@ export async function GET(req) {
     const studentsMax = searchParams.get("studentsMax");
     const sessionsGenerated = searchParams.get("sessionsGenerated");
     const tagsParam = searchParams.get("tags");
-    // ✅ فلتر الجروبات التعويضية
-    const makeupFilter = searchParams.get("isMakeupGroup"); // "true" | "false" | null
-    // ✅ فلتر نوع الجروب (kids / adults)
+    const makeupFilter = searchParams.get("isMakeupGroup");
     const groupTypeFilter = searchParams.get("groupType");
 
     const query = { isDeleted: false };
 
     if (search) {
-      // ✅ FIX: escape للبحث كمان عشان حروف زي | ( متكسرش الـ regex
       const safeSearch = escapeRegex(search);
       query.$or = [
         { name: { $regex: safeSearch, $options: "i" } },
@@ -169,14 +98,11 @@ export async function GET(req) {
         query.tags = { $in: tagIds };
       }
     }
-    // ✅ فلتر الجروبات التعويضية
     if (makeupFilter === "true") {
       query.isMakeupGroup = true;
     } else if (makeupFilter === "false") {
-      // نشمل الجروبات العادية + أي وثيقة قديمة مفيهاش الحقل
       query.isMakeupGroup = { $ne: true };
     }
-    // ✅ فلتر نوع الجروب (Kids / Adults)
     if (groupTypeFilter && VALID_GROUP_TYPES.includes(groupTypeFilter)) {
       query.groupType = groupTypeFilter;
     }
@@ -200,7 +126,6 @@ export async function GET(req) {
 
     console.log("✅ Groups fetched:", groups.length, "of", total);
 
-    // ✅ فحص صحة اللينكات لكل جروبات الصفحة دي دفعة واحدة
     const groupIds = groups.map((g) => g._id);
     const linkHealthMap = await getSessionsLinkHealthForGroups(groupIds);
 
@@ -217,7 +142,6 @@ export async function GET(req) {
         code: group.code,
         status: group.status,
 
-        // ✅ MAKE-UP GROUP FLAGS — عشان الفرونت يعرض بادج "حصة تعويضية"
         isMakeupGroup: !!group.isMakeupGroup,
         makeupInfo: group.makeupInfo
           ? {
@@ -248,7 +172,6 @@ export async function GET(req) {
         isFull: group.currentStudentsCount >= group.maxStudents,
         schedule: group.schedule,
         deliveryMode: group.deliveryMode || "online",
-        // ✅ نوع الجروب (kids / adults) — null للجروبات القديمة اللي لسه ملهاش نوع
         groupType: VALID_GROUP_TYPES.includes(group.groupType)
           ? group.groupType
           : null,
@@ -268,7 +191,6 @@ export async function GET(req) {
           orphanedCount: health.orphanedCount,
         },
 
-        // ✅ Hold
         isOnHold: !!group.hold?.isHeld,
         hold: group.hold
           ? {
@@ -296,12 +218,10 @@ export async function GET(req) {
         status: "active",
         "hold.isHeld": true,
       }),
-      // ✅ إحصائية الجروبات التعويضية
       makeup: await Group.countDocuments({
         ...query,
         isMakeupGroup: true,
       }),
-      // ✅ إحصائيات نوع الجروب (أطفال / بالغين)
       kids: await Group.countDocuments({ ...query, groupType: "kids" }),
       adults: await Group.countDocuments({ ...query, groupType: "adults" }),
     };
@@ -344,7 +264,6 @@ export async function POST(req) {
     await connectDB();
 
     const body = await req.json();
-    // ✅ بنطبع بس في الـ development (بيانات الطلب مش المفروض تظهر في production)
     if (process.env.NODE_ENV === "development") {
       console.log("📥 Received group data:", JSON.stringify(body, null, 2));
     }
@@ -364,7 +283,7 @@ export async function POST(req) {
       groupType,
     } = body;
 
-    if (!name || !courseId || !maxStudents || !schedule) {
+    if (!name || !String(name).trim() || !courseId || !maxStudents || !schedule) {
       return NextResponse.json(
         {
           success: false,
@@ -375,7 +294,6 @@ export async function POST(req) {
       );
     }
 
-    // ✅ نوع الجروب إجباري: kids أو adults
     if (!VALID_GROUP_TYPES.includes(groupType)) {
       return NextResponse.json(
         {
@@ -386,22 +304,35 @@ export async function POST(req) {
       );
     }
 
-    const normalizedInstructors = (instructors || []).map((i) => ({
-      userId: i?.userId || i,
-      countTime: i?.countTime || 0,
-    }));
+    const cleanName = String(name).trim();
+
+    // ✅ المدرس إجباري — ممنوع إنشاء جروب من غير مدرس
+    const normalizedInstructors = (instructors || [])
+      .map((i) => ({
+        userId: i?.userId || i,
+        countTime: i?.countTime || 0,
+      }))
+      .filter((i) => !!i.userId);
+
     const instructorUserIds = normalizedInstructors.map((i) => i.userId);
 
-    // ✅ FIX: فحص الاسم المكرر بعد escape للـ special characters
-    const existingGroupName = await Group.findOne({
-      name: exactNameQuery(name),
-      isDeleted: false,
-    });
+    if (instructorUserIds.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "لازم تختار مدرس واحد على الأقل للجروب",
+        },
+        { status: 400 },
+      );
+    }
+
+    // ✅ فحص الاسم المكرر (من غير regex — بيدعم أي رموز في الاسم)
+    const existingGroupName = await findDuplicateGroupName(cleanName);
     if (existingGroupName) {
       return NextResponse.json(
         {
           success: false,
-          error: `يوجد مجموعة بنفس الاسم "${name.trim()}" بالفعل. الرجاء اختيار اسم مختلف.`,
+          error: `يوجد مجموعة بنفس الاسم "${cleanName}" بالفعل. الرجاء اختيار اسم مختلف.`,
         },
         { status: 409 },
       );
@@ -472,28 +403,15 @@ export async function POST(req) {
       );
     }
 
-    if (instructorUserIds.length > 0) {
-      const conflicts = await checkInstructorConflicts(
-        instructorUserIds,
-        schedule,
-      );
-      if (conflicts.length > 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "تعارض في مواعيد المدربين",
-            conflictType: "instructor_schedule",
-            conflicts,
-            conflictMessage: conflicts
-              .map(
-                (c) =>
-                  `المدرب "${c.instructorName}" موجود بالفعل في مجموعة "${c.conflictGroupName}" في نفس الموعد (${c.conflictDays.join("، ")} - ${c.conflictTime})`,
-              )
-              .join("\n"),
-          },
-          { status: 409 },
-        );
-      }
+    // ✅ تعارض المدرسين: لو أي مدرس محطوط في جروب تاني في نفس اليوم والوقت → رفض
+    const conflicts = await checkInstructorConflicts(
+      instructorUserIds,
+      schedule,
+    );
+    if (conflicts.length > 0) {
+      return NextResponse.json(buildConflictResponseBody(conflicts), {
+        status: 409,
+      });
     }
 
     const course = await Course.findById(courseId);
@@ -547,7 +465,7 @@ export async function POST(req) {
       .toUpperCase()}`;
 
     const groupData = {
-      name: name.trim(),
+      name: cleanName,
       code: groupCode,
       courseId,
       courseSnapshot,
@@ -563,7 +481,6 @@ export async function POST(req) {
         timezone: schedule.timezone || "Africa/Cairo",
       },
       deliveryMode: normalizedDeliveryMode,
-      // ✅ نوع الجروب (kids / adults)
       groupType,
       location:
         normalizedDeliveryMode === "offline" ? (location || "").trim() : "",
@@ -606,7 +523,6 @@ export async function POST(req) {
       createdBy: adminUser.id,
       updatedAt: new Date(),
       tags: tags || [],
-      // ✅ الجروبات اللي بتتعمل من الفورم العادي مش تعويضية
       isMakeupGroup: false,
     };
 
@@ -678,279 +594,6 @@ export async function POST(req) {
         details:
           process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
-      { status: 500 },
-    );
-  }
-}
-
-// ─── PUT ──────────────────────────────────────────────────────────────────────
-// ⚠️ ملاحظة: الـ route ده (من غير [id]) مالوش params.id فعليًا، والـ PUT الحقيقي
-//    موجود في app/api/groups/[id]/route.js. سيبته هنا زي ما هو مع تعديل groupType،
-//    ولو مش بتستخدمه ممكن تمسحه.
-export async function PUT(req, { params }) {
-  try {
-    const { id } = await params;
-    console.log(`✏️ Updating group: ${id}`);
-    const authCheck = await requireAdmin(req);
-    if (!authCheck.authorized) return authCheck.response;
-    await connectDB();
-
-    const body = await req.json();
-
-    const {
-      name,
-      instructors,
-      maxStudents,
-      schedule,
-      automation,
-      moduleSelection,
-      tags,
-      deliveryMode,
-      location,
-      locationDetails,
-      groupType,
-    } = body;
-
-    // ✅ لو النوع اتبعت لازم يكون kids أو adults
-    if (groupType !== undefined && !VALID_GROUP_TYPES.includes(groupType)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "نوع الجروب لازم يكون أطفال أو بالغين",
-        },
-        { status: 400 },
-      );
-    }
-
-    const normalizedInstructors = (instructors || []).map((i) => ({
-      userId: i?.userId || i,
-      countTime: i?.countTime || 0,
-    }));
-    const instructorUserIds = normalizedInstructors.map((i) => i.userId);
-
-    if (name) {
-      // ✅ FIX: escape للاسم هنا كمان
-      const duplicateGroup = await Group.findOne({
-        name: exactNameQuery(name),
-        isDeleted: false,
-        _id: { $ne: id },
-      });
-      if (duplicateGroup) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `يوجد مجموعة بنفس الاسم "${name.trim()}" بالفعل. الرجاء اختيار اسم مختلف.`,
-          },
-          { status: 409 },
-        );
-      }
-    }
-
-    if (
-      moduleSelection?.mode === "specific" &&
-      !moduleSelection.selectedModules?.length
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "When selecting specific modules, you must select at least one module",
-        },
-        { status: 400 },
-      );
-    }
-
-    if (instructorUserIds.length > 0 && schedule) {
-      const conflicts = await checkInstructorConflicts(
-        instructorUserIds,
-        schedule,
-        id,
-      );
-      if (conflicts.length > 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "تعارض في مواعيد المدربين",
-            conflictType: "instructor_schedule",
-            conflicts,
-            conflictMessage: conflicts
-              .map(
-                (c) =>
-                  `المدرب "${c.instructorName}" موجود بالفعل في مجموعة "${c.conflictGroupName}" في نفس الموعد (${c.conflictDays.join("، ")} - ${c.conflictTime})`,
-              )
-              .join("\n"),
-          },
-          { status: 409 },
-        );
-      }
-    }
-
-    const group = await Group.findById(id);
-    if (!group) {
-      return NextResponse.json(
-        { success: false, error: "Group not found" },
-        { status: 404 },
-      );
-    }
-
-    let totalSessionsCount = group.totalSessionsCount;
-    if (moduleSelection && group.courseSnapshot?.curriculum) {
-      if (
-        moduleSelection.mode === "specific" &&
-        moduleSelection.selectedModules.length > 0
-      ) {
-        totalSessionsCount = moduleSelection.selectedModules.reduce(
-          (sum, idx) =>
-            sum + (group.courseSnapshot.curriculum[idx]?.totalSessions || 3),
-          0,
-        );
-      } else {
-        totalSessionsCount = group.courseSnapshot.curriculum.reduce(
-          (sum, m) => sum + (m.totalSessions || 3),
-          0,
-        );
-      }
-    }
-
-    const mergedInstructors = normalizedInstructors.map((newInstructor) => {
-      const existingEntry = group.instructors?.find(
-        (e) =>
-          (e.userId?.toString() || e.userId) ===
-          (newInstructor.userId?.toString() || newInstructor.userId),
-      );
-      return {
-        userId: newInstructor.userId,
-        countTime: existingEntry?.countTime || 0,
-      };
-    });
-
-    const normalizedDeliveryMode = ["online", "offline"].includes(deliveryMode)
-      ? deliveryMode
-      : group.deliveryMode || "online";
-
-    // ✅ لو النوع مش متبعت، سيب القيمة الحالية زي ما هي (متتلمسش)
-    const normalizedGroupType =
-      groupType !== undefined ? groupType : null;
-
-    const hasLocationInfo =
-      location?.trim() ||
-      locationDetails?.placeName?.trim() ||
-      (locationDetails?.lat && locationDetails?.lng);
-
-    if (normalizedDeliveryMode === "offline" && !hasLocationInfo) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "لازم تحدد مكان الجروب على الماب في حالة الـ Offline",
-        },
-        { status: 400 },
-      );
-    }
-
-    const updateData = {
-      $set: {
-        name,
-        instructors: mergedInstructors,
-        maxStudents: parseInt(maxStudents),
-        schedule: {
-          startDate: new Date(schedule.startDate),
-          daysOfWeek: schedule.daysOfWeek,
-          timeFrom: schedule.timeFrom,
-          timeTo: schedule.timeTo,
-          timezone: schedule.timezone || "Africa/Cairo",
-        },
-        deliveryMode: normalizedDeliveryMode,
-        // ✅ نحدّث نوع الجروب بس لو اتبعت
-        ...(normalizedGroupType ? { groupType: normalizedGroupType } : {}),
-        location:
-          normalizedDeliveryMode === "offline" ? (location || "").trim() : "",
-        locationDetails:
-          normalizedDeliveryMode === "offline"
-            ? {
-                lat: locationDetails?.lat ?? null,
-                lng: locationDetails?.lng ?? null,
-                placeName: locationDetails?.placeName || "",
-                country: locationDetails?.country || "",
-                address: locationDetails?.address || "",
-                extraDetails: locationDetails?.extraDetails || "",
-              }
-            : {
-                lat: null,
-                lng: null,
-                placeName: "",
-                country: "",
-                address: "",
-                extraDetails: "",
-              },
-        automation,
-        moduleSelection: moduleSelection || {
-          mode: "all",
-          selectedModules: [],
-        },
-        totalSessionsCount,
-        updatedAt: new Date(),
-        tags: tags || [],
-      },
-    };
-
-    const updatedGroup = await Group.findByIdAndUpdate(id, updateData, {
-      new: true,
-    })
-      .populate("courseId", "title level")
-      .populate("instructors.userId", "name email")
-      .populate("createdBy", "name email")
-      .populate("tags")
-      .lean();
-
-    // ✅ FIX: نزامن deliveryMode مع كل السيشنات اللي لسه مش Completed
-    const deliveryModeChanged =
-      normalizedDeliveryMode !== (group.deliveryMode || "online");
-
-    let sessionsSynced = 0;
-    if (deliveryModeChanged) {
-      const syncResult = await Session.updateMany(
-        {
-          groupId: id,
-          isDeleted: false,
-          status: { $ne: "completed" },
-        },
-        {
-          $set: {
-            deliveryMode: normalizedDeliveryMode,
-          },
-        },
-      );
-      sessionsSynced = syncResult.modifiedCount || 0;
-      console.log(
-        `🔄 [Sync] Synced deliveryMode="${normalizedDeliveryMode}" to ${sessionsSynced} sessions`,
-      );
-    }
-
-    const responseData = {
-      ...updatedGroup,
-      isMakeupGroup: !!updatedGroup.isMakeupGroup,
-      makeupInfo: updatedGroup.makeupInfo || null,
-      groupType: updatedGroup.groupType || null,
-      instructors: (updatedGroup.instructors || []).map((i) => ({
-        _id: i.userId?._id || i.userId,
-        name: i.userId?.name || "",
-        email: i.userId?.email || "",
-        countTime: i.countTime || 0,
-      })),
-    };
-
-    console.log("✅ Group updated:", updatedGroup.code);
-    return NextResponse.json({
-      success: true,
-      data: responseData,
-      message: "Group updated successfully",
-      deliveryModeSynced: deliveryModeChanged,
-      sessionsSynced,
-    });
-  } catch (error) {
-    console.error("❌ Error updating group:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to update group" },
       { status: 500 },
     );
   }

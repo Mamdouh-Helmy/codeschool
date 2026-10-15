@@ -4,7 +4,9 @@
 // GET  -> preview what would happen (counts + affected sessions) before committing.
 //
 // الـ PUT بيعمل فحصين قبل الحفظ:
-//   1. تعارض مع الجروبات التانية (نفس الأيام + وقت متداخل) → 409 مع conflicts
+//   1. تعارض مدرسين: لو أي مدرس من مدرسين الجروب ده موجود في جروب تاني
+//      في نفس اليوم ونفس الوقت (تداخل) → 409 مع conflicts
+//      (جروبين بنفس الميعاد ومدرسين مختلفين = مفيش تعارض)
 //   2. تعارض مع اللينكات المستخدمة حاليًا في سيشنات الجروب (لو محجوزة لجروب
 //      تاني على نفس الأيام/الوقت الجديد) → 409 مع linkConflicts
 //   - لو تمام → بيعمل update على التواريخ فقط (اللينكات بتفضل زي ما هي)
@@ -15,57 +17,8 @@ import Group            from "../../../../models/Group";
 import Session          from "../../../../models/Session";
 import { requireAdmin } from "@/utils/authMiddleware";
 import { rescheduleGroupSessions } from "@/utils/sessionGenerator";
+import { checkInstructorConflicts } from "@/utils/groupValidation";
 import mongoose         from "mongoose";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper: فحص التعارض مع الجروبات التانية
-// تعارض = نفس الأيام (أي يوم مشترك) + وقت متداخل
-// ─────────────────────────────────────────────────────────────────────────────
-function timesOverlap(fromA, toA, fromB, toB) {
-  // HH:MM → number للمقارنة السريعة
-  const toNum = (t) => {
-    const [h, m] = t.split(":").map(Number);
-    return h * 60 + m;
-  };
-  const aStart = toNum(fromA), aEnd = toNum(toA);
-  const bStart = toNum(fromB), bEnd = toNum(toB);
-  return aStart < bEnd && bStart < aEnd;
-}
-
-async function findConflictingGroups(currentGroupId, daysOfWeek, timeFrom, timeTo) {
-  // نجيب كل الجروبات النشطة الـ sessions متولدة ليها ومش نفس الجروب
-  const otherGroups = await Group.find({
-    _id:               { $ne: currentGroupId },
-    status:            "active",
-    sessionsGenerated: true,
-    isDeleted:         false,
-    "schedule.daysOfWeek": { $in: daysOfWeek },   // عنده على الأقل يوم مشترك
-  })
-    .select("name code schedule.daysOfWeek schedule.timeFrom schedule.timeTo")
-    .lean();
-
-  const conflicts = [];
-
-  for (const g of otherGroups) {
-    const sharedDays = (g.schedule?.daysOfWeek || []).filter((d) =>
-      daysOfWeek.includes(d),
-    );
-    if (sharedDays.length === 0) continue;
-
-    if (timesOverlap(timeFrom, timeTo, g.schedule.timeFrom, g.schedule.timeTo)) {
-      conflicts.push({
-        id:         g._id,
-        name:       g.name,
-        code:       g.code,
-        sharedDays,
-        timeFrom:   g.schedule.timeFrom,
-        timeTo:     g.schedule.timeTo,
-      });
-    }
-  }
-
-  return conflicts;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET: Preview impact of a reschedule before applying it
@@ -221,23 +174,39 @@ export async function PUT(req, { params }) {
       );
     }
 
-    // ── فحص التعارض مع الجروبات التانية (على مستوى الجدول العام للجروب) ────
-    const conflicts = await findConflictingGroups(id, daysOfWeek, timeFrom, timeTo);
+    // ── فحص تعارض المدرسين ──────────────────────────────────────────────────
+    // بنرفض بس لو مدرس من مدرسين الجروب ده موجود في جروب تاني في نفس
+    // اليوم ونفس الوقت. جروبات بنفس الميعاد ومدرسين تانيين مش بتتعارض.
+    const plainGroup = group.toObject();
+    const groupInstructors = (plainGroup.instructors || []).map((i) => ({
+      userId: i.userId?._id || i.userId,
+    }));
 
-    if (conflicts.length > 0) {
+    const instructorConflicts = await checkInstructorConflicts(
+      groupInstructors,
+      { daysOfWeek, timeFrom, timeTo },
+      id,
+    );
+
+    if (instructorConflicts.length > 0) {
       return NextResponse.json(
         {
           success: false,
-          error:   "Schedule conflict detected with other active groups",
-          conflicts: conflicts.map((c) => ({
-            groupName:  c.name,
-            groupCode:  c.code,
-            sharedDays: c.sharedDays,
-            theirTime:  `${c.timeFrom} - ${c.timeTo}`,
+          error:   "تعارض في مواعيد المدربين",
+          // نفس شكل الداتا اللي ConflictAlert في الفورم متعود عليه
+          conflicts: instructorConflicts.map((c) => ({
+            groupName:      `${c.conflictGroupName} — المدرب: ${c.instructorName}`,
+            groupCode:      c.conflictGroupCode,
+            sharedDays:     c.conflictDays,
+            theirTime:      c.conflictTime,
+            instructorName: c.instructorName,
           })),
-          message:
-            `The selected schedule conflicts with ${conflicts.length} other group(s). ` +
-            `Please choose a different time or days.`,
+          message: instructorConflicts
+            .map(
+              (c) =>
+                `المدرب "${c.instructorName}" موجود بالفعل في مجموعة "${c.conflictGroupName}" في نفس الموعد (${c.conflictDays.join("، ")} - ${c.conflictTime})`,
+            )
+            .join("\n"),
         },
         { status: 409 },
       );

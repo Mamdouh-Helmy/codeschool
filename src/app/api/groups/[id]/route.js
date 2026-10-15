@@ -5,12 +5,14 @@ import Group from "../../../models/Group";
 import User from "../../../models/User";
 import Student from "../../../models/Student";
 import Session from "../../../models/Session";
-import Tag from "../../../models/Tag";
 import { requireAdmin } from "@/utils/authMiddleware";
+import {
+  VALID_GROUP_TYPES,
+  findDuplicateGroupName,
+  checkInstructorConflicts,
+  buildConflictResponseBody,
+} from "@/utils/groupValidation";
 import mongoose from "mongoose";
-
-// ✅ الجروب إما أطفال أو بالغين (مفيش mixed)
-const VALID_GROUP_TYPES = ["kids", "adults"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -100,7 +102,6 @@ export async function GET(req, { params }) {
 
     const groupObj = {
       ...group,
-      // ✅ null للجروبات القديمة اللي لسه ملهاش نوع (الأدمن يحدده من الفورم)
       groupType: VALID_GROUP_TYPES.includes(group.groupType)
         ? group.groupType
         : null,
@@ -147,15 +148,81 @@ export async function PUT(req, { params }) {
       );
     }
 
-    // ✅ Normalize instructors structure
-    if (updateData.instructors) {
-      updateData.instructors = updateData.instructors.map((i) => ({
-        userId: i?.userId || i,
-        countTime: i?.countTime || 0,
-      }));
+    // ✅ فحص الاسم المكرر (من غير regex — بيدعم أي رموز في الاسم)
+    if (updateData.name !== undefined) {
+      const cleanName = String(updateData.name || "").trim();
+      if (!cleanName) {
+        return NextResponse.json(
+          { success: false, error: "اسم الجروب مطلوب" },
+          { status: 400 },
+        );
+      }
+      updateData.name = cleanName;
+
+      const duplicate = await findDuplicateGroupName(cleanName, id);
+      if (duplicate) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `يوجد مجموعة بنفس الاسم "${cleanName}" بالفعل. الرجاء اختيار اسم مختلف.`,
+          },
+          { status: 409 },
+        );
+      }
     }
 
-    // ✅ نوع الجروب: لو اتبعت لازم يكون kids أو adults، وإلا 400
+    // ✅ Normalize instructors + المدرس إجباري
+    if (updateData.instructors) {
+      updateData.instructors = updateData.instructors
+        .map((i) => ({
+          userId: i?.userId || i,
+          countTime: i?.countTime || 0,
+        }))
+        .filter((i) => !!i.userId);
+
+      if (updateData.instructors.length === 0) {
+        return NextResponse.json(
+          { success: false, error: "لازم تختار مدرس واحد على الأقل للجروب" },
+          { status: 400 },
+        );
+      }
+
+      // ✅ تعارض المدرسين
+      //  - لو الميعاد اتبعت: نفحص كل المدرسين على الميعاد الجديد.
+      //  - لو الميعاد متبعتش: نفحص المدرسين المضافين حديثًا بس على الميعاد الحالي.
+      const existingIds = (existingGroup.instructors || []).map((e) =>
+        (e.userId?._id || e.userId)?.toString(),
+      );
+      const scheduleToCheck = updateData.schedule || existingGroup.schedule;
+      const instructorsToCheck = updateData.schedule
+        ? updateData.instructors
+        : updateData.instructors.filter(
+            (i) => !existingIds.includes(i.userId?.toString()),
+          );
+
+      if (instructorsToCheck.length > 0 && scheduleToCheck) {
+        const conflicts = await checkInstructorConflicts(
+          instructorsToCheck,
+          scheduleToCheck,
+          id,
+        );
+        if (conflicts.length > 0) {
+          return NextResponse.json(buildConflictResponseBody(conflicts), {
+            status: 409,
+          });
+        }
+      }
+
+      // نحافظ على countTime الحالي للمدرسين الموجودين
+      updateData.instructors = updateData.instructors.map((ni) => {
+        const old = (existingGroup.instructors || []).find(
+          (e) =>
+            (e.userId?._id || e.userId)?.toString() === ni.userId?.toString(),
+        );
+        return { userId: ni.userId, countTime: old?.countTime ?? ni.countTime ?? 0 };
+      });
+    }
+
     if (
       updateData.groupType !== undefined &&
       !VALID_GROUP_TYPES.includes(updateData.groupType)
@@ -166,7 +233,6 @@ export async function PUT(req, { params }) {
       );
     }
 
-    // ✅ deliveryMode: لو اتبعت لازم يكون online أو offline
     if (
       updateData.deliveryMode !== undefined &&
       !["online", "offline"].includes(updateData.deliveryMode)
@@ -192,8 +258,6 @@ export async function PUT(req, { params }) {
 
     if (!updatePayload.tags) updatePayload.tags = [];
 
-    // ✅ لو الجروب بقى (أو لسه) أونلاين → نصفّر بيانات المكان عشان مايفضلش
-    //    فيه بقايا أوفلاين قديمة
     const finalDeliveryMode =
       updateData.deliveryMode || existingGroup.deliveryMode || "online";
 
@@ -227,12 +291,7 @@ export async function PUT(req, { params }) {
       );
     }
 
-    // ═════════════════════════════════════════════════════════════════════
-    // ✅ مزامنة deliveryMode — بتشتغل دايماً (مش بس لحظة التغيير)
-    //    بنقارن بقيمة الجروب بعد التحديث، وبنصلّح أي سيشنة مختلفة.
-    //    بكده حتى السيشنات اللي اتبعترت قبل كده بتتصلّح لأول ما الجروب يتحفظ.
-    //    السيشنات المكتملة بتتساب زي ما هي (تاريخ).
-    // ═════════════════════════════════════════════════════════════════════
+    // ✅ مزامنة deliveryMode مع السيشنات غير المكتملة
     const groupMode =
       updatedGroup.deliveryMode === "offline" ? "offline" : "online";
 
