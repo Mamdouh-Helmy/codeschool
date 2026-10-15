@@ -1,9 +1,5 @@
 // models/BillingReminder.js
-// ✅ سجل مراحل التذكير بالسداد — الغرض الأساسي منه منع التكرار: كل مرحلة
-// (7 أيام / 3 أيام / يوم / اليوم / متأخر) بتتبعت مرة واحدة بس لكل فاتورة.
-//
-// dueDateKey جزء من الـ unique index عمدًا: لو الأدمن مدّ تاريخ الاستحقاق،
-// التاريخ الجديد بيبقى مفتاح جديد فالمراحل بتتبعت من أول وجديد عليه.
+
 import mongoose from "mongoose";
 
 const BillingReminderSchema = new mongoose.Schema(
@@ -26,7 +22,7 @@ const BillingReminderSchema = new mongoose.Schema(
       default: null,
     },
 
-    stageKey: { type: String, required: true }, // due_in_7 | due_in_3 | ...
+    stageKey: { type: String, required: true }, 
     reminderType: {
       type: String,
       enum: ["upcoming", "due_today", "overdue"],

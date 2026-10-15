@@ -34,6 +34,10 @@ function daysSince(date) {
     return Math.max(0, Math.floor((new Date() - new Date(date)) / 86400000));
 }
 
+// المتبقي الفعلي للفاتورة (الـ populate بـ lean مبيرجعش virtuals)
+const remainingOf = (inv) =>
+    Math.max(0, Number(inv?.totalAmount || 0) - Number(inv?.paidAmount || 0));
+
 // شدة التأخير: بتتحكم في لون الشريط والحافة
 function severity(days) {
     if (days >= 14) return { rail: "bg-red-500", bar: "bg-red-500", text: "text-red-600 dark:text-red-400", hex: "#ef4444" };
@@ -244,7 +248,7 @@ export default function BillingAlertsPage() {
         alerts.forEach((a) => {
             if (a.type === "overdue") {
                 overdue += 1;
-                amount += Number(a.invoiceId?.totalAmount || 0);
+                amount += remainingOf(a.invoiceId);
             } else {
                 escrow += 1;
                 amount += Number(a.paymentId?.amount || 0);
@@ -460,7 +464,7 @@ export default function BillingAlertsPage() {
                         const days = daysSince(alert.dueDateAtCreation);
                         const sev = severity(days);
                         const isOverdue = alert.type === "overdue";
-                        const amount = isOverdue ? alert.invoiceId?.totalAmount : alert.paymentId?.amount;
+                        const amount = isOverdue ? remainingOf(alert.invoiceId) : alert.paymentId?.amount;
                         const open = alert.status === "open";
                         const name = alert.studentId?.personalInfo?.fullName || "طالب";
 
@@ -505,7 +509,7 @@ export default function BillingAlertsPage() {
                                     <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums leading-none">
                                         {Number(amount || 0).toLocaleString("en-US")}
                                     </p>
-                                    <p className={`text-[11px] mt-1 ${muted}`}>{isOverdue ? "EGP • فاتورة" : "EGP • دفعة"}</p>
+                                    <p className={`text-[11px] mt-1 ${muted}`}>{isOverdue ? "EGP • متبقي" : "EGP • دفعة"}</p>
                                 </div>
 
                                 {/* العمر / النتيجة */}
@@ -593,9 +597,9 @@ export default function BillingAlertsPage() {
                             </div>
                             <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
                                 <div>
-                                    <dt className={`text-xs ${muted}`}>{actingAlert.type === "overdue" ? "قيمة الفاتورة" : "قيمة الدفعة"}</dt>
+                                    <dt className={`text-xs ${muted}`}>{actingAlert.type === "overdue" ? "المتبقي من الفاتورة" : "قيمة الدفعة"}</dt>
                                     <dd className="font-bold text-gray-900 dark:text-white tabular-nums">
-                                        {formatMoney(actingAlert.type === "overdue" ? actingAlert.invoiceId?.totalAmount : actingAlert.paymentId?.amount)}
+                                        {formatMoney(actingAlert.type === "overdue" ? remainingOf(actingAlert.invoiceId) : actingAlert.paymentId?.amount)}
                                     </dd>
                                 </div>
                                 <div>

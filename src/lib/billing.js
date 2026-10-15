@@ -2,6 +2,7 @@
 import Invoice from "../app/models/Invoice";
 import Payment from "../app/models/Payment";
 import BillingAlert from "../app/models/BillingAlert";
+import Student from "../app/models/Student";
 import { sendDueDateReminders } from "./billing-reminders";
 
 const ESCROW_DAYS = 14;
@@ -83,6 +84,8 @@ export async function createInvoiceForPackage({
 }
 
 // ─── إضافة دفعة/قسط جديد على فاتورة موجودة ──────────────────────────────────
+// ملحوظة: الدفعة بتتسجل escrow.status = not_started، و syncEscrowStarts
+// (في الكرون اليومي) هي اللي بتدخلها الإسكرو لو الطالب ليه حضور فعلي بعد الفاتورة.
 export async function addPaymentToInvoice(invoiceId, { amount, method, notes, recordedBy }) {
   if (!amount || amount <= 0) throw new Error("Payment amount must be positive");
 
@@ -206,6 +209,8 @@ export async function startEscrowForInvoice(invoiceId) {
 // للطالب في جروب معين — بغض النظر عن حالة الحضور (present/absent/late/excused).
 // الطالب ممكن يكون في أكتر من جروب في نفس الوقت، فكل جروب بيتفعّل الإسكرو
 // بتاعه بشكل مستقل تمامًا (بيدور بس على فاتورة نفس الـstudentId+groupId).
+// ⚠️ ده مسار "سريع" بس — مش بيغطي التجديد/الأقساط/الفاتورة المتأخرة، ودي
+// بتتغطى في syncEscrowStarts تحت.
 export async function handleFirstSessionForBilling({ studentId, groupId }) {
   if (!groupId) return;
 
@@ -218,6 +223,108 @@ export async function handleFirstSessionForBilling({ studentId, groupId }) {
   if (invoice) await startEscrowForInvoice(invoice._id);
 }
 
+// ─── Cron: مزامنة بداية الإسكرو (Self-healing) ──────────────────────────────
+// بتغطي الحالات اللي handleFirstSessionForBilling بتفوتها:
+//   • أقساط اتضافت بعد بداية الإسكرو
+//   • تجديد باقة في نفس الجروب (isFirstUsageForGroup بيبقى false)
+//   • فاتورة اتعملت بعد أول خصم ساعات
+// القاعدة: الدفعة not_started + فيه خصم ساعات فعلي (hoursDeducted > 0) في جروب
+// الفاتورة بتاريخ >= تاريخ إنشاء الفاتورة → الإسكرو يبدأ من (أحدث تاريخ بين
+// أول خصم وتاريخ الدفعة) + 14 يوم.
+// الفواتير اللي من غير groupId بترجع في النتيجة (noGroupInvoices) للمراجعة اليدوية.
+export async function syncEscrowStarts() {
+  const orphan = await Payment.find({
+    type: "payment",
+    status: "completed",
+    "escrow.status": "not_started",
+  }).select("_id invoiceId date createdAt");
+
+  const byInvoice = new Map();
+  for (const p of orphan) {
+    const key = String(p.invoiceId);
+    if (!byInvoice.has(key)) byInvoice.set(key, []);
+    byInvoice.get(key).push(p);
+  }
+
+  let started = 0;
+  let waitingFirstSession = 0;
+  let noGroup = 0;
+  let failedCount = 0;
+  const noGroupInvoices = [];
+
+  for (const [invoiceId, payments] of byInvoice) {
+    try {
+      const invoice = await Invoice.findById(invoiceId)
+        .select("studentId groupId status createdAt")
+        .lean();
+
+      if (!invoice || invoice.status === "Voided") continue;
+
+      if (!invoice.groupId) {
+        noGroup += payments.length;
+        noGroupInvoices.push(invoice._id);
+        continue;
+      }
+
+      // أول خصم ساعات فعلي في الجروب ده بعد إنشاء الفاتورة
+      const studentDoc = await Student.findOne(
+        {
+          _id: invoice.studentId,
+          "creditSystem.usageHistory": {
+            $elemMatch: {
+              groupId: invoice.groupId,
+              hoursDeducted: { $gt: 0 },
+              date: { $gte: invoice.createdAt },
+            },
+          },
+        },
+        { "creditSystem.usageHistory.$": 1 },
+      ).lean();
+
+      const firstUsage = studentDoc?.creditSystem?.usageHistory?.[0];
+      if (!firstUsage) {
+        waitingFirstSession += payments.length;
+        continue;
+      }
+
+      for (const p of payments) {
+        const startedAt = new Date(
+          Math.max(
+            new Date(firstUsage.date).getTime(),
+            new Date(p.date || p.createdAt).getTime(),
+          ),
+        );
+        const releaseAt = new Date(startedAt);
+        releaseAt.setDate(releaseAt.getDate() + ESCROW_DAYS);
+
+        const res = await Payment.updateOne(
+          { _id: p._id, "escrow.status": "not_started" },
+          {
+            $set: {
+              "escrow.status": "in_escrow",
+              "escrow.startedAt": startedAt,
+              "escrow.releaseAt": releaseAt,
+            },
+          },
+        );
+        if (res.modifiedCount > 0) started++;
+      }
+    } catch (err) {
+      failedCount++;
+      console.error(`⚠️ escrow sync failed for invoice ${invoiceId}:`, err.message);
+    }
+  }
+
+  return {
+    checked: orphan.length,
+    started,
+    waitingFirstSession,
+    noGroup,
+    noGroupInvoices,
+    failed: failedCount,
+  };
+}
+
 // ─── Cron: تنبيهات الاستحقاق المتأخر (Due Date) ────────────────────────────
 export async function checkOverdueInvoices() {
   const now = new Date();
@@ -227,6 +334,8 @@ export async function checkOverdueInvoices() {
   }).select("_id studentId dueDate");
 
   let created = 0;
+  let failedCount = 0;
+
   for (const inv of overdue) {
     try {
       await BillingAlert.create({
@@ -238,10 +347,13 @@ export async function checkOverdueInvoices() {
       });
       created++;
     } catch (err) {
-      if (err.code !== 11000) throw err; // 11000 = فيه تيكت open بالفعل، متوقع
+      if (err.code === 11000) continue; // فيه تنبيه open بالفعل، متوقع
+      failedCount++;
+      console.error(`⚠️ overdue alert failed for invoice ${inv._id}:`, err.message);
     }
   }
-  return { checked: overdue.length, alertsCreated: created };
+
+  return { checked: overdue.length, alertsCreated: created, failed: failedCount };
 }
 
 // ─── Cron: تنبيهات مراجعة الإسكرو بعد 14 يوم ────────────────────────────────
@@ -253,11 +365,15 @@ export async function flagDueEscrowsForReview() {
   const now = new Date();
 
   const duePayments = await Payment.find({
+    type: "payment",
+    status: "completed",
     "escrow.status": "in_escrow",
     "escrow.releaseAt": { $lte: now },
   });
 
   let created = 0;
+  let failedCount = 0;
+
   for (const payment of duePayments) {
     try {
       await BillingAlert.create({
@@ -270,11 +386,13 @@ export async function flagDueEscrowsForReview() {
       });
       created++;
     } catch (err) {
-      if (err.code !== 11000) throw err; // فيه alert مفتوح بالفعل لنفس الدفعة
+      if (err.code === 11000) continue; // فيه alert مفتوح بالفعل لنفس الدفعة
+      failedCount++;
+      console.error(`⚠️ escrow alert failed for payment ${payment._id}:`, err.message);
     }
   }
 
-  return { checked: duePayments.length, alertsCreated: created };
+  return { checked: duePayments.length, alertsCreated: created, failed: failedCount };
 }
 
 // ✅ ينفذ قرار الأدمن على تنبيه escrow_review: "recognize" (تتحول لإيراد
@@ -290,8 +408,7 @@ export async function resolveEscrowAlert(alertId, { action, refundAmount, reason
 
   const now = new Date();
 
-  // ✅ بنحسب المبلغ مرة واحدة بس ونستخدمه في التنفيذ وفي التسجيل — بدل ما
-  // يتحسب مرتين بنفس المعادلة وممكن يختلفوا لو الكود اتغير بعدين
+  // ✅ بنحسب المبلغ مرة واحدة بس ونستخدمه في التنفيذ وفي التسجيل
   const resolvedRefundAmount = Math.min(
     Number(refundAmount) || payment.amount,
     payment.amount,
@@ -325,12 +442,22 @@ export async function resolveEscrowAlert(alertId, { action, refundAmount, reason
 }
 
 // ─── الكرون اليومي الموحّد ───────────────────────────────────────────────────
-// 🆕 FIX: كانت الدالة دي معرّفة مرتين في نفس الملف بـ export — ده Duplicate
-// declaration وبيمنع تحميل الموديول كله. دي النسخة الوحيدة الصح (بتشغّل
-// الإسكرو + تنبيهات التأخير + رسايل الواتساب).
+// 🆕 كل خطوة مستقلة: لو واحدة وقعت، الباقي يكمّل (خصوصًا رسايل الواتساب).
+// الترتيب مهم: syncEscrowStarts الأول عشان flagDueEscrowsForReview تشوف
+// الدفعات اللي لسه متفعّلة.
+async function safeStep(name, fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    console.error(`❌ billing cron step "${name}" failed:`, err.message);
+    return { error: err.message };
+  }
+}
+
 export async function runDailyBillingCron() {
-  const escrowResult = await flagDueEscrowsForReview();
-  const overdueResult = await checkOverdueInvoices();
-  const reminderResult = await sendDueDateReminders();
-  return { escrowResult, overdueResult, reminderResult };
+  const escrowSyncResult = await safeStep("escrowSync", syncEscrowStarts);
+  const escrowResult = await safeStep("escrow", flagDueEscrowsForReview);
+  const overdueResult = await safeStep("overdue", checkOverdueInvoices);
+  const reminderResult = await safeStep("reminders", sendDueDateReminders);
+  return { escrowSyncResult, escrowResult, overdueResult, reminderResult };
 }

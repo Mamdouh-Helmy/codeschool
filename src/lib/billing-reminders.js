@@ -23,18 +23,14 @@ const CAIRO_TZ = "Africa/Cairo";
 // (لو السيرفر وقع في نص الإرسال قبل ما نعمل commit)
 const STALE_REMINDER_MS = 30 * 60 * 1000; // 30 دقيقة
 
-// ✅ مراحل التذكير — قبل الاستحقاق (موجب)، يوم الاستحقاق (0)، بعده (سالب)
+// 🆕 تذكير واحد فقط: يوم الاستحقاق نفسه (بتوقيت القاهرة)
+// مفيش تذكيرات قبل ولا بعد — عشان لو التاريخ اتعدل ميتبعتش حاجة للتاريخ القديم
 const STAGES = [
-  { key: "due_in_7", daysUntilDue: 7, reminderType: "upcoming" },
-  { key: "due_in_3", daysUntilDue: 3, reminderType: "upcoming" },
-  { key: "due_in_1", daysUntilDue: 1, reminderType: "upcoming" },
   { key: "due_today", daysUntilDue: 0, reminderType: "due_today" },
-  { key: "overdue_1", daysUntilDue: -1, reminderType: "overdue" },
-  { key: "overdue_3", daysUntilDue: -3, reminderType: "overdue" },
-  { key: "overdue_7", daysUntilDue: -7, reminderType: "overdue" },
 ];
 
-const WINDOW_DAYS = 8;
+// 🆕 نافذة البحث: يوم قبل وبعد بس (تغطية فروق التوقيت بين UTC والقاهرة)
+const WINDOW_DAYS = 1;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -240,6 +236,23 @@ export async function sendDueDateReminders({ now = new Date() } = {}) {
         continue;
       }
 
+      // 🆕 إعادة تحقق من أحدث نسخة للفاتورة قبل الحجز والإرسال
+      // (لو الأدمن عدّل التاريخ أو الفاتورة اتدفعت/اتلغت بعد ما جبنا القائمة)
+      const fresh = await Invoice.findById(invoice._id)
+        .select("status dueDate totalAmount paidAmount")
+        .lean();
+
+      if (
+        !fresh ||
+        fresh.status !== "Pending" ||
+        !fresh.dueDate ||
+        cairoDateKey(fresh.dueDate) !== cairoDateKey(invoice.dueDate) ||
+        (fresh.totalAmount || 0) - (fresh.paidAmount || 0) <= 0
+      ) {
+        skipped++;
+        continue;
+      }
+
       const amountRemaining = Math.max(
         (invoice.totalAmount || 0) - (invoice.paidAmount || 0),
         0,
@@ -351,7 +364,6 @@ export async function sendDueDateReminders({ now = new Date() } = {}) {
 
       if (result?.success) {
         // ✅ Atomic Commit — بنحدّث بس لو السجل لسه "pending"
-        // (شرط الأمان ده يضمن مفيش عملية تانية بتعدّل نفس السجل)
         await BillingReminder.updateOne(
           { _id: reminder._id, status: "pending" },
           {
@@ -366,7 +378,6 @@ export async function sendDueDateReminders({ now = new Date() } = {}) {
       } else {
         failed++;
         // ✅ Atomic Rollback — نمسح السجل عشان الكرون يعيد المحاولة بكرة
-        // (بس بشرط يكون لسه "pending" — عشان مفيش عملية تانية عمال تعدّله)
         await BillingReminder.deleteOne({
           _id: reminder._id,
           status: "pending",

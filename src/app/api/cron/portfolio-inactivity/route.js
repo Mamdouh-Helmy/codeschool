@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Portfolio from "../../../models/Portfolio";
+import User from "../../../models/User"; // ✅ جديد
 import {
   sendPortfolioMessage,
   resolveOwnerPhone,
@@ -9,6 +10,9 @@ import {
 
 const INACTIVITY_DAYS = 30;
 const REMINDER_TYPE = "portfolio_inactivity_reminder";
+
+// ✅ الرسالة تروح للجيست فقط — أي role تاني مش بيتبعتله
+const TARGET_ROLE = "guest";
 
 // ✅ فك أي claim قديم اتعلق أكتر من ساعة (لو السيرفر وقع في النص)
 const STALE_CLAIM_MS = 60 * 60 * 1000;
@@ -158,6 +162,10 @@ export async function GET(req) {
     if (!owner.isActive) {
       status = "skipped";
       reason = "inactive_user";
+    } else if (owner.role !== TARGET_ROLE) {
+      // ✅ مش جيست → مش هيتبعتله
+      status = "skipped";
+      reason = "not_guest";
     } else if (portfolio.updatedAt > cutoff) {
       status = "not_due";
     } else {
@@ -227,7 +235,14 @@ export async function POST(req) {
     Date.now() - INACTIVITY_DAYS * 24 * 60 * 60 * 1000,
   );
 
+  // ✅ الجيست النشطين فقط
+  const guestIds = await User.find({
+    role: TARGET_ROLE,
+    isActive: true,
+  }).distinct("_id");
+
   const portfolios = await Portfolio.find({
+    userId: { $in: guestIds }, // ✅ الجيست فقط
     updatedAt: { $lte: cutoff },
     $or: [
       { "metadata.lastInactivityReminderSentAt": null },
@@ -245,13 +260,18 @@ export async function POST(req) {
   for (const portfolio of portfolios) {
     const owner = portfolio.userId;
 
-    if (!owner || !owner.isActive) {
+    // ✅ شرط أمان إضافي: لو الـ role اتغير بين الـ query والإرسال
+    if (!owner || !owner.isActive || owner.role !== TARGET_ROLE) {
       skipped++;
       results.push({
         portfolioId: portfolio._id,
         title: portfolio.title,
         status: "skipped",
-        reason: !owner ? "orphan_portfolio" : "inactive_user",
+        reason: !owner
+          ? "orphan_portfolio"
+          : !owner.isActive
+            ? "inactive_user"
+            : "not_guest",
       });
       continue;
     }

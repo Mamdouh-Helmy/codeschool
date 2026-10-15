@@ -51,9 +51,27 @@ export async function POST(req, { params }) {
       }
 
       const now = new Date();
+      let parsedDueDate;
+
+      if (action === "extend") {
+        if (!newDueDate) {
+          return NextResponse.json(
+            { success: false, message: "newDueDate is required for extend" },
+            { status: 400 },
+          );
+        }
+
+        parsedDueDate = new Date(newDueDate);
+        // 🆕 تاريخ قديم/النهارده كان هيعمل تنبيه overdue جديد تاني يوم
+        if (isNaN(parsedDueDate.getTime()) || parsedDueDate <= now) {
+          return NextResponse.json(
+            { success: false, message: "newDueDate must be a future date" },
+            { status: 400 },
+          );
+        }
+      }
 
       if (action === "suspend") {
-        // ✅ نفس suspension logic الموجود بالظبط
         await Student.findOneAndUpdate(
           { _id: invoice.studentId, isDeleted: false },
           {
@@ -67,13 +85,7 @@ export async function POST(req, { params }) {
         invoice.status = "Suspended";
         await invoice.save();
       } else {
-        if (!newDueDate) {
-          return NextResponse.json(
-            { success: false, message: "newDueDate is required for extend" },
-            { status: 400 },
-          );
-        }
-        invoice.dueDate = new Date(newDueDate);
+        invoice.dueDate = parsedDueDate;
         invoice.status = "Pending";
         await invoice.save();
       }
@@ -82,7 +94,7 @@ export async function POST(req, { params }) {
       alert.resolution = {
         action,
         oldDueDate: alert.dueDateAtCreation,
-        newDueDate: action === "extend" ? new Date(newDueDate) : undefined,
+        newDueDate: action === "extend" ? parsedDueDate : undefined,
         reason: reason || "",
         actedBy: authCheck.user.id,
         actedAt: now,

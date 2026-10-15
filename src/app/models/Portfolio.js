@@ -125,9 +125,17 @@ const portfolioSchema = new mongoose.Schema(
       layout: { type: String, enum: ["standard", "minimal", "creative"], default: "standard" },
     },
 
-    // ✅ جديد: لتتبع آخر مرة اتبعت فيها رسالة التذكير بعدم التحديث
+    // ✅ لتتبع رسالة التذكير بعدم التحديث + قفل الـ Atomic Claim
+    // لازم الحقول دي تكون معرّفة في الـ schema، لأن Mongoose (strict) بيشيل
+    // أي حقل مش معرّف من الـ update بصمت، وده كان بيعطّل القفل فعليًا.
     metadata: {
       lastInactivityReminderSentAt: { type: Date, default: null },
+      inactivityReminderStatus: {
+        type: String,
+        enum: ["pending", "sending", "sent"],
+        default: "pending",
+      },
+      inactivityReminderClaimedAt: { type: Date, default: null },
     },
   },
   {
