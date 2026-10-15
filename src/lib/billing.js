@@ -211,16 +211,66 @@ export async function startEscrowForInvoice(invoiceId) {
 // بتاعه بشكل مستقل تمامًا (بيدور بس على فاتورة نفس الـstudentId+groupId).
 // ⚠️ ده مسار "سريع" بس — مش بيغطي التجديد/الأقساط/الفاتورة المتأخرة، ودي
 // بتتغطى في syncEscrowStarts تحت.
+//
+// 🆕 FIX: لو مفيش فاتورة بنفس الجروب، ممكن تكون الفاتورة اتعملت وقت إضافة
+// الباكدج (قبل ما الطالب يتحط في جروب) فـ groupId بتاعها null. وقتها بندوّر
+// على فاتورة الباكدج الحالية (packageId) اللي من غير جروب ونربطها بالجروب ده.
 export async function handleFirstSessionForBilling({ studentId, groupId }) {
   if (!groupId) return;
 
-  const invoice = await Invoice.findOne({
+  let invoice = await Invoice.findOne({
     studentId,
     groupId,
     status: { $nin: ["Voided"] },
   }).sort({ createdAt: -1 });
 
+  if (!invoice) {
+    const student = await Student.findById(studentId)
+      .select("creditSystem.currentPackage._id")
+      .lean();
+    const currentPackageId = student?.creditSystem?.currentPackage?._id;
+
+    if (currentPackageId) {
+      invoice = await Invoice.findOneAndUpdate(
+        {
+          studentId,
+          packageId: currentPackageId,
+          groupId: null,
+          status: { $nin: ["Voided"] },
+        },
+        { $set: { groupId } },
+        { sort: { createdAt: -1 }, new: true },
+      );
+    }
+  }
+
   if (invoice) await startEscrowForInvoice(invoice._id);
+}
+
+// 🆕 شبكة أمان للكرون: لو الفاتورة من غير جروب، نحاول نستنتجه من أول خصم ساعات
+// للطالب بعد إنشاء الفاتورة. بنربط بس لو فيه جروب واحد بالظبط — لو صفر أو أكتر
+// من جروب، بنرجّع null وتفضل الفاتورة في noGroupInvoices للمراجعة اليدوية.
+async function inferGroupForInvoice(invoice) {
+  const student = await Student.findById(invoice.studentId)
+    .select("creditSystem.usageHistory")
+    .lean();
+
+  const groups = new Map(); // String(groupId) → groupId الأصلي (ObjectId)
+  for (const u of student?.creditSystem?.usageHistory || []) {
+    if (!u.groupId) continue;
+    if (!(u.hoursDeducted > 0)) continue;
+    if (new Date(u.date) < new Date(invoice.createdAt)) continue;
+    groups.set(String(u.groupId), u.groupId);
+  }
+
+  if (groups.size !== 1) return null;
+
+  const [groupId] = groups.values();
+  await Invoice.updateOne(
+    { _id: invoice._id, groupId: null },
+    { $set: { groupId } },
+  );
+  return groupId;
 }
 
 // ─── Cron: مزامنة بداية الإسكرو (Self-healing) ──────────────────────────────
@@ -231,7 +281,8 @@ export async function handleFirstSessionForBilling({ studentId, groupId }) {
 // القاعدة: الدفعة not_started + فيه خصم ساعات فعلي (hoursDeducted > 0) في جروب
 // الفاتورة بتاريخ >= تاريخ إنشاء الفاتورة → الإسكرو يبدأ من (أحدث تاريخ بين
 // أول خصم وتاريخ الدفعة) + 14 يوم.
-// الفواتير اللي من غير groupId بترجع في النتيجة (noGroupInvoices) للمراجعة اليدوية.
+// 🆕 الفواتير من غير groupId: بنحاول نربطها تلقائيًا (لو الطالب أخد حصص في جروب
+// واحد بس). اللي مينفعش يتربط بيرجع في النتيجة (noGroupInvoices) للمراجعة اليدوية.
 export async function syncEscrowStarts() {
   const orphan = await Payment.find({
     type: "payment",
@@ -249,6 +300,7 @@ export async function syncEscrowStarts() {
   let started = 0;
   let waitingFirstSession = 0;
   let noGroup = 0;
+  let autoLinked = 0;
   let failedCount = 0;
   const noGroupInvoices = [];
 
@@ -261,9 +313,14 @@ export async function syncEscrowStarts() {
       if (!invoice || invoice.status === "Voided") continue;
 
       if (!invoice.groupId) {
-        noGroup += payments.length;
-        noGroupInvoices.push(invoice._id);
-        continue;
+        const inferred = await inferGroupForInvoice(invoice);
+        if (!inferred) {
+          noGroup += payments.length;
+          noGroupInvoices.push(invoice._id);
+          continue;
+        }
+        invoice.groupId = inferred;
+        autoLinked++;
       }
 
       // أول خصم ساعات فعلي في الجروب ده بعد إنشاء الفاتورة
@@ -320,6 +377,7 @@ export async function syncEscrowStarts() {
     started,
     waitingFirstSession,
     noGroup,
+    autoLinked,
     noGroupInvoices,
     failed: failedCount,
   };
