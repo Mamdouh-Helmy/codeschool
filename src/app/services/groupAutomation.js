@@ -1487,6 +1487,33 @@ Session Report 📃✨
   return template[language] || template.ar || "";
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ Dynamic variable resolver
+// أي متغير نصي في الداتابيز (مجموعات: student / guardian / common) ومش متعالج
+// في الكود، بيتحسب أوتوماتيك حسب genderType واللغة.
+// ═══════════════════════════════════════════════════════════════════════════
+const AUTO_RESOLVE_GROUPS = ["student", "guardian", "common"];
+const AUTO_RESOLVE_SKIP_KEYS = ["decision"]; // متغيرات بتتحسب وقت التقييم، مش نص ثابت
+
+function resolveDbVariableValue(v, lang, ctx) {
+  const { isMale, isFather } = ctx;
+  const pick = (a, b) => (a || "").trim() || (b || "").trim() || "";
+
+  if (v.hasGender) {
+    if (v.genderType === "student" || v.genderType === "instructor") {
+      return lang === "ar"
+        ? pick(isMale ? v.valueMaleAr : v.valueFemaleAr, v.valueAr)
+        : pick(isMale ? v.valueMaleEn : v.valueFemaleEn, v.valueEn);
+    }
+    if (v.genderType === "guardian") {
+      return lang === "ar"
+        ? pick(isFather ? v.valueFatherAr : v.valueMotherAr, v.valueAr)
+        : pick(isFather ? v.valueFatherEn : v.valueMotherEn, v.valueEn);
+    }
+  }
+  return lang === "ar" ? pick(v.valueAr, "") : pick(v.valueEn, "");
+}
+
 export async function prepareStudentVariables(
   student,
   group,
@@ -1551,6 +1578,16 @@ export async function prepareStudentVariables(
   const studentFirstName = studentNameFor(language);
   const guardianFirstName = guardianNameFor(language);
 
+  // ✅ كل مفتاح تحية (مثلاً guardianSalutation_ar) يقرأ قيمته "هو" من الداتابيز،
+  // ولو مش موجود يرجع للقيمة القديمة (fallback) — فمفيش رسالة قديمة بتتغير.
+  const buildOwnSal = (key, lang, name, tokenPattern, fallback) => {
+    const own = resolveVar(key, lang);
+    if (!own) return fallback;
+    const hasToken = new RegExp(`\\{(${tokenPattern})\\}`);
+    const allTokens = new RegExp(`\\{(${tokenPattern})\\}`, "g");
+    return hasToken.test(own) ? own.replace(allTokens, name) : `${own} ${name}`;
+  };
+
   // ── {salutation_ar} / {salutation_en}: للقوالب القديمة (سيبناها زي ما هي) ──
   const salutationBase_ar =
     resolveVar("salutation_ar", "ar") ||
@@ -1596,18 +1633,50 @@ export async function prepareStudentVariables(
     return `${base} ${name}`;
   };
 
-  const studentSalutation_ar = buildStudentSal("ar");
-  const studentSalutation_en = buildStudentSal("en");
+  const studentSalutation_ar_legacy = buildStudentSal("ar");
+  const studentSalutation_en_legacy = buildStudentSal("en");
   const studentSalutation =
-    language === "ar" ? studentSalutation_ar : studentSalutation_en;
+    language === "ar" ? studentSalutation_ar_legacy : studentSalutation_en_legacy;
 
-  const guardianSalutation_ar = buildGuardianSal("ar");
-  const guardianSalutation_en = buildGuardianSal("en");
+  // ✅ studentSalutation_ar/_en: لو ليهم قيمة في الداتابيز بنقراها، وإلا القديم
+  const studentSalutation_ar = buildOwnSal(
+    "studentSalutation_ar",
+    "ar",
+    studentNameFor("ar"),
+    "studentName|name",
+    studentSalutation_ar_legacy,
+  );
+  const studentSalutation_en = buildOwnSal(
+    "studentSalutation_en",
+    "en",
+    studentNameFor("en"),
+    "studentName|name",
+    studentSalutation_en_legacy,
+  );
+
+  const guardianSalutation_ar_legacy = buildGuardianSal("ar");
+  const guardianSalutation_en_legacy = buildGuardianSal("en");
   const guardianSalutation = isAdult
     ? ""
     : language === "ar"
-      ? guardianSalutation_ar
-      : guardianSalutation_en;
+      ? guardianSalutation_ar_legacy
+      : guardianSalutation_en_legacy;
+
+  // ✅ guardianSalutation_ar/_en: بيقرأوا قيمتهم "هما" من الداتابيز (دي بتاعت الاكتمال)
+  const guardianSalutation_ar = buildOwnSal(
+    "guardianSalutation_ar",
+    "ar",
+    guardianNameFor("ar"),
+    "guardianName",
+    guardianSalutation_ar_legacy,
+  );
+  const guardianSalutation_en = buildOwnSal(
+    "guardianSalutation_en",
+    "en",
+    guardianNameFor("en"),
+    "guardianName",
+    guardianSalutation_en_legacy,
+  );
 
   const childTitleAr =
     resolveVar("childTitle", "ar") || (isMale ? "ابنك" : "ابنتك");
@@ -1682,6 +1751,21 @@ export async function prepareStudentVariables(
         : isMale
           ? "son"
           : "daughter",
+
+    // ✅ متغيرات الأسماء بالـ suffix — قيمتها من بيانات الطالب الحقيقية
+    // (قيم الداتابيز لها مجرد أمثلة فمنعالجهاش أوتوماتيك)
+    studentName_ar: studentNameFor("ar"),
+    studentName_en: studentNameFor("en"),
+    name_ar: studentNameFor("ar"),
+    name_en: studentNameFor("en"),
+    fullName: student.personalInfo?.fullName || "",
+    fullStudentName: student.personalInfo?.fullName || "",
+
+    // ✅ الابن/الابنة — من الداتابيز حسب جنس الطالب
+    studentGender_ar:
+      resolveVar("studentGender_ar", "ar") || (isMale ? "الابن" : "الابنة"),
+    studentGender_en:
+      resolveVar("studentGender_en", "en") || (isMale ? "son" : "daughter"),
 
     // Guardian — لو adult → فاضية
     guardianSalutation: isAdult ? "" : guardianSalutation,
@@ -1764,6 +1848,36 @@ export async function prepareStudentVariables(
   if (extra.moduleTitle) variables.moduleTitle = extra.moduleTitle;
   if (extra.moduleDescription)
     variables.moduleDescription = extra.moduleDescription;
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ✅ DYNAMIC: أي متغير جديد في الداتابيز (student / guardian / common)
+  // ومش متعالج فوق، يتحسب أوتوماتيك حسب النوع (ابن/ابنة، أب/أم) واللغة.
+  // المتغيرات اللي الكود عالجها فوق مبتتلمسش.
+  // ═══════════════════════════════════════════════════════════════════════
+  for (const [key, v] of Object.entries(dbVars)) {
+    if (key in variables) continue;
+    if (AUTO_RESOLVE_SKIP_KEYS.includes(key)) continue;
+    if (!AUTO_RESOLVE_GROUPS.includes(v.group)) continue;
+
+    // اللغة من suffix المفتاح (_ar / _en) لو موجود، وإلا لغة الطالب
+    const keyLang = key.endsWith("_ar")
+      ? "ar"
+      : key.endsWith("_en")
+        ? "en"
+        : language;
+
+    let value = resolveDbVariableValue(v, keyLang, { isMale, isFather });
+    if (!value) continue;
+
+    value = value
+      .replace(/\{(studentName|name)\}/g, studentNameFor(keyLang))
+      .replace(/\{guardianName\}/g, guardianNameFor(keyLang));
+
+    // متغيرات ولي الأمر تتفرّغ للبالغين (زي باقي الكود)
+    if (isAdult && v.genderType === "guardian") value = "";
+
+    variables[key] = value;
+  }
 
   return { variables, language, gender, relationship, isAdult };
 }
