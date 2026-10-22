@@ -1,6 +1,6 @@
 // app/(public)/session-blog/[sessionId]/page.jsx
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
     BookOpen,
@@ -11,12 +11,77 @@ import {
     Languages,
 } from "lucide-react";
 
+/* ارتفاع النافبار الثابت للموقع (pt-16 = 4rem). غيّره لو النافبار عندك أطول. */
+const NAV_OFFSET = "4rem";
+
+/* محتوى فيه <script> أو <style> أو كلاس booklet = محتوى تفاعلي كامل → iframe */
+const isInteractiveContent = (html) =>
+    /<(script|style)[\s>]|class=["'][^"']*\bbooklet\b/i.test(html || "");
+
+/* ستايل إضافي جوه الـ iframe: هيدر/فوتر البوكلت مكررين مع نافبار الموقع */
+const EMBED_CSS = `
+  .site-header, .site-footer { display: none !important; }
+  .main-container { padding-top: 16px; }
+`;
+
+/* بيستقبل الثيم من الصفحة (light/dark) من غير ما الـ iframe يعيد التحميل */
+const THEME_BRIDGE = `<script>
+addEventListener("message", function (e) {
+  var d = e.data;
+  if (d && d.type === "SET_THEME") {
+    var r = document.documentElement;
+    r.dataset.theme = d.theme;
+    r.classList.toggle("dark", d.theme === "dark");
+  }
+});
+</script>`;
+
+function buildDoc(body, isAr, dark) {
+    return `<!DOCTYPE html>
+<html lang="${isAr ? "ar" : "en"}" dir="${isAr ? "rtl" : "ltr"}" data-theme="${dark ? "dark" : "light"}" class="${dark ? "dark" : ""}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>${EMBED_CSS}</style>
+</head>
+<body>${body}${THEME_BRIDGE}</body>
+</html>`;
+}
+
+function LangToggle({ isAr, onChange }) {
+    const btn = (active) =>
+        `px-4 py-1.5 rounded-full text-sm font-bold transition-all ${
+            active
+                ? "bg-primary text-white shadow-brand-sm"
+                : "text-SlateBlueText dark:text-darkmuted hover:text-primary"
+        }`;
+
+    return (
+        <div className="flex items-center gap-2">
+            <Languages className="w-4 h-4 text-SlateBlueText dark:text-darkmuted shrink-0" />
+            <div className="flex gap-1 p-1 bg-IcyBreeze dark:bg-dark_input rounded-full">
+                <button onClick={() => onChange("ar")} className={btn(isAr)}>
+                    العربية
+                </button>
+                <button onClick={() => onChange("en")} className={btn(!isAr)}>
+                    English
+                </button>
+            </div>
+        </div>
+    );
+}
+
 export default function SessionBlogPage() {
     const { sessionId } = useParams();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [data, setData] = useState(null);
     const [lang, setLang] = useState("ar");
+    const [isDark, setIsDark] = useState(false);
+
+    const frameRef = useRef(null);
+    const darkRef = useRef(false);
+    darkRef.current = isDark;
 
     useEffect(() => {
         async function fetchBlog() {
@@ -37,6 +102,38 @@ export default function SessionBlogPage() {
         }
         if (sessionId) fetchBlog();
     }, [sessionId]);
+
+    /* تتبّع الدارك مود (tailwind darkMode: "class") */
+    useEffect(() => {
+        const root = document.documentElement;
+        const read = () => setIsDark(root.classList.contains("dark"));
+        read();
+        const observer = new MutationObserver(read);
+        observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+        return () => observer.disconnect();
+    }, []);
+
+    const sendTheme = () =>
+        frameRef.current?.contentWindow?.postMessage(
+            { type: "SET_THEME", theme: darkRef.current ? "dark" : "light" },
+            "*"
+        );
+
+    useEffect(() => {
+        sendTheme();
+    }, [isDark]);
+
+    const hasAr = !!data?.blogBodyAr?.trim();
+    const hasEn = !!data?.blogBodyEn?.trim();
+    const isAr = lang === "ar";
+    const body = (isAr ? data?.blogBodyAr : data?.blogBodyEn) || "";
+    const interactive = isInteractiveContent(body);
+
+    /* مش بيتعاد بناؤه مع تغيير الثيم عشان حالة الاختبار ما تضيعش */
+    const srcDoc = useMemo(
+        () => (interactive ? buildDoc(body, isAr, darkRef.current) : ""),
+        [body, isAr, interactive]
+    );
 
     // ---------- Loading ----------
     if (loading) {
@@ -77,12 +174,47 @@ export default function SessionBlogPage() {
         );
     }
 
-    const hasAr = !!data.blogBodyAr?.trim();
-    const hasEn = !!data.blogBodyEn?.trim();
-    const isAr = lang === "ar";
-    const body = isAr ? data.blogBodyAr : data.blogBodyEn;
+    // ================= INTERACTIVE (full-screen iframe) =================
+    if (interactive) {
+        return (
+            <div
+                className="flex flex-col bg-IcyBreeze dark:bg-darkmode transition-colors"
+                style={{ height: "100dvh", paddingTop: NAV_OFFSET }}
+            >
+                <div
+                    className="shrink-0 h-14 px-4 flex items-center gap-3 bg-white dark:bg-darkcard border-b border-PowderBlueBorder dark:border-dark_border"
+                    dir={isAr ? "rtl" : "ltr"}
+                >
+                    <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <BookOpen className="w-4 h-4 text-primary" />
+                    </span>
 
-    // تقدير وقت القراءة
+                    <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-MidnightNavyText dark:text-white">
+                            {data.sessionTitle}
+                        </p>
+                        <p className="truncate text-[11px] text-SlateBlueText dark:text-darkmuted">
+                            {data.courseTitle} · {data.moduleTitle}
+                        </p>
+                    </div>
+
+                    {hasAr && hasEn && <LangToggle isAr={isAr} onChange={setLang} />}
+                </div>
+
+                <iframe
+                    key={lang}
+                    ref={frameRef}
+                    title={data.sessionTitle}
+                    srcDoc={srcDoc}
+                    sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+                    onLoad={sendTheme}
+                    className="flex-1 min-h-0 w-full border-0 bg-transparent"
+                />
+            </div>
+        );
+    }
+
+    // ================= REGULAR ARTICLE =================
     const plainText = body.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
     const wordCount = plainText ? plainText.split(" ").length : 0;
     const readingMinutes = Math.max(1, Math.round(wordCount / 180));
@@ -94,7 +226,6 @@ export default function SessionBlogPage() {
                 className="relative overflow-hidden bg-brand-primary dark:bg-brand-dark"
                 dir={isAr ? "rtl" : "ltr"}
             >
-                {/* decorative blobs */}
                 <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full bg-white/10 blur-3xl pointer-events-none" />
                 <div className="absolute -bottom-24 -left-16 w-64 h-64 rounded-full bg-black/10 blur-3xl pointer-events-none" />
 
@@ -143,28 +274,8 @@ export default function SessionBlogPage() {
                     )}
 
                     {hasAr && hasEn && (
-                        <div className="flex items-center gap-2 px-6 pt-5">
-                            <Languages className="w-4 h-4 text-SlateBlueText dark:text-darkmuted shrink-0" />
-                            <div className="flex gap-1 p-1 bg-IcyBreeze dark:bg-dark_input rounded-full">
-                                <button
-                                    onClick={() => setLang("ar")}
-                                    className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${isAr
-                                        ? "bg-primary text-white shadow-brand-sm"
-                                        : "text-SlateBlueText dark:text-darkmuted hover:text-primary"
-                                        }`}
-                                >
-                                    العربية
-                                </button>
-                                <button
-                                    onClick={() => setLang("en")}
-                                    className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${!isAr
-                                        ? "bg-primary text-white shadow-brand-sm"
-                                        : "text-SlateBlueText dark:text-darkmuted hover:text-primary"
-                                        }`}
-                                >
-                                    English
-                                </button>
-                            </div>
+                        <div className="px-6 pt-5">
+                            <LangToggle isAr={isAr} onChange={setLang} />
                         </div>
                     )}
 
