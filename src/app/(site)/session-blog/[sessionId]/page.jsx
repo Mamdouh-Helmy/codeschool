@@ -170,6 +170,18 @@ export default function SessionBlogPage() {
         sendTheme();
     }, [isDark]);
 
+    const hasAr = !!data?.blogBodyAr?.trim();
+    const hasEn = !!data?.blogBodyEn?.trim();
+    const isAr = lang === "ar";
+    const body = (isAr ? data?.blogBodyAr : data?.blogBodyEn) || "";
+    const interactive = isInteractiveContent(body);
+
+    /* مش بيتعاد بناؤه مع تغيير الثيم عشان حالة الاختبار ما تضيعش */
+    const srcDoc = useMemo(
+        () => (interactive ? buildDoc(body, isAr, darkRef.current) : ""),
+        [body, isAr, interactive]
+    );
+
     /* رسائل الـ iframe: الارتفاع + التمرير + مزامنة موضع الـ nav */
     useEffect(() => {
         if (!interactive) return;
@@ -212,18 +224,6 @@ export default function SessionBlogPage() {
             if (raf) cancelAnimationFrame(raf);
         };
     }, [interactive]);
-
-    const hasAr = !!data?.blogBodyAr?.trim();
-    const hasEn = !!data?.blogBodyEn?.trim();
-    const isAr = lang === "ar";
-    const body = (isAr ? data?.blogBodyAr : data?.blogBodyEn) || "";
-    const interactive = isInteractiveContent(body);
-
-    /* مش بيتعاد بناؤه مع تغيير الثيم عشان حالة الاختبار ما تضيعش */
-    const srcDoc = useMemo(
-        () => (interactive ? buildDoc(body, isAr, darkRef.current) : ""),
-        [body, isAr, interactive]
-    );
 
     // ---------- Loading ----------
     if (loading) {
