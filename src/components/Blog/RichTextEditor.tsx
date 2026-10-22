@@ -118,6 +118,7 @@ function parseCode(source: string): CodeParts {
 }
 
 /** بيجمّع الـ 3 أجزاء في HTML واحد */
+/** بيجمّع الـ 3 أجزاء في HTML واحد */
 function composeCode({ html, css, js }: CodeParts): string {
   const extra = [
     css.trim() ? `<style>\n${css.trim()}\n</style>` : "",
@@ -127,9 +128,15 @@ function composeCode({ html, css, js }: CodeParts): string {
     .join("\n\n");
 
   if (!extra) return html;
-  if (/<\/body>/i.test(html)) {
-    return html.replace(/<\/body>/i, () => `${extra}\n</body>`);
+
+  // نحط الـ style/script قبل آخر </body> (مش أول واحدة)
+  const matches = [...html.matchAll(/<\/body>/gi)];
+  const last = matches[matches.length - 1];
+
+  if (last && last.index !== undefined) {
+    return `${html.slice(0, last.index)}${extra}\n${html.slice(last.index)}`;
   }
+
   return html ? `${html}\n\n${extra}` : extra;
 }
 

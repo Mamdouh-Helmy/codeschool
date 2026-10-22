@@ -135,6 +135,14 @@ const buildRuntime = (id: string) => `
 })();
 `;
 
+/** بيحقن النص قبل آخر </body> (مش أول واحدة) عشان نصوص الـ JS اللي فيها </body> ما تكسرش الحقن */
+function injectBeforeLastBodyClose(source: string, injection: string): string {
+  const matches = [...source.matchAll(/<\/body>/gi)];
+  const last = matches[matches.length - 1];
+  if (!last || last.index === undefined) return source + injection;
+  return source.slice(0, last.index) + injection + source.slice(last.index);
+}
+
 function buildSrcDoc(opts: {
   html: string;
   dir?: "rtl" | "ltr";
@@ -164,15 +172,14 @@ function buildSrcDoc(opts: {
   // لو المستخدم كتب صفحة HTML كاملة
   if (/<html[\s>]/i.test(html)) {
     let out = html;
+
     if (/<head[\s>]/i.test(out)) {
       out = out.replace(/<head[^>]*>/i, (m) => m + headInject);
     } else {
       out = out.replace(/<html[^>]*>/i, (m) => m + `<head>${headInject}</head>`);
     }
-    out = /<\/body>/i.test(out)
-      ? out.replace(/<\/body>/i, () => tail + "</body>")
-      : out + tail;
-    return out;
+
+    return injectBeforeLastBodyClose(out, tail);
   }
 
   return `<!DOCTYPE html><html><head>${headInject}</head><body>${html}${tail}</body></html>`;
