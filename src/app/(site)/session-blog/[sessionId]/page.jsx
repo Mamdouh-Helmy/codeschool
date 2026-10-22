@@ -11,29 +11,75 @@ import {
     Languages,
 } from "lucide-react";
 
-/* ارتفاع النافبار الثابت للموقع (pt-16 = 4rem). غيّره لو النافبار عندك أطول. */
-const NAV_OFFSET = "4rem";
+/* ارتفاع نافبار الموقع الثابت بالـ px — غيّره لو مختلف عندك */
+const NAV_H = 80;
+/* مسافة التمرير للينكات الداخلية = النافبار + شريط تنقل البوكلت */
+const SCROLL_OFFSET = NAV_H + 70;
 
 /* محتوى فيه <script> أو <style> أو كلاس booklet = محتوى تفاعلي كامل → iframe */
 const isInteractiveContent = (html) =>
     /<(script|style)[\s>]|class=["'][^"']*\bbooklet\b/i.test(html || "");
 
-/* ستايل إضافي جوه الـ iframe: هيدر/فوتر البوكلت مكررين مع نافبار الموقع */
+/* ستايل إضافي جوه الـ iframe: هيدر/فوتر البوكلت مكررين مع نافبار الموقع،
+   والسكرول مخفي لأن الصفحة هي اللي بتتحرك (سكرول واحد بس) */
 const EMBED_CSS = `
+  html { overflow: hidden; }
+  body { display: flow-root; }
   .site-header, .site-footer { display: none !important; }
-  .main-container { padding-top: 16px; }
+  .main-container { padding-top: 8px; }
 `;
 
-/* بيستقبل الثيم من الصفحة (light/dark) من غير ما الـ iframe يعيد التحميل */
-const THEME_BRIDGE = `<script>
-addEventListener("message", function (e) {
-  var d = e.data;
-  if (d && d.type === "SET_THEME") {
-    var r = document.documentElement;
-    r.dataset.theme = d.theme;
-    r.classList.toggle("dark", d.theme === "dark");
+/* جسر التواصل بين الـ iframe والصفحة:
+   - بيبلّغ الصفحة بالارتفاع (iframe بيتمدد من غير سكرول داخلي)
+   - بيحوّل لينكات #anchor لتمرير الصفحة نفسها
+   - بيحاكي sticky للـ nav لأن الـ iframe طويل ومفيهوش سكرول
+   - بيستقبل الثيم (light/dark) من غير إعادة تحميل */
+const BRIDGE = `<script>
+(function () {
+  function post(m) { window.parent.postMessage(m, "*"); }
+  var lastH = 0;
+  function report() {
+    var h = Math.ceil(document.body.getBoundingClientRect().height);
+    if (h && h !== lastH) { lastH = h; post({ type: "FRAME_HEIGHT", h: h }); }
   }
-});
+  new ResizeObserver(report).observe(document.body);
+  addEventListener("load", report);
+
+  var nav = null;
+  function place(top) {
+    nav = nav || document.querySelector(".lesson-navigation");
+    if (!nav) return;
+    nav.style.transform = "none";
+    var base = nav.getBoundingClientRect().top;
+    var host = nav.parentElement.getBoundingClientRect().bottom;
+    var max = Math.max(0, host - base - nav.offsetHeight - 12);
+    var dy = Math.min(Math.max(0, top + 8 - base), max);
+    nav.style.transform = dy ? "translateY(" + dy + "px)" : "none";
+  }
+
+  addEventListener("message", function (e) {
+    var d = e.data;
+    if (!d) return;
+    if (d.type === "SET_THEME") {
+      var r = document.documentElement;
+      r.dataset.theme = d.theme;
+      r.classList.toggle("dark", d.theme === "dark");
+    } else if (d.type === "VIEWPORT") {
+      place(d.top);
+    }
+  });
+
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest ? e.target.closest('a[href^="#"]') : null;
+    if (!a) return;
+    e.preventDefault();
+    var id = decodeURIComponent(a.getAttribute("href").slice(1));
+    var el = id ? document.getElementById(id) : null;
+    post({ type: "SCROLL_TO", y: el ? el.getBoundingClientRect().top : 0 });
+  });
+
+  post({ type: "READY" });
+})();
 </script>`;
 
 function buildDoc(body, isAr, dark) {
@@ -44,7 +90,7 @@ function buildDoc(body, isAr, dark) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>${EMBED_CSS}</style>
 </head>
-<body>${body}${THEME_BRIDGE}</body>
+<body>${body}${BRIDGE}</body>
 </html>`;
 }
 
@@ -79,6 +125,7 @@ export default function SessionBlogPage() {
     const [lang, setLang] = useState("ar");
     const [isDark, setIsDark] = useState(false);
 
+    const [frameH, setFrameH] = useState(0);
     const frameRef = useRef(null);
     const darkRef = useRef(false);
     darkRef.current = isDark;
@@ -122,6 +169,49 @@ export default function SessionBlogPage() {
     useEffect(() => {
         sendTheme();
     }, [isDark]);
+
+    /* رسائل الـ iframe: الارتفاع + التمرير + مزامنة موضع الـ nav */
+    useEffect(() => {
+        if (!interactive) return;
+        let raf = 0;
+
+        const sendViewport = () => {
+            raf = 0;
+            const el = frameRef.current;
+            if (!el) return;
+            const top = Math.max(0, NAV_H - el.getBoundingClientRect().top);
+            el.contentWindow?.postMessage({ type: "VIEWPORT", top }, "*");
+        };
+        const schedule = () => {
+            if (!raf) raf = requestAnimationFrame(sendViewport);
+        };
+
+        const onMessage = (e) => {
+            const el = frameRef.current;
+            if (!el || e.source !== el.contentWindow || !e.data) return;
+            const d = e.data;
+
+            if (d.type === "FRAME_HEIGHT") {
+                setFrameH(Math.ceil(d.h));
+                schedule();
+            } else if (d.type === "READY") {
+                schedule();
+            } else if (d.type === "SCROLL_TO") {
+                const y = window.scrollY + el.getBoundingClientRect().top + d.y - SCROLL_OFFSET;
+                window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+            }
+        };
+
+        window.addEventListener("message", onMessage);
+        window.addEventListener("scroll", schedule, { passive: true });
+        window.addEventListener("resize", schedule);
+        return () => {
+            window.removeEventListener("message", onMessage);
+            window.removeEventListener("scroll", schedule);
+            window.removeEventListener("resize", schedule);
+            if (raf) cancelAnimationFrame(raf);
+        };
+    }, [interactive]);
 
     const hasAr = !!data?.blogBodyAr?.trim();
     const hasEn = !!data?.blogBodyEn?.trim();
@@ -174,30 +264,17 @@ export default function SessionBlogPage() {
         );
     }
 
-    // ================= INTERACTIVE (full-screen iframe) =================
+    // ================= INTERACTIVE (iframe بيتمدد، والصفحة هي اللي بتتحرك) =================
     if (interactive) {
         return (
-            <div
-                className="flex flex-col bg-IcyBreeze dark:bg-darkmode transition-colors"
-                style={{ height: "100dvh", paddingTop: NAV_OFFSET }}
-            >
+            <div className="min-h-screen bg-IcyBreeze dark:bg-darkmode transition-colors pt-24 pb-10">
                 <div
-                    className="shrink-0 h-14 px-4 flex items-center gap-3 bg-white dark:bg-darkcard border-b border-PowderBlueBorder dark:border-dark_border"
                     dir={isAr ? "rtl" : "ltr"}
+                    className="mx-auto w-full max-w-[1080px] px-[14px] sm:px-[22px] mb-3 flex items-center justify-between gap-3"
                 >
-                    <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                        <BookOpen className="w-4 h-4 text-primary" />
-                    </span>
-
-                    <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-bold text-MidnightNavyText dark:text-white">
-                            {data.sessionTitle}
-                        </p>
-                        <p className="truncate text-[11px] text-SlateBlueText dark:text-darkmuted">
-                            {data.courseTitle} · {data.moduleTitle}
-                        </p>
-                    </div>
-
+                    <p className="min-w-0 truncate text-xs font-semibold text-SlateBlueText dark:text-darkmuted">
+                        {data.courseTitle} · {data.moduleTitle}
+                    </p>
                     {hasAr && hasEn && <LangToggle isAr={isAr} onChange={setLang} />}
                 </div>
 
@@ -206,9 +283,11 @@ export default function SessionBlogPage() {
                     ref={frameRef}
                     title={data.sessionTitle}
                     srcDoc={srcDoc}
+                    scrolling="no"
                     sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
                     onLoad={sendTheme}
-                    className="flex-1 min-h-0 w-full border-0 bg-transparent"
+                    className="block w-full border-0 bg-transparent"
+                    style={frameH ? { height: frameH } : { minHeight: "70vh" }}
                 />
             </div>
         );
