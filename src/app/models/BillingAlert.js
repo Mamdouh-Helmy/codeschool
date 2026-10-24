@@ -15,7 +15,7 @@ const BillingAlertSchema = new mongoose.Schema(
       index: true,
     },
 
-    // ✅ NEW: escrow_review — تنبيه بعد انتهاء 14 يوم إسكرو على دفعة معينة،
+    // escrow_review — تنبيه بعد انتهاء 14 يوم إسكرو على دفعة معينة،
     // بيستنى قرار الأدمن (احسبها فلوس / رجّعها) قبل ما أي حاجة تتنفذ فعليًا
     type: {
       type: String,
@@ -24,7 +24,7 @@ const BillingAlertSchema = new mongoose.Schema(
     },
     status: { type: String, enum: ["open", "resolved"], default: "open" },
 
-    // ✅ NEW: مطلوبة فقط لو النوع escrow_review — الدفعة اللي التنبيه ده خاص بيها
+    // مطلوبة فقط لو النوع escrow_review — الدفعة اللي التنبيه ده خاص بيها
     paymentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Payment",
@@ -36,7 +36,8 @@ const BillingAlertSchema = new mongoose.Schema(
     resolution: {
       action: {
         type: String,
-        enum: ["suspend", "extend", "recognize", "refund"],
+        // ✅ NEW: "paid" = اتقفل تلقائيًا لأن الطالب سدد كل المتبقي
+        enum: ["suspend", "extend", "recognize", "refund", "paid"],
         default: null,
       },
       oldDueDate: { type: Date },
@@ -50,7 +51,7 @@ const BillingAlertSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// ✅ تيكت "open" واحد بس لكل فاتورة (لنوع overdue) في نفس الوقت
+// تيكت "open" واحد بس لكل فاتورة (لنوع overdue) في نفس الوقت
 BillingAlertSchema.index(
   { invoiceId: 1, type: 1, status: 1 },
   {
@@ -59,7 +60,7 @@ BillingAlertSchema.index(
   },
 );
 
-// ✅ تيكت "open" واحد بس لكل دفعة (لنوع escrow_review) في نفس الوقت
+// تيكت "open" واحد بس لكل دفعة (لنوع escrow_review) في نفس الوقت
 BillingAlertSchema.index(
   { paymentId: 1, status: 1 },
   {

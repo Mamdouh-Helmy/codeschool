@@ -7,6 +7,27 @@ import { sendDueDateReminders } from "./billing-reminders";
 
 const ESCROW_DAYS = 14;
 
+// ✅ NEW: بتقفل تنبيهات "overdue" المفتوحة لفاتورة اتسددت بالكامل (أو اتلغت)
+async function closeOverdueAlertsForInvoice(invoiceId, actedBy = null) {
+  try {
+    const set = {
+      status: "resolved",
+      "resolution.action": "paid",
+      "resolution.reason": "تم السداد بالكامل",
+      "resolution.actedAt": new Date(),
+    };
+    if (actedBy) set["resolution.actedBy"] = actedBy;
+
+    await BillingAlert.updateMany(
+      { invoiceId, type: "overdue", status: "open" },
+      { $set: set },
+    );
+  } catch (err) {
+    // مش حرج: الفلتر في الـ API هيخفيه برضه والكرون هينضفه
+    console.error("⚠️ failed to close overdue alerts:", err.message);
+  }
+}
+
 // ─── إنشاء فاتورة جديدة عند إضافة باكدج ─────────────────────────────────────
 // paymentOption: "full" | "none" | "partial"
 //   - full:    الطالب دفع السعر بالكامل الآن → مفيش dueDate، الفاتورة Paid فورًا
@@ -117,6 +138,11 @@ export async function addPaymentToInvoice(invoiceId, { amount, method, notes, re
   invoice.metadata.updatedAt = new Date();
   await invoice.save();
 
+  // ✅ NEW: لو الطالب سدد كل المتبقي، اقفل أي تنبيه overdue مفتوح على الفاتورة
+  if (invoice.status === "Paid") {
+    await closeOverdueAlertsForInvoice(invoice._id, recordedBy);
+  }
+
   return { invoice, payment };
 }
 
@@ -189,6 +215,9 @@ export async function refundInvoicePayment(invoiceId, { amount, reason, actedBy 
   invoice.metadata.lastModifiedBy = actedBy;
   invoice.metadata.updatedAt = new Date();
   await invoice.save();
+
+  // ✅ NEW: الفاتورة اتلغت، فأي تنبيه overdue مفتوح عليها ملوش لازمة
+  await closeOverdueAlertsForInvoice(invoice._id, actedBy);
 
   return { invoice, refundRecord };
 }
@@ -383,6 +412,45 @@ export async function syncEscrowStarts() {
   };
 }
 
+// ✅ NEW: شبكة أمان — بتقفل أي overdue مفتوح على فاتورة اتسددت/اتلغت
+// (بتغطي التنبيهات القديمة، وأي دفع اتسجل من مكان تاني غير addPaymentToInvoice)
+export async function closeSettledOverdueAlerts() {
+  const openAlerts = await BillingAlert.find({
+    type: "overdue",
+    status: "open",
+  })
+    .populate("invoiceId", "status totalAmount paidAmount")
+    .select("_id invoiceId");
+
+  const toClose = openAlerts
+    .filter((a) => {
+      const inv = a.invoiceId;
+      if (!inv) return false;
+      const remaining = Math.max(
+        0,
+        Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0),
+      );
+      return ["Paid", "Voided"].includes(inv.status) || remaining <= 0;
+    })
+    .map((a) => a._id);
+
+  if (toClose.length === 0) return { checked: openAlerts.length, closed: 0 };
+
+  await BillingAlert.updateMany(
+    { _id: { $in: toClose } },
+    {
+      $set: {
+        status: "resolved",
+        "resolution.action": "paid",
+        "resolution.reason": "تم السداد بالكامل",
+        "resolution.actedAt": new Date(),
+      },
+    },
+  );
+
+  return { checked: openAlerts.length, closed: toClose.length };
+}
+
 // ─── Cron: تنبيهات الاستحقاق المتأخر (Due Date) ────────────────────────────
 export async function checkOverdueInvoices() {
   const now = new Date();
@@ -515,7 +583,15 @@ async function safeStep(name, fn) {
 export async function runDailyBillingCron() {
   const escrowSyncResult = await safeStep("escrowSync", syncEscrowStarts);
   const escrowResult = await safeStep("escrow", flagDueEscrowsForReview);
+  // ✅ NEW: نضّف التنبيهات المتسددة قبل ما نعمل تنبيهات جديدة
+  const settledAlertsResult = await safeStep("closeSettledAlerts", closeSettledOverdueAlerts);
   const overdueResult = await safeStep("overdue", checkOverdueInvoices);
   const reminderResult = await safeStep("reminders", sendDueDateReminders);
-  return { escrowSyncResult, escrowResult, overdueResult, reminderResult };
+  return {
+    escrowSyncResult,
+    escrowResult,
+    settledAlertsResult,
+    overdueResult,
+    reminderResult,
+  };
 }

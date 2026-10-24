@@ -12,7 +12,6 @@ import {
     Inbox,
     Scale,
     Check,
-    TrendingUp,
     Wallet,
     PieChart,
     BarChart3,
@@ -37,6 +36,10 @@ function daysSince(date) {
 // المتبقي الفعلي للفاتورة (الـ populate بـ lean مبيرجعش virtuals)
 const remainingOf = (inv) =>
     Math.max(0, Number(inv?.totalAmount || 0) - Number(inv?.paidAmount || 0));
+
+// ✅ NEW: الفاتورة اتسددت أو اتلغت؟
+const isSettled = (inv) =>
+    !inv || ["Paid", "Voided"].includes(inv.status) || remainingOf(inv) <= 0;
 
 // شدة التأخير: بتتحكم في لون الشريط والحافة
 function severity(days) {
@@ -113,6 +116,7 @@ const RESOLUTION_LABEL = {
     suspend: "تم إيقاف الطالب",
     recognize: "تم احتسابه إيراد",
     refund: "تم الاسترجاع",
+    paid: "تم السداد بالكامل", // ✅ NEW
 };
 
 const inputCls =
@@ -230,8 +234,18 @@ export default function BillingAlertsPage() {
             if (typeFilter !== "all") params.set("type", typeFilter);
             const res = await fetch(`/api/billing-alerts?${params.toString()}`);
             const data = await res.json();
-            if (data.success) setAlerts(data.data || []);
-            else toast.error(data.message || "تعذر تحميل التنبيهات");
+            if (data.success) {
+                // ✅ NEW: طبقة أمان — تنبيه overdue مفتوح على فاتورة مسددة ميظهرش
+                const list = (data.data || []).filter(
+                    (a) =>
+                        a.type !== "overdue" ||
+                        a.status !== "open" ||
+                        !isSettled(a.invoiceId)
+                );
+                setAlerts(list);
+            } else {
+                toast.error(data.message || "تعذر تحميل التنبيهات");
+            }
         } catch (err) {
             toast.error(err.message || "تعذر تحميل التنبيهات");
         } finally {
@@ -322,7 +336,8 @@ export default function BillingAlertsPage() {
             });
             const data = await res.json();
             if (data.success) {
-                toast.success("تم تنفيذ الإجراء بنجاح");
+                // ✅ NEW: لو السيرفر قفل التنبيه لأن الفاتورة اتسددت، نعرض رسالته
+                toast.success(data.message || "تم تنفيذ الإجراء بنجاح");
                 closeResolve();
                 fetchAlerts();
             } else {

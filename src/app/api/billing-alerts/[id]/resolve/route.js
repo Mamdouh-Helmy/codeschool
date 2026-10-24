@@ -1,3 +1,4 @@
+//api/billing-alerts/[id]/resolve
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import BillingAlert from "../../../../models/BillingAlert";
@@ -48,6 +49,29 @@ export async function POST(req, { params }) {
           { success: false, message: "Related invoice not found" },
           { status: 404 },
         );
+      }
+
+      // ✅ NEW: لو الطالب سدد كل المتبقي، اقفل التنبيه من غير ما توقف الطالب أو تمدد
+      const remaining = Math.max(
+        0,
+        Number(invoice.totalAmount || 0) - Number(invoice.paidAmount || 0),
+      );
+      if (remaining <= 0 || ["Paid", "Voided"].includes(invoice.status)) {
+        alert.status = "resolved";
+        alert.resolution = {
+          action: "paid",
+          oldDueDate: alert.dueDateAtCreation,
+          reason: "تم السداد بالكامل",
+          actedBy: authCheck.user.id,
+          actedAt: new Date(),
+        };
+        await alert.save();
+
+        return NextResponse.json({
+          success: true,
+          data: { alert, invoice },
+          message: "الفاتورة مسددة بالكامل، تم إغلاق التنبيه",
+        });
       }
 
       const now = new Date();
