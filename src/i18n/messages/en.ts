@@ -4868,6 +4868,7 @@ const en = {
   "groups.groupType.adults": "Adults",
   "groups.groupType.mixed": "Mixed",
   "dashboard.interviews": "Interviews",
+  "dashboard.studentEvaluations": "Student Evaluations",
 };
 
 export default en;

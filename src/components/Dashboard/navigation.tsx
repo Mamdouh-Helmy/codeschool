@@ -104,7 +104,7 @@ export const useAdminNavigation = () => {
           item("dashboard.rescheduleRequests", "Reschedule Requests", "/admin/reschedule-requests", "ion:swap-horizontal-outline"),
           item("nav.meetingLink", "Meeting Link", "/admin/meetingLinkAdmin", "ion:link-outline"),
           item("dashboard.certificates", "Certificates", "/admin/certificates", "ion:ribbon-outline"),
-          item("dashboard.studentEvaluations", "Student Evaluations", "/admin/student-evaluations", "ion:clipboard-outline", true),
+          item("dashboard.studentEvaluations", "Student Evaluations", "/admin/evaluations", "ion:clipboard-outline", true),
         ],
       },
       {

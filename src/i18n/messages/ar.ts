@@ -4981,6 +4981,7 @@ const ar = {
   "groups.groupType.adults": "بالغون",
   "groups.groupType.mixed": "مختلطة",
   "dashboard.interviews": "المقابلات الشخصية",
+  "dashboard.studentEvaluations": "تقييمات الطلبة",
 };
 
 export default ar;
