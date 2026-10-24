@@ -35,8 +35,8 @@ export const NavLink = ({
     onClick={onNavigate}
     aria-current={active ? "page" : undefined}
     className={`group flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${active
-        ? "bg-primary/10 text-primary"
-        : "text-SlateBlueText hover:bg-slate-100 hover:text-primary dark:text-darktext dark:hover:bg-darkmode"
+      ? "bg-primary/10 text-primary"
+      : "text-SlateBlueText hover:bg-slate-100 hover:text-primary dark:text-darktext dark:hover:bg-darkmode"
       }`}
   >
     <span className="flex min-w-0 items-center gap-3">
@@ -104,6 +104,7 @@ export const useAdminNavigation = () => {
           item("dashboard.rescheduleRequests", "Reschedule Requests", "/admin/reschedule-requests", "ion:swap-horizontal-outline"),
           item("nav.meetingLink", "Meeting Link", "/admin/meetingLinkAdmin", "ion:link-outline"),
           item("dashboard.certificates", "Certificates", "/admin/certificates", "ion:ribbon-outline"),
+          item("dashboard.studentEvaluations", "Student Evaluations", "/admin/student-evaluations", "ion:clipboard-outline", true),
         ],
       },
       {
