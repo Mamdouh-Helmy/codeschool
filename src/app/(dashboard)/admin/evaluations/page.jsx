@@ -93,6 +93,7 @@ const WARN_CHIP = "bg-amber-50 text-amber-700 ring-amber-600/15 dark:bg-amber-50
 const INFO_CHIP = "bg-sky-50 text-sky-700 ring-sky-600/15 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-400/20";
 const NEUTRAL_CHIP = "bg-gray-100 text-gray-600 ring-gray-500/10 dark:bg-white/10 dark:text-gray-300 dark:ring-white/10";
 
+const noScroll = "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
 const card = "rounded-2xl border border-gray-200/80 dark:border-dark_border bg-white dark:bg-darklight";
 const soft = "bg-gray-50 dark:bg-white/[0.04]";
 const muted = "text-gray-500 dark:text-darkmuted";
@@ -380,7 +381,7 @@ function Skyline({ rows, onOpen }) {
                         <span className="flex-1 border-t border-dashed border-white/10" />
                     </div>
                 ))}
-                <div className="absolute inset-0 pr-5 flex items-end gap-1 overflow-x-auto">
+                <div className={`absolute inset-0 pr-5 flex items-end gap-1 overflow-x-auto ${noScroll}`}>
                     {sorted.map((s) => {
                         const tone = scoreTone(s.overall);
                         return (
@@ -668,7 +669,7 @@ function ReportDialog({ report, rows, focusEvalId, onClose, onSelect, onPrev, on
                         </div>
                         <span className={`text-xs tabular-nums ${muted}`}>{rows.length}</span>
                     </div>
-                    <ul className="flex-1 overflow-y-auto overscroll-contain p-2 space-y-1">
+                    <ul className={`flex-1 overflow-y-auto overscroll-contain p-2 space-y-1 ${noScroll}`}>
                         {rows.map((s) => {
                             const on = s.id === studentId;
                             const t = scoreTone(s.overall);
@@ -732,9 +733,9 @@ function ReportDialog({ report, rows, focusEvalId, onClose, onSelect, onPrev, on
                     </header>
 
                     {/* scrollable report */}
-                    <div ref={scroller} className="flex-1 overflow-y-auto overscroll-contain">
+                    <div ref={scroller} className={`flex-1 overflow-y-auto overscroll-contain ${noScroll}`}>
                         {/* sticky section nav */}
-                        <nav className="sticky top-0 z-10 flex gap-1.5 overflow-x-auto px-5 sm:px-7 py-2.5 bg-white/90 dark:bg-darklight/90 backdrop-blur border-b border-gray-200/70 dark:border-dark_border" aria-label="أقسام التقرير">
+                        <nav className={`sticky top-0 z-10 flex gap-1.5 overflow-x-auto px-5 sm:px-7 py-2.5 bg-white/90 dark:bg-darklight/90 backdrop-blur border-b border-gray-200/70 dark:border-dark_border ${noScroll}`} aria-label="أقسام التقرير">
                             {[
                                 { id: "rp-summary", label: "الملخص", icon: Gauge },
                                 { id: "rp-criteria", label: "المعايير", icon: Star },
@@ -987,16 +988,52 @@ export default function StudentEvaluationsPage() {
     }, [filtered, sort]);
 
     const attention = useMemo(() => {
+        const LOW_CATS = ["at_risk", "needs_repeat"];
         return studentRows
-            .filter(
-                (s) =>
-                    ["at_risk", "needs_repeat"].includes(s.last.marketing?.studentCategory) ||
-                    s.overall < 3 ||
-                    s.trend <= -1,
-            )
-            .sort((a, b) => a.overall - b.overall)
+            .map((s) => {
+                const reasons = [];
+                const cat = s.last.marketing?.studentCategory;
+                if (LOW_CATS.includes(cat)) reasons.push(CATEGORIES[cat].label);
+                if (s.last.finalDecision && s.last.finalDecision !== "pass") {
+                    reasons.push(`آخر قرار: ${DECISIONS[s.last.finalDecision]?.label}`);
+                }
+                if (s.overall > 0 && s.overall < 3) reasons.push("معدل منخفض");
+                if (s.count > 1 && s.trend <= -0.5) reasons.push("تراجع في المستوى");
+                CRITERIA.forEach((c) => {
+                    const v = Number(s.last.criteria?.[c.key]);
+                    if (v > 0 && v <= 2) reasons.push(`${c.label} ضعيف`);
+                });
+                return { ...s, reasons };
+            })
+            .filter((s) => s.reasons.length > 0)
+            .sort((a, b) => b.reasons.length - a.reasons.length || a.overall - b.overall)
             .slice(0, 5);
     }, [studentRows]);
+
+    /* لو مفيش حد في خطر: اعرض أقل 3 درجات للمتابعة بدل قائمة فاضية */
+    const watchList = useMemo(
+        () => [...studentRows].filter((s) => s.overall > 0).sort((a, b) => a.overall - b.overall).slice(0, 3),
+        [studentRows],
+    );
+
+    const attentionRow = (s) => (
+        <li key={s.id}>
+            <button
+                onClick={() => openStudent(s.id)}
+                className={`w-full flex items-center gap-3 rounded-xl px-2.5 py-2 text-right hover:bg-gray-50 dark:hover:bg-darkhover transition-colors ${focusRing}`}
+            >
+                <ScoreRing score={s.overall} size={38} stroke={4} />
+                <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{s.name}</p>
+                    <p className={`text-[11px] truncate ${muted}`}>{s.group}</p>
+                    {s.reasons?.length > 0 && (
+                        <p className="text-[10px] truncate text-rose-600 dark:text-rose-400">{s.reasons.slice(0, 2).join(" • ")}</p>
+                    )}
+                </div>
+                <Trend value={s.trend} compact />
+            </button>
+        </li>
+    );
 
     /* تقرير الطالب المختار (من كل التقييمات مش المفلترة) */
     const report = useMemo(() => {
@@ -1178,27 +1215,27 @@ export default function StudentEvaluationsPage() {
                         <div className="flex items-center gap-2 mb-3">
                             <Flame className="w-4 h-4 text-rose-500" />
                             <h3 className="text-sm font-bold text-gray-900 dark:text-white">يحتاجون تدخل</h3>
+                            {attention.length > 0 && (
+                                <span className="mr-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+                                    {attention.length}
+                                </span>
+                            )}
                         </div>
-                        {attention.length === 0 ? (
-                            <p className={`text-xs ${muted}`}>كل الطلبة في مستوى مطمئن.</p>
+                        {attention.length > 0 ? (
+                            <ul className="space-y-1">{attention.map(attentionRow)}</ul>
                         ) : (
-                            <ul className="space-y-1">
-                                {attention.map((s) => (
-                                    <li key={s.id}>
-                                        <button
-                                            onClick={() => openStudent(s.id)}
-                                            className={`w-full flex items-center gap-3 rounded-xl px-2.5 py-2 text-right hover:bg-gray-50 dark:hover:bg-darkhover transition-colors ${focusRing}`}
-                                        >
-                                            <ScoreRing score={s.overall} size={38} stroke={4} />
-                                            <div className="min-w-0 flex-1">
-                                                <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{s.name}</p>
-                                                <p className={`text-[11px] truncate ${muted}`}>{s.group}</p>
-                                            </div>
-                                            <Trend value={s.trend} compact />
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
+                            <div>
+                                <div className="flex items-center gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 px-3 py-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 mb-3">
+                                    <ThumbsUp className="w-4 h-4 shrink-0" />
+                                    مفيش طلبة في خطر حالياً
+                                </div>
+                                {watchList.length > 0 && (
+                                    <>
+                                        <p className={`text-[11px] mb-1.5 ${muted}`}>الأقل درجة (للمتابعة)</p>
+                                        <ul className="space-y-1">{watchList.map(attentionRow)}</ul>
+                                    </>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>
