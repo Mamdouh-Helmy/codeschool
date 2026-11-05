@@ -12,7 +12,8 @@ import {
     UserCheck, Layers, Tag, Sparkles, FolderOpen,
     Link2Off,
     PauseCircle,
-    Gift,  // ✅ NEW
+    Gift,
+    MessageSquare,
 } from "lucide-react";
 import Modal from "./Modal";
 import GroupForm from "./GroupForm";
@@ -23,6 +24,7 @@ import FixGroupLinksModal from "./FixGroupLinksModal";
 import GroupDetailsPage from "./GroupDetailsPage";
 import GroupHoldModal from "./GroupHoldModal";
 import MakeupSessionForm from "./MakeupSessionForm";
+import GroupMessageModal from "./GroupMessageModal";
 import { useI18n } from "@/i18n/I18nProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -172,6 +174,8 @@ export default function GroupsAdmin() {
     const [makeupModalOpen, setMakeupModalOpen] = useState(false);
 
     const [pendingActivation, setPendingActivation] = useState(DEFAULT_PENDING_ACTIVATION);
+    const [messageModal, setMessageModal] = useState({ open: false, groupId: null });
+
 
     const searchTimeoutRef = useRef(null);
 
@@ -260,6 +264,9 @@ export default function GroupsAdmin() {
         if (filters.groupType) count++; // ✅ NEW
         return count;
     }, [filters]);
+
+    const onSendMessage = useCallback((groupId) => setMessageModal({ open: true, groupId }), []);
+    const closeMessageModal = useCallback(() => setMessageModal({ open: false, groupId: null }), []);
 
     // ── Data Fetching ──────────────────────────────────────────────────────────
     useEffect(() => {
@@ -1075,6 +1082,7 @@ export default function GroupsAdmin() {
                                     onFixLinks={onFixLinks}
                                     onHold={onHold}
                                     onRelease={onRelease}
+                                    onSendMessage={onSendMessage}
                                 />
                             ))}
                         </tbody>
@@ -1124,6 +1132,12 @@ export default function GroupsAdmin() {
                     onClose={closeAddStudentsModal}
                     onStudentAdded={loadGroups}
                 />
+            </Modal>
+
+            <Modal open={messageModal.open} title="إرسال رسالة للجروب" onClose={closeMessageModal} size="2xl">
+                {messageModal.open && (
+                    <GroupMessageModal groupId={messageModal.groupId} onClose={closeMessageModal} />
+                )}
             </Modal>
 
             <MeetingLinksCheckModal
@@ -1326,6 +1340,7 @@ function GroupRow({
     onViewDetails, onActivate, onAddStudents, onViewSessions,
     onEdit, onDelete, onFixLinks,
     onHold, onRelease,
+    onSendMessage,
 }) {
     const isOffline = group.deliveryMode === "offline";
     const hasLinkIssue = !isOffline && !!group.linkHealth?.hasIssue;
@@ -1364,8 +1379,8 @@ function GroupRow({
                     {(groupType === "kids" || groupType === "adults") && (
                         <span
                             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${groupType === "kids"
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20"
-                                    : "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/20"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20"
+                                : "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/20"
                                 }`}
                             title={groupTypeLabels[groupType]}
                         >
@@ -1520,6 +1535,11 @@ function GroupRow({
                             <PlayCircle className="w-4 h-4 text-emerald-600" />
                         </ActionButton>
                     )}
+
+                    <ActionButton onClick={() => onSendMessage(group.id)} hoverColor="blue" title="إرسال رسالة">
+                        <MessageSquare className="w-4 h-4 text-blue-600" />
+                    </ActionButton>
+
 
                     {group.status === "active" && !group.isFull && !isOnHold && (
                         <ActionButton onClick={() => onAddStudents(group.id)} hoverColor="blue" title={t("groups.actions.addStudents") || "Add Students"}>
