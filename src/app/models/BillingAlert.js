@@ -37,7 +37,7 @@ const BillingAlertSchema = new mongoose.Schema(
       action: {
         type: String,
         // ✅ NEW: "paid" = اتقفل تلقائيًا لأن الطالب سدد كل المتبقي
-        enum: ["suspend", "extend", "recognize", "refund", "paid"],
+        enum: ["suspend", "extend", "recognize", "refund", "paid", "package_removed"],
         default: null,
       },
       oldDueDate: { type: Date },

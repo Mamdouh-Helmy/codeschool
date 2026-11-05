@@ -380,6 +380,16 @@ export default function GroupDetailsPage({ groupId, onClose }) {
   const [addOpen, setAddOpen] = useState(false);
   const [pkgStudentId, setPkgStudentId] = useState(null);
 
+  // ── حذف طالب (مودال التأكيد) ──
+  const [removeDialog, setRemoveDialog] = useState({
+    open: false,
+    studentId: null,
+    name: "",
+    hasPackage: false,
+    removePackage: false,
+    busy: false,
+  });
+
   // ── إضافة مدرس ──
   const [instrPickerOpen, setInstrPickerOpen] = useState(false);
   const [instrList, setInstrList] = useState([]);
@@ -488,18 +498,53 @@ export default function GroupDetailsPage({ groupId, onClose }) {
     }
   }
 
-  async function removeStudent(studentId, name) {
-    if (!confirm(t("group.student.removeConfirm", { name }))) return;
+  // ── Remove student ─────────────────────────────────────────────────────────
+  // بتفتح المودال بس
+  function removeStudent(studentId, name) {
+    const st = data?.students?.find((s) => s.id === studentId);
+    setRemoveDialog({
+      open: true,
+      studentId,
+      name,
+      hasPackage: !!st?.credit?.hasPackage,
+      removePackage: false,
+      busy: false,
+    });
+  }
+
+  // بتنفذ الحذف فعليًا
+  async function confirmRemoveStudent() {
+    const { studentId, removePackage } = removeDialog;
+    setRemoveDialog((d) => ({ ...d, busy: true }));
     const tid = toast.loading(t("common.removing"));
     try {
       const r = await fetch(`/api/groups/${groupId}/remove-student`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId, removePackage }),
       });
       const j = await r.json();
-      if (r.ok && j.success) { toast.success(t("common.removed"), { id: tid }); load(); }
-      else toast.error(j.error || t("common.error"), { id: tid });
-    } catch { toast.error(t("common.error"), { id: tid }); }
+      if (r.ok && j.success) {
+        toast.success(t("common.removed"), { id: tid });
+        if (j.packageRemoved && j.otherGroupsCount > 0) {
+          toast(
+            tx(
+              `تنبيه: الطالب لسه في ${j.otherGroupsCount} جروب تاني وباقته اتشالت منه.`,
+              `Note: the student is still in ${j.otherGroupsCount} other group(s) and their package was removed.`,
+            ),
+            { icon: "⚠️", duration: 6000 },
+          );
+        }
+        setRemoveDialog((d) => ({ ...d, open: false, busy: false }));
+        load();
+      } else {
+        toast.error(j.error || t("common.error"), { id: tid });
+        setRemoveDialog((d) => ({ ...d, busy: false }));
+      }
+    } catch {
+      toast.error(t("common.error"), { id: tid });
+      setRemoveDialog((d) => ({ ...d, busy: false }));
+    }
   }
 
   async function removeInstructor(instructorId, name) {
@@ -1019,6 +1064,140 @@ export default function GroupDetailsPage({ groupId, onClose }) {
         groupData={instrNotify.groupData}
         onSendNotifications={sendNotifyAndAdd}
       />
+
+      {/* ══ Remove student dialog ══ */}
+      {removeDialog.open && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-darkmode/60 backdrop-blur-sm p-3"
+          onClick={(e) =>
+            e.target === e.currentTarget && !removeDialog.busy &&
+            setRemoveDialog((d) => ({ ...d, open: false }))
+          }
+        >
+          <div
+            dir={isRTL ? "rtl" : "ltr"}
+            className="w-full max-w-md rounded-3xl bg-white dark:bg-darklight border border-gray-100 dark:border-dark_border shadow-2xl overflow-hidden"
+          >
+            {/* header */}
+            <div className="flex items-start gap-3 px-5 pt-5">
+              <div className="w-11 h-11 rounded-2xl bg-red-50 dark:bg-red-900/20 text-red-500 flex items-center justify-center flex-shrink-0">
+                <UserMinus size={20} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-black text-gray-900 dark:text-white text-base">
+                  {tx("حذف الطالب من الجروب", "Remove student from group")}
+                </h3>
+                <p className="text-sm text-darktext mt-0.5">
+                  {tx("هل أنت متأكد من حذف", "Are you sure you want to remove")}{" "}
+                  <b className="text-gray-900 dark:text-white">{removeDialog.name}</b>؟
+                </p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {removeDialog.hasPackage ? (
+                <>
+                  <p className="text-xs font-bold text-gray-500 dark:text-darkmuted">
+                    {tx("ماذا نفعل بباقة الطالب؟", "What should happen to the student's package?")}
+                  </p>
+
+                  {[
+                    {
+                      value: false,
+                      title: tx("إبقاء الباقة", "Keep the package"),
+                      desc: tx(
+                        "الفواتير وتنبيهات الفوترة ورسائل التحصيل تكمل كالمعتاد.",
+                        "Invoices, billing alerts and payment reminders continue as usual.",
+                      ),
+                      on: "border-primary bg-primary/5",
+                      dot: "bg-primary",
+                    },
+                    {
+                      value: true,
+                      title: tx("إزالة الباقة", "Remove the package"),
+                      desc: tx(
+                        "تُلغى الفواتير غير المسددة، ويختفي من تنبيهات الفوترة، وتتوقف الرسائل.",
+                        "Unpaid invoices are voided, billing alerts disappear and messages stop.",
+                      ),
+                      on: "border-red-500 bg-red-50/70 dark:bg-red-500/10",
+                      dot: "bg-red-500",
+                    },
+                  ].map((opt) => {
+                    const selected = removeDialog.removePackage === opt.value;
+                    return (
+                      <button
+                        key={String(opt.value)}
+                        type="button"
+                        disabled={removeDialog.busy}
+                        onClick={() => setRemoveDialog((d) => ({ ...d, removePackage: opt.value }))}
+                        className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-start transition ${
+                          selected
+                            ? opt.on
+                            : "border-gray-200 dark:border-dark_border hover:bg-gray-50 dark:hover:bg-dark_input"
+                        }`}
+                      >
+                        <span
+                          className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                            selected ? `${opt.dot} border-transparent` : "border-gray-300 dark:border-gray-600"
+                          }`}
+                        >
+                          {selected && <span className="w-2 h-2 rounded-full bg-white" />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1.5 font-bold text-sm text-gray-900 dark:text-white">
+                            <Package size={14} /> {opt.title}
+                          </span>
+                          <span className="block text-xs text-darktext mt-1 leading-relaxed">{opt.desc}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+
+                  {removeDialog.removePackage && (
+                    <div className="flex items-start gap-2 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 px-3.5 py-3 text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+                      <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+                      <p>
+                        {tx(
+                          "لو الطالب مسجل في جروبات أخرى، ستتأثر باقته فيها أيضًا. والمبالغ المدفوعة سابقًا لا تُسترد تلقائيًا.",
+                          "If the student is in other groups, their package is affected there too. Amounts already paid are not refunded automatically.",
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-darktext leading-relaxed">
+                  {tx(
+                    "سيتم حذف الطالب من هذا الجروب فقط.",
+                    "The student will be removed from this group only.",
+                  )}
+                </p>
+              )}
+            </div>
+
+            {/* footer */}
+            <div className="flex gap-3 px-5 pb-5">
+              <button
+                onClick={() => setRemoveDialog((d) => ({ ...d, open: false }))}
+                disabled={removeDialog.busy}
+                className="px-5 py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-dark_border text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-dark_input disabled:opacity-50 transition"
+              >
+                {tx("إلغاء", "Cancel")}
+              </button>
+              <button
+                onClick={confirmRemoveStudent}
+                disabled={removeDialog.busy}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition"
+              >
+                {removeDialog.busy && <Loader2 size={15} className="animate-spin" />}
+                {removeDialog.removePackage
+                  ? tx("حذف الطالب وإزالة الباقة", "Remove student & package")
+                  : tx("حذف الطالب", "Remove student")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══ Package management ══ */}
       {pkgStudent && (

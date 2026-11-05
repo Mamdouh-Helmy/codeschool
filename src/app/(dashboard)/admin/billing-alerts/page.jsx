@@ -116,7 +116,8 @@ const RESOLUTION_LABEL = {
     suspend: "تم إيقاف الطالب",
     recognize: "تم احتسابه إيراد",
     refund: "تم الاسترجاع",
-    paid: "تم السداد بالكامل", // ✅ NEW
+    paid: "تم السداد بالكامل",
+    package_removed: "تم حذف الباقة",
 };
 
 const inputCls =

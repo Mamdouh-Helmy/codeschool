@@ -9,12 +9,19 @@
 // 🆕 المخاطب هنا هو ولي الأمر فقط. لو مفيش رقم لولي الأمر، الفاتورة بتتخطى
 // (skipped) ومبنبعتش للطالب نهائيًا.
 //
+// 🆕 منطق التكرار:
+//   - يوم الاستحقاق: رسالة "due_today" مرة واحدة.
+//   - بعد الاستحقاق: رسالة "overdue" كل يوم طول ما فيه تنبيه overdue مفتوح
+//     (يعني الأدمن لسه ماخدش إجراء). أول ما الأدمن يمدّ الموعد / يوقف الطالب /
+//     الفاتورة تتسدد أو تتلغي، التنبيه بيتقفل والرسايل بتقف.
+//
 // ⚠️ مفيش فحص على canReceiveMessages()/رصيد الساعات هنا عمدًا — الرسالة دي
 // تحصيل مش تسويق، ولازم توصل حتى لو رصيد الطالب صفر أو الإشعارات متوقفة.
 import Invoice from "../app/models/Invoice";
 import Student from "../app/models/Student";
 import Group from "../app/models/Group";
 import BillingReminder from "../app/models/BillingReminder";
+import BillingAlert from "../app/models/BillingAlert";
 import wapilotService from "../app/services/wapilot-service";
 
 const CAIRO_TZ = "Africa/Cairo";
@@ -23,13 +30,9 @@ const CAIRO_TZ = "Africa/Cairo";
 // (لو السيرفر وقع في نص الإرسال قبل ما نعمل commit)
 const STALE_REMINDER_MS = 30 * 60 * 1000; // 30 دقيقة
 
-// 🆕 تذكير واحد فقط: يوم الاستحقاق نفسه (بتوقيت القاهرة)
-// مفيش تذكيرات قبل ولا بعد — عشان لو التاريخ اتعدل ميتبعتش حاجة للتاريخ القديم
-const STAGES = [
-  { key: "due_today", daysUntilDue: 0, reminderType: "due_today" },
-];
-
-// 🆕 نافذة البحث: يوم قبل وبعد بس (تغطية فروق التوقيت بين UTC والقاهرة)
+// 🆕 نافذة البحث لفواتير "يوم الاستحقاق": يوم قبل وبعد بس
+// (تغطية فروق التوقيت بين UTC والقاهرة)
+// المتأخرة بتتجاب بالـ ids من التنبيهات المفتوحة، مش بالنافذة دي
 const WINDOW_DAYS = 1;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -67,8 +70,17 @@ function formatArabicDays(n) {
   return `${abs} يومًا`;
 }
 
-function stageFor(daysUntilDue) {
-  return STAGES.find((s) => s.daysUntilDue === daysUntilDue) || null;
+// 🆕 مرحلة يوم الاستحقاق: مرة واحدة. بعدها كل يوم "overdue" (مفتاح مختلف لكل
+// يوم عشان الـ unique index { invoiceId, stageKey, dueDateKey } يسمح برسالة
+// واحدة في اليوم بس، ويمنع التكرار لو الكرون اشتغل مرتين في نفس اليوم)
+function stageFor(daysUntilDue, todayKey) {
+  if (daysUntilDue === 0) {
+    return { key: "due_today", reminderType: "due_today" };
+  }
+  if (daysUntilDue < 0) {
+    return { key: `overdue_${todayKey}`, reminderType: "overdue" };
+  }
+  return null;
 }
 
 // ============================================================
@@ -210,14 +222,30 @@ export async function sendDueDateReminders({ now = new Date() } = {}) {
   // ✅ أول حاجة: نمسح أي حجز قديم اتعلق (failover)
   await cleanupStaleReminders();
 
+  const todayKey = cairoDateKey(now);
+
   const from = new Date(now);
   from.setDate(from.getDate() - (WINDOW_DAYS + 1));
   const to = new Date(now);
   to.setDate(to.getDate() + (WINDOW_DAYS + 1));
 
+  // ✅ الفواتير المتأخرة اللي الأدمن لسه ماخدش فيها إجراء (تنبيه overdue مفتوح)
+  const openOverdueAlerts = await BillingAlert.find({
+    type: "overdue",
+    status: "open",
+  })
+    .select("invoiceId")
+    .lean();
+  const overdueInvoiceIds = openOverdueAlerts.map((a) => a.invoiceId);
+  const overdueSet = new Set(overdueInvoiceIds.map(String));
+
   const invoices = await Invoice.find({
     status: "Pending",
-    dueDate: { $ne: null, $gte: from, $lte: to },
+    dueDate: { $ne: null },
+    $or: [
+      { dueDate: { $gte: from, $lte: to } }, // يوم الاستحقاق
+      { _id: { $in: overdueInvoiceIds } }, // متأخرة ومستنية إجراء الأدمن
+    ],
   }).select("_id studentId groupId totalAmount paidAmount dueDate status");
 
   let sent = 0;
@@ -230,8 +258,14 @@ export async function sendDueDateReminders({ now = new Date() } = {}) {
   for (const invoice of invoices) {
     try {
       const daysUntilDue = daysUntilDueCairo(now, invoice.dueDate);
-      const stage = stageFor(daysUntilDue);
+      const stage = stageFor(daysUntilDue, todayKey);
       if (!stage) {
+        skipped++;
+        continue;
+      }
+
+      // المتأخر مبيتبعتلوش غير لو التنبيه لسه مفتوح (الأدمن ماتحركش)
+      if (daysUntilDue < 0 && !overdueSet.has(String(invoice._id))) {
         skipped++;
         continue;
       }

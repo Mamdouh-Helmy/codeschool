@@ -595,3 +595,49 @@ export async function runDailyBillingCron() {
     reminderResult,
   };
 }
+
+
+// ✅ NEW: وقف الفوترة لطالب اتشالت باقته مع حذفه من الجروب
+// - بتلغي (Voided) الفواتير غير المسددة الخاصة بالجروب ده (أو الفواتير اللي لسه من غير جروب ومربوطة بالباقة الحالية)
+// - بتقفل تنبيهات overdue المفتوحة عليها
+// الفاتورة الـ Voided مبتتحسبش في الكرون ولا الرسايل (الاتنين بيدوّروا على status: "Pending" بس)
+export async function stopBillingForRemovedStudent({ studentId, groupId, packageId, actedBy }) {
+  const invoices = await Invoice.find({
+    studentId,
+    status: { $in: ["Pending", "Suspended"] },
+    $or: [{ groupId }, ...(packageId ? [{ groupId: null, packageId }] : [])],
+  }).select("_id");
+
+  const ids = invoices.map((i) => i._id);
+  if (ids.length === 0) return { voidedInvoices: 0, closedAlerts: 0 };
+
+  const now = new Date();
+
+  await Invoice.updateMany(
+    { _id: { $in: ids } },
+    {
+      $set: {
+        status: "Voided",
+        dueDate: null,
+        notes: "أُلغيت تلقائيًا: تم حذف الطالب من الجروب مع إزالة الباقة",
+        "metadata.lastModifiedBy": actedBy || null,
+        "metadata.updatedAt": now,
+      },
+    },
+  );
+
+  const alertsRes = await BillingAlert.updateMany(
+    { invoiceId: { $in: ids }, type: "overdue", status: "open" },
+    {
+      $set: {
+        status: "resolved",
+        "resolution.action": "package_removed",
+        "resolution.reason": "تم حذف الطالب من الجروب مع إزالة الباقة",
+        "resolution.actedAt": now,
+        ...(actedBy ? { "resolution.actedBy": actedBy } : {}),
+      },
+    },
+  );
+
+  return { voidedInvoices: ids.length, closedAlerts: alertsRes.modifiedCount || 0 };
+}
