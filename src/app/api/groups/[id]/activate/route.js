@@ -15,13 +15,12 @@ import {
   findScheduleConflict,
   pruneOrphanedReservations,
 } from "@/utils/checkMeetingLinks";
+import { createFlexibleWeeklySchedule } from "@/utils/sessionGenerator";
+import { buildSessionSlotsForModules } from "@/utils/courseSessionSlots";
 
 const LINK_ERROR_CODES = ["NO_AVAILABLE_LINK", "LINK_CONFLICT"];
 const VALID_ASSIGNMENT_MODES = ["first_available", "round_robin"];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper: build simulated session list for preview (no DB writes)
-// ─────────────────────────────────────────────────────────────────────────────
 function previewSessions(group) {
   const course = group.courseId;
   if (!course?.curriculum?.length) return [];
@@ -32,79 +31,31 @@ function previewSessions(group) {
   };
   const { startDate, daysOfWeek, timeFrom, timeTo } = group.schedule;
 
-  const dayMap = {
-    Sunday: 0,
-    Monday: 1,
-    Tuesday: 2,
-    Wednesday: 3,
-    Thursday: 4,
-    Friday: 5,
-    Saturday: 6,
-  };
-
-  let modulesToUse = [];
-  if (moduleSelection.mode === "all") {
-    modulesToUse = course.curriculum.map((m, i) => ({
-      module: m,
-      origIdx: i,
-    }));
-  } else {
-    modulesToUse = moduleSelection.selectedModules
-      .map((i) => ({ module: course.curriculum[i], origIdx: i }))
-      .filter((x) => x.module);
-  }
-
-  const dayNums = daysOfWeek.map((d) => dayMap[d]).sort((a, b) => a - b);
-  const daysPerWeek = dayNums.length;
-
-  const base = new Date(startDate);
-  const firstDay = dayNums[0];
-  let diff = firstDay - base.getDay();
-  if (diff < 0) diff += 7;
-  base.setDate(base.getDate() + diff);
-
-  let total = modulesToUse.reduce(
-    (s, { module: m }) => s + (m.totalSessions || 3),
-    0,
+  const slots = buildSessionSlotsForModules(course.curriculum, moduleSelection);
+  const dates = createFlexibleWeeklySchedule(
+    startDate,
+    daysOfWeek,
+    slots.length,
+    {
+      silent: true,
+    },
   );
 
-  const dates = [];
-  for (let i = 0; i < total; i++) {
-    const dayInCycle = i % daysPerWeek;
-    const week = Math.floor(i / daysPerWeek);
-    const d = new Date(base);
-    d.setDate(base.getDate() + week * 7);
-    if (dayInCycle > 0) {
-      const delta = dayNums[dayInCycle] - dayNums[0];
-      d.setDate(d.getDate() + delta);
-    }
-    dates.push(d);
-  }
+  return slots.map((slot, i) => {
+    const titles = slot.lessonIndexes
+      .map((idx) => slot.module.lessons?.[idx]?.title)
+      .filter(Boolean)
+      .join(" & ");
 
-  const sessions = [];
-  let dateIdx = 0;
-  for (const { module: m, origIdx } of modulesToUse) {
-    const groups = [
-      { sessionNumber: 1, lessonIndexes: [0, 1] },
-      { sessionNumber: 2, lessonIndexes: [2, 3] },
-      { sessionNumber: 3, lessonIndexes: [4, 5] },
-    ];
-    for (const g of groups) {
-      const l1 = m.lessons?.[g.lessonIndexes[0]];
-      const l2 = m.lessons?.[g.lessonIndexes[1]];
-      if (!l1 || !l2) continue;
-      sessions.push({
-        title: `${m.title} - جلسة ${g.sessionNumber}: ${l1.title} & ${l2.title}`,
-        scheduledDate: dates[dateIdx] ?? null,
-        startTime: timeFrom,
-        endTime: timeTo,
-        moduleIndex: origIdx,
-        sessionNumber: g.sessionNumber,
-      });
-      dateIdx++;
-    }
-  }
-  return sessions;
+    return {
+      title: `${slot.module.title} - جلسة ${slot.sessionNumber}: ${titles}`,
+      scheduledDate: dates[i] ?? null,
+      startTime: timeFrom,
+      endTime: timeTo,
+      moduleIndex: slot.moduleIndex,
+      sessionNumber: slot.sessionNumber,
+    };
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

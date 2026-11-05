@@ -1,18 +1,9 @@
 // → utils/checkMeetingLinks.js  (استبدل الملف القديم بالكامل بده)
 import MeetingLink from "../app/models/MeetingLink";
-
-/**
- * تحويل اسم اليوم إلى رقم
- */
-const dayMap = {
-  Sunday: 0,
-  Monday: 1,
-  Tuesday: 2,
-  Wednesday: 3,
-  Thursday: 4,
-  Friday: 5,
-  Saturday: 6,
-};
+import {
+  calculateTotalSessions,
+  createFlexibleWeeklySchedule,
+} from "./sessionGenerator";
 
 /**
  * تحويل رقم اليوم إلى اسم
@@ -28,80 +19,62 @@ const dayMapReverse = {
 };
 
 /**
- * حساب الفرق بين يومين في نفس الأسبوع
+ * ✅ عدد السيشنات المطلوبة للجروب — ديناميك من دروس الكورس الفعلية
+ * (نفس الدالة اللي بيستخدمها الـ generator). لو الكورس مش populated
+ * بنرجع لـ totalSessionsCount المخزّن على الجروب.
  */
-function calculateDayDifference(startDay, targetDay) {
-  if (targetDay >= startDay) {
-    return targetDay - startDay;
-  } else {
-    return targetDay + 7 - startDay;
+function resolveTotalSessions(group) {
+  const curriculum = group?.courseId?.curriculum;
+
+  if (Array.isArray(curriculum) && curriculum.length > 0) {
+    const calculated = calculateTotalSessions(
+      curriculum,
+      group.moduleSelection || { mode: "all", selectedModules: [] },
+    );
+    if (calculated > 0) return calculated;
   }
+
+  return group?.totalSessionsCount || 0;
 }
 
 /**
- * توليد تواريخ الجلسات للتحقق
+ * ✅ توليد تواريخ الجلسات للتحقق
+ * بيستخدم createFlexibleWeeklySchedule عشان التواريخ تبقى مطابقة 100%
+ * للتواريخ اللي هتتولد فعليًا عند التفعيل.
  */
 export function generateSessionDatesForCheck(group) {
   const { startDate, daysOfWeek, timeFrom, timeTo } = group.schedule;
-  const totalSessions = group.totalSessionsCount || 
-    (group.courseId?.curriculum?.length * 3 || 30);
+  const totalSessions = resolveTotalSessions(group);
 
-  // تحويل أيام الأسبوع لأرقام وترتيبها
-  const dayNumbers = daysOfWeek
-    .map((day) => dayMap[day])
-    .sort((a, b) => a - b);
+  if (totalSessions <= 0) return [];
 
-  const daysPerWeek = dayNumbers.length;
-  const startDateTime = new Date(startDate);
-  
-  // تعديل تاريخ البدء ليكون أول يوم محدد
-  let adjustedStartDate = new Date(startDateTime);
-  const currentDay = startDateTime.getDay();
-  const firstSelectedDay = dayNumbers[0];
-  
-  let daysToAdd = firstSelectedDay - currentDay;
-  if (daysToAdd < 0) {
-    daysToAdd += 7;
-  }
-  
-  adjustedStartDate.setDate(startDateTime.getDate() + daysToAdd);
+  const dates = createFlexibleWeeklySchedule(
+    startDate,
+    daysOfWeek,
+    totalSessions,
+    { silent: true },
+  );
 
-  const sessions = [];
+  const [fromHours, fromMinutes] = timeFrom.split(":").map(Number);
+  const [toHours, toMinutes] = timeTo.split(":").map(Number);
 
-  // توليد تواريخ الجلسات
-  for (let sessionIndex = 0; sessionIndex < totalSessions; sessionIndex++) {
-    const dayInCycle = sessionIndex % daysPerWeek;
-    const weeksElapsed = Math.floor(sessionIndex / daysPerWeek);
-    
-    const sessionDate = new Date(adjustedStartDate);
-    sessionDate.setDate(adjustedStartDate.getDate() + (weeksElapsed * 7));
-    
-    if (dayInCycle > 0) {
-      const dayDifference = calculateDayDifference(dayNumbers[0], dayNumbers[dayInCycle]);
-      sessionDate.setDate(sessionDate.getDate() + dayDifference);
-    }
-
-    // إضافة وقت الجلسة
-    const startDateTime2 = new Date(sessionDate);
-    const [hours, minutes] = timeFrom.split(":").map(Number);
-    startDateTime2.setHours(hours, minutes, 0, 0);
+  return dates.map((sessionDate, i) => {
+    const startDateTime = new Date(sessionDate);
+    startDateTime.setHours(fromHours, fromMinutes, 0, 0);
 
     const endDateTime = new Date(sessionDate);
-    const [endHours, endMinutes] = timeTo.split(":").map(Number);
-    endDateTime.setHours(endHours, endMinutes, 0, 0);
+    endDateTime.setHours(toHours, toMinutes, 0, 0);
 
-    sessions.push({
-      index: sessionIndex + 1,
+    return {
+      index: i + 1,
       date: sessionDate,
       dayName: dayMapReverse[sessionDate.getDay()],
-      startTime: startDateTime2,
+      startTime: startDateTime,
       endTime: endDateTime,
-      timeFrom: timeFrom,
-      timeTo: timeTo,
-    });
-  }
-
-  return sessions;
+      timeFrom,
+      timeTo,
+    };
+  });
 }
 
 /**
@@ -148,77 +121,6 @@ async function checkLinkAvailability(link, startTime, endTime) {
 }
 
 /**
- * محاكاة توزيع الروابط بالترتيب (مع مراعاة الجروب)
- */
-async function simulateLinkAssignmentInOrder(sessions, availableLinks, groupId) {
-  const usedLinkIds = new Set();
-  const sessionsNeedingLinks = [];
-  const sessionsWithConflicts = [];
-  const assignments = [];
-
-  // ترتيب الجلسات حسب التاريخ
-  const sortedSessions = [...sessions].sort((a, b) => a.startTime - b.startTime);
-
-  console.log(`\n📋 Simulating link assignment in order (Group: ${groupId}):`);
-  
-  for (let i = 0; i < sortedSessions.length; i++) {
-    const session = sortedSessions[i];
-    const sessionStart = session.startTime;
-    const sessionEnd = session.endTime;
-    
-    let foundLink = false;
-    
-    // نجرب الروابط بالترتيب
-    for (const link of availableLinks) {
-      const linkId = link._id.toString();
-      
-      // لو الرابط مستخدم قبل كده، نتخطاه (مش هنستخدم نفس الرابط لجلسات مختلفة)
-      if (usedLinkIds.has(linkId)) continue;
-      
-      // التحقق من توفر الرابط للوقت ده
-      const isAvailable = await checkLinkAvailability(link, sessionStart, sessionEnd);
-      
-      if (isAvailable) {
-        foundLink = true;
-        usedLinkIds.add(linkId);
-        assignments.push({
-          sessionIndex: i + 1,
-          sessionDate: session.date,
-          sessionDay: session.dayName,
-          sessionTime: `${session.timeFrom} - ${session.timeTo}`,
-          linkName: link.name,
-          linkId: linkId
-        });
-        console.log(`   Session ${i + 1} (${session.date.toLocaleDateString()}) → ${link.name}`);
-        break;
-      } else {
-        // سجل التعارض
-        sessionsWithConflicts.push({
-          session: session,
-          link: link,
-          reason: "conflict"
-        });
-        console.log(`   ⚠️ Session ${i + 1} - ${link.name} not available (conflict)`);
-      }
-    }
-    
-    if (!foundLink) {
-      console.log(`   ❌ Session ${i + 1} (${session.date.toLocaleDateString()}) → NO LINK AVAILABLE`);
-      sessionsNeedingLinks.push(session);
-    }
-  }
-
-  console.log(`   📊 Links needed: ${Math.ceil(sortedSessions.length / 4)} (one link per 4 sessions max)`);
-  console.log(`   📊 Links available: ${availableLinks.length}`);
-
-  return {
-    sessionsNeedingLinks,
-    sessionsWithConflicts,
-    assignments
-  };
-}
-
-/**
  * ✅ التحقق من توفر الروابط لجدول الجروب (محسّن)
  */
 export async function checkMeetingLinksAvailability(group) {
@@ -226,35 +128,37 @@ export async function checkMeetingLinksAvailability(group) {
     console.log(`\n🔍 ========== CHECKING MEETING LINKS AVAILABILITY ==========`);
     console.log(`Group: ${group.name} (${group.code})`);
     console.log(`Group ID: ${group._id}`);
-    console.log(`Schedule: ${group.schedule.daysOfWeek.length} day(s) per week - ${group.schedule.daysOfWeek.join(', ')}`);
-    console.log(`Start Date: ${new Date(group.schedule.startDate).toLocaleDateString()}`);
+    console.log(
+      `Schedule: ${group.schedule.daysOfWeek.length} day(s) per week - ${group.schedule.daysOfWeek.join(", ")}`,
+    );
+    console.log(
+      `Start Date: ${new Date(group.schedule.startDate).toLocaleDateString()}`,
+    );
     console.log(`Time: ${group.schedule.timeFrom} - ${group.schedule.timeTo}`);
-    
-    const totalSessionsNeeded = group.totalSessionsCount || 
-      (group.courseId?.curriculum?.length * 3 || 0);
-    
-    console.log(`Total Sessions Needed: ${totalSessionsNeeded}`);
 
-    // 1. توليد تواريخ الجلسات
+    // 1. توليد تواريخ الجلسات (نفس تواريخ الـ generator)
     const sessions = generateSessionDatesForCheck(group);
+    console.log(`Total Sessions Needed: ${sessions.length}`);
     console.log(`\n📅 Generated ${sessions.length} session dates for checking`);
 
     // 2. جلب جميع الروابط
     const allLinks = await MeetingLink.find({
       isDeleted: false,
-      status: { $in: ["available", "reserved"] }
-    }).sort({ name: 1 }).lean(); // مرتبة حسب الاسم
+      status: { $in: ["available", "reserved"] },
+    })
+      .sort({ name: 1 })
+      .lean();
 
     console.log(`\n📊 Total Links in System: ${allLinks.length}`);
-    
+
     // 3. تحليل كل رابط
     const linksAnalysis = {
       available: [],
       reserved: [],
-      maintenance: []
+      maintenance: [],
     };
 
-    allLinks.forEach(link => {
+    allLinks.forEach((link) => {
       if (link.status === "available") {
         linksAnalysis.available.push(link);
       } else if (link.status === "reserved") {
@@ -266,55 +170,58 @@ export async function checkMeetingLinksAvailability(group) {
 
     console.log(`   Available: ${linksAnalysis.available.length}`);
     console.log(`   Reserved: ${linksAnalysis.reserved.length}`);
-    
+
     if (linksAnalysis.available.length > 0) {
-      console.log(`   Available links in order: ${linksAnalysis.available.map(l => l.name).join(' → ')}`);
+      console.log(
+        `   Available links in order: ${linksAnalysis.available.map((l) => l.name).join(" → ")}`,
+      );
     }
 
-    // 4. محاكاة توزيع الروابط بالترتيب مع مراعاة أن نفس الجروب يقدر يستخدم نفس الرابط
-    console.log(`\n📊 Simulating link distribution in order (allowing same group to reuse links)...`);
-    
-    // نحتاج فقط روابط كافية بحيث كل 4 جلسات تأخذ رابط مختلف (تقريباً)
-    const linksNeeded = Math.ceil(sessions.length / 4); // رابط واحد يكفي 4 جلسات
+    // 4. محاكاة توزيع الروابط (نفس الجروب يقدر يعيد استخدام نفس اللينك)
+    console.log(
+      `\n📊 Simulating link distribution (same group may reuse links)...`,
+    );
+
+    // تقدير تقريبي: لينك واحد يكفي 4 جلسات (ديناميك على عدد السيشنات الفعلي)
+    const linksNeeded = Math.max(1, Math.ceil(sessions.length / 4));
     const hasMinimumLinks = linksAnalysis.available.length >= linksNeeded;
 
-    // محاكاة أكثر واقعية: كل جلسة محتاجة لينك مختلف في وقتها
-    const usedLinks = new Set();
     const sessionsWithLinks = [];
     const sessionsNeedingLinks = [];
 
     for (let i = 0; i < sessions.length; i++) {
       const session = sessions[i];
       let foundLink = false;
-      
+
       for (const link of linksAnalysis.available) {
-        const linkId = link._id.toString();
-        
-        // التحقق من توفر الرابط للوقت ده
-        const isAvailable = await checkLinkAvailability(link, session.startTime, session.endTime);
-        
+        const isAvailable = await checkLinkAvailability(
+          link,
+          session.startTime,
+          session.endTime,
+        );
+
         if (isAvailable) {
           foundLink = true;
-          usedLinks.add(linkId);
           sessionsWithLinks.push({
             session: i + 1,
-            link: link.name
+            link: link.name,
           });
           break;
         }
       }
-      
+
       if (!foundLink) {
         sessionsNeedingLinks.push(session);
       }
     }
 
     console.log(`\n📋 Detailed Analysis:`);
-    console.log(`   Sessions needing unique links: ${sessionsNeedingLinks.length}/${sessions.length}`);
+    console.log(
+      `   Sessions needing links: ${sessionsNeedingLinks.length}/${sessions.length}`,
+    );
     console.log(`   Links needed (minimum): ${linksNeeded}`);
     console.log(`   Links available: ${linksAnalysis.available.length}`);
-    console.log(`   Has minimum links: ${hasMinimumLinks ? '✅ YES' : '❌ NO'}`);
-    console.log(`   Note: Same group can reuse the same link for different sessions`);
+    console.log(`   Has minimum links: ${hasMinimumLinks ? "✅ YES" : "❌ NO"}`);
 
     const hasEnoughLinks = sessionsNeedingLinks.length === 0;
 
@@ -324,19 +231,19 @@ export async function checkMeetingLinksAvailability(group) {
         totalSessions: sessions.length,
         sessionsNeedingLinks: sessionsNeedingLinks.length,
         sessionsWithConflicts: 0,
-        hasEnoughLinks: hasEnoughLinks,
-        canProceed: hasEnoughLinks || hasMinimumLinks, // نسمح بالتفعيل لو عنده الحد الأدنى من الروابط
-        linksNeeded: linksNeeded,
+        hasEnoughLinks,
+        canProceed: hasEnoughLinks || hasMinimumLinks,
+        linksNeeded,
         linksAvailable: linksAnalysis.available.length,
         linksReserved: linksAnalysis.reserved.length,
-        hasMinimumLinks: hasMinimumLinks,
-        note: "Same group can reuse the same link for different sessions"
+        hasMinimumLinks,
+        note: "Same group can reuse the same link for different sessions",
       },
       links: {
         total: allLinks.length,
         available: linksAnalysis.available.length,
         reserved: linksAnalysis.reserved.length,
-        availableLinks: linksAnalysis.available.map(l => ({
+        availableLinks: linksAnalysis.available.map((l) => ({
           id: l._id,
           name: l.name,
           platform: l.platform,
@@ -344,7 +251,7 @@ export async function checkMeetingLinksAvailability(group) {
         })),
       },
       sessions: {
-        needingLinks: sessionsNeedingLinks.slice(0, 10).map(s => ({
+        needingLinks: sessionsNeedingLinks.slice(0, 10).map((s) => ({
           number: s.index,
           date: s.date.toLocaleDateString(),
           day: s.dayName,
@@ -355,7 +262,9 @@ export async function checkMeetingLinksAvailability(group) {
     };
 
     console.log(`\n📋 Final Analysis:`);
-    console.log(`   ${result.summary.hasEnoughLinks ? '✅ ENOUGH LINKS' : '⚠️ NEED AT LEAST ' + linksNeeded + ' LINKS'}`);
+    console.log(
+      `   ${result.summary.hasEnoughLinks ? "✅ ENOUGH LINKS" : "⚠️ NEED AT LEAST " + linksNeeded + " LINKS"}`,
+    );
 
     return result;
   } catch (error) {
@@ -447,14 +356,17 @@ export function findScheduleConflict(link, newSchedule, excludeGroupId = null) {
   for (const res of link.reservations || []) {
     if (!res?.groupId) continue;
 
-    if (excludeGroupId && res.groupId?.toString() === excludeGroupId.toString()) {
+    if (
+      excludeGroupId &&
+      res.groupId?.toString() === excludeGroupId.toString()
+    ) {
       continue; // الحجز ده لنفس الجروب اللي بنفحصله — مش تعارض
     }
 
     if (res.endTime && new Date(res.endTime) < now) continue; // الحجز ده انتهى فعليًا
 
     const dayOverlap = (newSchedule.daysOfWeek || []).some((d) =>
-      (res.daysOfWeek || []).includes(d)
+      (res.daysOfWeek || []).includes(d),
     );
     if (!dayOverlap) continue; // مفيش يوم مشترك مع الحجز ده
 
@@ -497,7 +409,9 @@ export async function pruneOrphanedReservations(links) {
   const allGroupIds = [
     ...new Set(
       links.flatMap((l) =>
-        (l.reservations || []).map((r) => r.groupId?.toString()).filter(Boolean),
+        (l.reservations || [])
+          .map((r) => r.groupId?.toString())
+          .filter(Boolean),
       ),
     ),
   ];
@@ -569,13 +483,20 @@ export async function getSessionsLinkHealthForGroups(groupIds) {
     .lean();
 
   const referencedLinkIds = [
-    ...new Set(sessions.filter((s) => s.meetingLinkId).map((s) => s.meetingLinkId.toString())),
+    ...new Set(
+      sessions
+        .filter((s) => s.meetingLinkId)
+        .map((s) => s.meetingLinkId.toString()),
+    ),
   ];
 
   const existingLinkIds = referencedLinkIds.length
     ? new Set(
         (
-          await MeetingLink.find({ _id: { $in: referencedLinkIds }, isDeleted: false })
+          await MeetingLink.find({
+            _id: { $in: referencedLinkIds },
+            isDeleted: false,
+          })
             .select("_id")
             .lean()
         ).map((l) => l._id.toString()),
@@ -586,7 +507,8 @@ export async function getSessionsLinkHealthForGroups(groupIds) {
 
   for (const s of sessions) {
     const gid = s.groupId.toString();
-    if (!health.has(gid)) health.set(gid, { missingCount: 0, orphanedCount: 0, hasIssue: false });
+    if (!health.has(gid))
+      health.set(gid, { missingCount: 0, orphanedCount: 0, hasIssue: false });
     const entry = health.get(gid);
 
     if (s.meetingLinkId) {
@@ -614,11 +536,15 @@ export async function getSessionsLinkHealthForGroups(groupIds) {
  * @param {String}   [excludeGroupId] - جروب مستثنى من الفحص (بيستخدم نفس اللينكات أصلاً)
  * @returns {{hasConflicts: boolean, conflicts: Array}}
  */
-export async function checkLinksConflictForSchedule(linkIds, newSchedule, excludeGroupId = null) {
+export async function checkLinksConflictForSchedule(
+  linkIds,
+  newSchedule,
+  excludeGroupId = null,
+) {
   if (!linkIds?.length) return { hasConflicts: false, conflicts: [] };
 
-  const MeetingLink = (await import("../app/models/MeetingLink")).default;
-  const links = await MeetingLink.find({
+  const MeetingLinkModel = (await import("../app/models/MeetingLink")).default;
+  const links = await MeetingLinkModel.find({
     _id: { $in: linkIds },
     isDeleted: false,
   }).lean();
@@ -652,7 +578,9 @@ export async function checkLinksForRescheduledSchedule(groupId, newSchedule) {
     isDeleted: false,
     status: { $ne: "completed" },
     meetingLinkId: { $ne: null },
-  }).select("_id title moduleIndex sessionNumber meetingLinkId").lean();
+  })
+    .select("_id title moduleIndex sessionNumber meetingLinkId")
+    .lean();
 
   if (sessions.length === 0) {
     return { hasConflicts: false, conflicts: [] };

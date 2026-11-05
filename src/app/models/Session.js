@@ -115,23 +115,21 @@ const SessionSchema = new mongoose.Schema(
     sessionNumber: {
       type: Number,
       required: true,
-      enum: [1, 2, 3],
+      min: 1,
       validate: {
-        validator: function (v) {
-          return [1, 2, 3].includes(v);
-        },
-        message:
-          "Session number must be 1, 2, or 3 (Lessons 1-2→S1, 3-4→S2, 5-6→S3)",
+        validator: Number.isInteger,
+        message: "Session number must be a positive integer",
       },
     },
     lessonIndexes: {
       type: [Number],
       required: true,
       validate: {
-        validator: function (arr) {
-          return arr.length === 2 && arr.every((n) => n >= 0 && n < 6);
-        },
-        message: "Each session must cover exactly 2 lessons (0-5)",
+        validator: (arr) =>
+          Array.isArray(arr) &&
+          arr.length >= 1 &&
+          arr.every((n) => Number.isInteger(n) && n >= 0),
+        message: "Each session must cover at least 1 lesson (valid indexes)",
       },
     },
 
@@ -768,7 +766,7 @@ SessionSchema.methods.getDisplayDetails = function () {
     sessionNumber: this.sessionNumber,
     sessionDisplay: `Session ${this.sessionNumber}`,
     lessons: lessonsText,
-    lessonsCount: 2,
+    lessonsCount: this.lessonIndexes.length, // ✅ كان 2 ثابتة
     date: this.formattedDate,
     day: dayName,
     time: `${this.startTime} - ${this.endTime}`,
@@ -1456,9 +1454,8 @@ SessionSchema.statics.getAvailableMeetingLinksForSession = async function (
   const session = await this.findById(sessionId);
   if (!session) throw new Error("Session not found");
 
-  const { getAvailableMeetingLinks } = await import(
-    "../../utils/sessionGenerator"
-  );
+  const { getAvailableMeetingLinks } =
+    await import("../../utils/sessionGenerator");
   return await getAvailableMeetingLinks(
     [session.dayName],
     session.startTime,

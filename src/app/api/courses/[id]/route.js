@@ -12,11 +12,22 @@ const processModule = (module, moduleIndex) => {
   const moduleBlogBodyAr = (module.blog?.bodyAr || module.blogBodyAr || "").trim();
   const moduleBlogBodyEn = (module.blog?.bodyEn || module.blogBodyEn || "").trim();
 
+  const sessionsArr = Array.isArray(module.sessions) ? module.sessions : [];
+  const lessonsArr = Array.isArray(module.lessons) ? module.lessons : [];
+
+  // ✅ عدد السيشنز بيتحسب من الداتا الفعلية (مش ثابت على 3)
+  const computedTotalSessions = Math.max(
+    Number(module.totalSessions) || 0,
+    ...sessionsArr.map((s) => Number(s.sessionNumber) || 0),
+    ...lessonsArr.map((l) => Number(l.sessionNumber) || 0),
+    1
+  );
+
   return {
     title: module.title?.trim() || `Module ${moduleIndex + 1}`,
     description: module.description?.trim() || "",
     order: module.order || moduleIndex + 1,
-    totalSessions: module.totalSessions || 3,
+    totalSessions: computedTotalSessions,
     projects: Array.isArray(module.projects)
       ? module.projects.filter((p) => p?.trim())
       : [],
@@ -24,7 +35,7 @@ const processModule = (module, moduleIndex) => {
     blogBodyEn: moduleBlogBodyEn,
     blogCreatedAt: module.blog?.createdAt || module.blogCreatedAt || new Date(),
     blogUpdatedAt: new Date(),
-    lessons: (module.lessons || []).map((lesson, lessonIndex) => ({
+    lessons: lessonsArr.map((lesson, lessonIndex) => ({
       title: lesson.title?.trim() || `Lesson ${lessonIndex + 1}`,
       description: lesson.description?.trim() || "",
       order: lesson.order || lessonIndex + 1,
@@ -32,7 +43,7 @@ const processModule = (module, moduleIndex) => {
         lesson.sessionNumber || calculateSessionNumber(lesson.order || lessonIndex + 1),
       duration: lesson.duration || "45 mins",
     })),
-    sessions: (module.sessions || []).map((session, sessionIndex) => ({
+    sessions: sessionsArr.map((session, sessionIndex) => ({
       sessionNumber: session.sessionNumber || sessionIndex + 1,
       presentationUrl: session.presentationUrl?.trim() || "",
       blogBodyAr: (session.blogBodyAr || "").trim(),

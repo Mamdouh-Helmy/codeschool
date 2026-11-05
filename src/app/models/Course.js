@@ -1,6 +1,7 @@
 // models/Course.js
 
 import mongoose from "mongoose";
+import { countModuleSessions } from "../../utils/courseSessionSlots";
 
 // Lesson Schema
 const LessonSchema = new mongoose.Schema(
@@ -39,6 +40,7 @@ const ModuleSchema = new mongoose.Schema({
   blogBodyEn: { type: String, default: "" },
   blogCreatedAt: { type: Date, default: Date.now },
   blogUpdatedAt: { type: Date, default: Date.now },
+  // ⚠️ legacy: مبقاش مصدر حقيقة — العدد الفعلي بيتحسب من دروس الموديول
   totalSessions: { type: Number, default: 3 },
 
   // ✅ Certificate fields
@@ -49,7 +51,7 @@ const ModuleSchema = new mongoose.Schema({
     default: "",
   },
   certificateSignatureName: { type: String, default: "" },
-    certificateCaption: { type: String, default: "" }, // ✅ جديد
+  certificateCaption: { type: String, default: "" },
 });
 
 // Course Schema
@@ -118,10 +120,14 @@ CourseSchema.virtual("totalLessons").get(function () {
   ) || 0;
 });
 
+// ✅ ديناميك: من الدروس الفعلية (نفس منطق الـ generator)
 CourseSchema.virtual("totalSessions").get(function () {
-  return this.curriculum?.reduce((total, module) => 
-    total + (module.totalSessions || 3), 0
-  ) || 0;
+  return (
+    this.curriculum?.reduce(
+      (total, module) => total + countModuleSessions(module),
+      0,
+    ) || 0
+  );
 });
 
 CourseSchema.virtual("totalProjects").get(function () {

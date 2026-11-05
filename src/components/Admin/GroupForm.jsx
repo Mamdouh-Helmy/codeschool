@@ -107,6 +107,22 @@ const getDayIndex = (dateStr) => dateStr ? new Date(dateStr).getDay() : -1;
 const getEnglishDay = (dateStr) => dateStr ? ENGLISH_DAYS[new Date(dateStr).getDay()] : null;
 const areDuplicates = (lessons) => lessons?.length > 1 && lessons.every(l => l.title === lessons[0]?.title);
 
+// ✅ نفس منطق الباك إند (courseSessionSlots.js): عدد السيشنز من الدروس الفعلية
+const FALLBACK_LESSONS_PER_SESSION = 2;
+function countModuleSessions(module) {
+  const lessons = Array.isArray(module?.lessons) ? module.lessons : [];
+  if (!lessons.length) return 0;
+
+  const nums = lessons.map((l) => Math.floor(Number(l?.sessionNumber)));
+  const allOnes = nums.every((n) => n === 1);
+  const hasInvalid = nums.some((n) => !Number.isFinite(n) || n < 1);
+
+  if (hasInvalid || (allOnes && lessons.length > FALLBACK_LESSONS_PER_SESSION)) {
+    return Math.ceil(lessons.length / FALLBACK_LESSONS_PER_SESSION);
+  }
+  return new Set(nums).size;
+}
+
 function getUniqueLessonGroups(lessons) {
   if (!lessons?.length) return [];
   const groups = [];
@@ -309,8 +325,12 @@ function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t, g
     setSelectedModules({ ...selectedModules, selectedModules: next });
   };
 
-  const totalSessionsAll = curriculum.reduce((s, m) => s + (m.totalSessions || 3), 0);
-  const selectedSessions = (selectedModules?.selectedModules || []).reduce((s, i) => s + (curriculum[i]?.totalSessions || 3), 0);
+  // ✅ ديناميك من الدروس الفعلية
+  const totalSessionsAll = curriculum.reduce((s, m) => s + countModuleSessions(m), 0);
+  const selectedSessions = (selectedModules?.selectedModules || []).reduce(
+    (s, i) => s + countModuleSessions(curriculum[i]),
+    0
+  );
 
   const handleSync = async () => {
     if (!groupId) return;
@@ -387,7 +407,7 @@ function ModuleSelection({ curriculum, selectedModules, setSelectedModules, t, g
                       {module.lessons?.length || 0} {t("groups.form.lessons")}
                     </span>
                     <span className="text-[10px] bg-orange-coral/10 dark:bg-orange-coral/20 text-orange-coral px-2 py-0.5 rounded-full">
-                      {module.totalSessions || 3} {t("groups.form.sessions")}
+                      {countModuleSessions(module)} {t("groups.form.sessions")}
                     </span>
                     {areDuplicates(module.lessons) && (
                       <span className="text-[10px] bg-amber-brand/15 dark:bg-amber-brand/20 text-orange-deep dark:text-amber-brand px-2 py-0.5 rounded-full flex items-center gap-1">
@@ -456,7 +476,8 @@ function CurriculumView({ curriculum, moduleSelection, expandedModules, onToggle
   if (!curriculum?.length) return null;
 
   const totalLessons = curriculum.reduce((s, m) => s + (m.lessons?.length || 0), 0);
-  const totalSessions = curriculum.reduce((s, m) => s + (m.totalSessions || 3), 0);
+  // ✅ ديناميك من الدروس الفعلية
+  const totalSessions = curriculum.reduce((s, m) => s + countModuleSessions(m), 0);
 
   return (
     <div className="mt-4 p-4 bg-IcyBreeze dark:bg-dark_input rounded-2xl border border-PowderBlueBorder dark:border-dark_border">
@@ -468,6 +489,7 @@ function CurriculumView({ curriculum, moduleSelection, expandedModules, onToggle
           const hasDup = areDuplicates(module.lessons);
           const isSel = moduleSelection.mode === "specific" && moduleSelection.selectedModules?.includes(idx);
           const isOpen = expandedModules.includes(idx);
+          const moduleSessionsCount = countModuleSessions(module);
 
           return (
             <div key={idx} className="border border-PowderBlueBorder dark:border-dark_border rounded-xl overflow-hidden">
@@ -482,7 +504,7 @@ function CurriculumView({ curriculum, moduleSelection, expandedModules, onToggle
                 <div className="flex items-center gap-1.5">
                   {isSel && <span className="text-[10px] bg-primary/10 text-primary dark:bg-primary/20 px-2 py-0.5 rounded-full">✓ {t("groups.form.selected")}</span>}
                   <span className="text-[10px] bg-secondary/10 dark:bg-secondary/20 text-secondary dark:text-white px-2 py-0.5 rounded-full">{module.lessons?.length || 0} {t("groups.form.lessons")}</span>
-                  <span className="text-[10px] bg-orange-coral/10 dark:bg-orange-coral/20 text-orange-coral px-2 py-0.5 rounded-full">{module.totalSessions || 3} {t("groups.form.sessions")}</span>
+                  <span className="text-[10px] bg-orange-coral/10 dark:bg-orange-coral/20 text-orange-coral px-2 py-0.5 rounded-full">{moduleSessionsCount} {t("groups.form.sessions")}</span>
                 </div>
               </div>
 
@@ -517,7 +539,7 @@ function CurriculumView({ curriculum, moduleSelection, expandedModules, onToggle
                     <p className="text-[10px] text-secondary dark:text-white flex items-center gap-1">
                       <span className="font-medium">{t("groups.form.sessionDistribution")}:</span>
                       <span className="bg-secondary/20 dark:bg-secondary/30 px-2 py-0.5 rounded-full">
-                        {t("groups.form.sessionsPerModule", { count: module.totalSessions || 3 })}
+                        {t("groups.form.sessionsPerModule", { count: moduleSessionsCount })}
                       </span>
                     </p>
                   </div>

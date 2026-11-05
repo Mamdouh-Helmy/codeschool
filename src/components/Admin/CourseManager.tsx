@@ -92,6 +92,40 @@ interface CourseManagerProps {
     selectedId?: string;
 }
 
+// ✅ Sessions config + helpers (عدد السيشنز ديناميك)
+const LESSONS_PER_SESSION = 2;
+const DEFAULT_SESSIONS = 3;
+
+interface SessionFormData {
+    title: string;
+    description: string;
+    presentationUrl: string;
+    blogBodyAr: string;
+    blogBodyEn: string;
+    blogImage: string;
+}
+
+const emptySession = (): SessionFormData => ({
+    title: "",
+    description: "",
+    presentationUrl: "",
+    blogBodyAr: "",
+    blogBodyEn: "",
+    blogImage: "",
+});
+
+const buildEmptySessionData = (count = DEFAULT_SESSIONS) => {
+    const data: Record<number, SessionFormData> = {};
+    for (let i = 1; i <= count; i++) data[i] = emptySession();
+    return data;
+};
+
+const buildBlogLang = (count = DEFAULT_SESSIONS) => {
+    const data: Record<number, "ar" | "en"> = {};
+    for (let i = 1; i <= count; i++) data[i] = "ar";
+    return data;
+};
+
 // ✅ خيارات ألوان الشهادة (خلفية + شريط) — من التصميمات الجاهزة عندنا
 const CERTIFICATE_BACKGROUNDS: { id: string; label: string; colors: [string, string] }[] = [
     { id: "navy-orange", label: "كحلي + أورانج", colors: ["#0d2b3e", "#ff6a00"] },
@@ -187,6 +221,14 @@ const Modal = ({
     );
 };
 
+// ✅ عدد السيشنز الفعلي من الدروس/السيشنز الموجودة (مش من totalSessions القديم)
+const getModuleSessionsCount = (m: Module): number =>
+    Math.max(
+        ...(m.lessons || []).map((l) => l.sessionNumber || 0),
+        ...(m.sessions || []).map((s) => s.sessionNumber || 0),
+        0
+    );
+
 export default function CourseManager({
     onSelect,
     selectedId,
@@ -223,26 +265,15 @@ export default function CourseManager({
     // State لإدارة المشاريع في المودول
     const [newModuleProject, setNewModuleProject] = useState("");
 
-    // State لتخزين بيانات الجلسات المؤقتة (مع Presentation + Blog Ar/En + Image)
-    const [sessionLessonsData, setSessionLessonsData] = useState<{
-        [key: number]: {
-            title: string;
-            description: string;
-            presentationUrl: string;
-            blogBodyAr: string;
-            blogBodyEn: string;
-            blogImage: string;
-        }
-    }>({
-        1: { title: "", description: "", presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
-        2: { title: "", description: "", presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
-        3: { title: "", description: "", presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
-    });
+    // ✅ بيانات الجلسات المؤقتة (ديناميك حسب عدد السيشنز)
+    const [sessionLessonsData, setSessionLessonsData] = useState<Record<number, SessionFormData>>(
+        buildEmptySessionData()
+    );
 
     // رفع الصور وحالة الرفع لكل جلسة
-    const [uploadingImage, setUploadingImage] = useState<{ [key: number]: boolean }>({});
+    const [uploadingImage, setUploadingImage] = useState<Record<number, boolean>>({});
     // اللغة النشطة في تبويب البلوج لكل جلسة
-    const [activeBlogLang, setActiveBlogLang] = useState<{ [key: number]: 'ar' | 'en' }>({ 1: 'ar', 2: 'ar', 3: 'ar' });
+    const [activeBlogLang, setActiveBlogLang] = useState<Record<number, "ar" | "en">>(buildBlogLang());
     const fileInputRefs = useRef<{ [key: number]: HTMLInputElement | null }>({});
 
     // Load all courses
@@ -302,25 +333,26 @@ export default function CourseManager({
     };
 
     const calculateSessionNumber = (lessonOrder: number): number => {
-        return Math.ceil(lessonOrder / 2);
+        return Math.ceil(lessonOrder / LESSONS_PER_SESSION);
     };
 
+    // ✅ الألوان بتتكرر بدل ما ترجع للأزرق
     const getSessionColor = (sessionNumber: number): string => {
-        const colors = {
-            1: "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800",
-            2: "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800",
-            3: "bg-purple-50 border-purple-200 dark:bg-purple-900/20 dark:border-purple-800",
-        };
-        return colors[sessionNumber as keyof typeof colors] || colors[1];
+        const colors = [
+            "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800",
+            "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800",
+            "bg-purple-50 border-purple-200 dark:bg-purple-900/20 dark:border-purple-800",
+        ];
+        return colors[(Math.max(sessionNumber, 1) - 1) % colors.length];
     };
 
     const getSessionBadgeColor = (sessionNumber: number): string => {
-        const colors = {
-            1: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-            2: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-            3: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
-        };
-        return colors[sessionNumber as keyof typeof colors] || colors[1];
+        const colors = [
+            "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+            "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
+        ];
+        return colors[(Math.max(sessionNumber, 1) - 1) % colors.length];
     };
 
     const getLevelBadgeColor = (level: string): string => {
@@ -332,104 +364,145 @@ export default function CourseManager({
         return colors[level as keyof typeof colors] || colors.beginner;
     };
 
-    const emptySessionData = () => ({
-        1: { title: "", description: "", presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
-        2: { title: "", description: "", presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
-        3: { title: "", description: "", presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
-    });
-
     const openModuleModal = (moduleIndex?: number) => {
-        if (moduleIndex !== undefined) {
-            // Edit existing module
-            setCurrentModuleIndex(moduleIndex);
-            const existingModule = form.curriculum[moduleIndex];
+    if (moduleIndex !== undefined) {
+        // Edit existing module
+        setCurrentModuleIndex(moduleIndex);
+        const existingModule = form.curriculum[moduleIndex];
 
-            setTempModule({
-                ...existingModule,
-                blogBodyAr: existingModule.blogBodyAr || "",
-                blogBodyEn: existingModule.blogBodyEn || "",
-                hasCertificate: existingModule.hasCertificate || false,
-                certificateBackground: existingModule.certificateBackground || "",
-                certificateSignatureName: existingModule.certificateSignatureName || "",
-                certificateCaption: existingModule.certificateCaption || "",
-            });
+        // ✅ عدد السيشنز الفعلي من الداتا (من غير totalSessions القديم)
+        const count = Math.max(getModuleSessionsCount(existingModule), 1);
 
-            // استرجاع بيانات الجلسات من الدروس والـ sessions الموجودة
-            const newSessionData: any = emptySessionData();
+        setTempModule({
+            ...existingModule,
+            totalSessions: count,
+            blogBodyAr: existingModule.blogBodyAr || "",
+            blogBodyEn: existingModule.blogBodyEn || "",
+            hasCertificate: existingModule.hasCertificate || false,
+            certificateBackground: existingModule.certificateBackground || "",
+            certificateSignatureName: existingModule.certificateSignatureName || "",
+            certificateCaption: existingModule.certificateCaption || "",
+        });
 
-            if (existingModule.lessons && Array.isArray(existingModule.lessons)) {
-                existingModule.lessons.forEach(lesson => {
-                    if (lesson.sessionNumber >= 1 && lesson.sessionNumber <= 3) {
-                        newSessionData[lesson.sessionNumber] = {
-                            ...newSessionData[lesson.sessionNumber],
-                            title: lesson.title,
-                            description: lesson.description || "",
-                        };
-                    }
-                });
+        // استرجاع بيانات الجلسات من الدروس والـ sessions الموجودة
+        const newSessionData = buildEmptySessionData(count);
+
+        (existingModule.lessons || []).forEach((lesson) => {
+            const d = newSessionData[lesson.sessionNumber];
+            if (d) {
+                d.title = lesson.title;
+                d.description = lesson.description || "";
             }
+        });
 
-            if (existingModule.sessions && Array.isArray(existingModule.sessions)) {
-                existingModule.sessions.forEach(session => {
-                    if (session.sessionNumber >= 1 && session.sessionNumber <= 3) {
-                        newSessionData[session.sessionNumber].presentationUrl = session.presentationUrl || "";
-                        newSessionData[session.sessionNumber].blogBodyAr = session.blogBodyAr || "";
-                        newSessionData[session.sessionNumber].blogBodyEn = session.blogBodyEn || "";
-                        newSessionData[session.sessionNumber].blogImage = session.blogImage || "";
-                    }
-                });
+        (existingModule.sessions || []).forEach((session) => {
+            const d = newSessionData[session.sessionNumber];
+            if (d) {
+                d.presentationUrl = session.presentationUrl || "";
+                d.blogBodyAr = session.blogBodyAr || "";
+                d.blogBodyEn = session.blogBodyEn || "";
+                d.blogImage = session.blogImage || "";
             }
+        });
 
-            setSessionLessonsData(newSessionData);
-        } else {
-            // Create new module
-            setCurrentModuleIndex(null);
-            setTempModule({
+        setSessionLessonsData(newSessionData);
+        setActiveBlogLang(buildBlogLang(count));
+    } else {
+        // Create new module
+        setCurrentModuleIndex(null);
+        setTempModule({
+            title: "",
+            description: "",
+            order: form.curriculum.length + 1,
+            lessons: Array.from({ length: DEFAULT_SESSIONS * LESSONS_PER_SESSION }, (_, i) => ({
                 title: "",
                 description: "",
-                order: form.curriculum.length + 1,
-                lessons: Array(6)
-                    .fill(null)
-                    .map((_, i) => ({
-                        title: "",
-                        description: "",
-                        order: i + 1,
-                        sessionNumber: calculateSessionNumber(i + 1),
-                        duration: "45 mins",
-                    })),
-                sessions: [
-                    {
-                        sessionNumber: 1,
-                        presentationUrl: "",
-                    },
-                    {
-                        sessionNumber: 2,
-                        presentationUrl: "",
-                    },
-                    {
-                        sessionNumber: 3,
-                        presentationUrl: "",
-                    },
-                ],
-                projects: [],
-                blogBodyAr: "",
-                blogBodyEn: "",
-                blogCreatedAt: new Date(),
-                blogUpdatedAt: new Date(),
-                totalSessions: 3,
-                hasCertificate: false,
-                certificateBackground: "",
-                certificateSignatureName: "",
-                certificateCaption: "",
-            });
+                order: i + 1,
+                sessionNumber: calculateSessionNumber(i + 1),
+                duration: "45 mins",
+            })),
+            sessions: Array.from({ length: DEFAULT_SESSIONS }, (_, i) => ({
+                sessionNumber: i + 1,
+                presentationUrl: "",
+            })),
+            projects: [],
+            blogBodyAr: "",
+            blogBodyEn: "",
+            blogCreatedAt: new Date(),
+            blogUpdatedAt: new Date(),
+            totalSessions: DEFAULT_SESSIONS,
+            hasCertificate: false,
+            certificateBackground: "",
+            certificateSignatureName: "",
+            certificateCaption: "",
+        });
 
-            // إعادة تعيين بيانات الجلسات
-            setSessionLessonsData(emptySessionData());
+        // إعادة تعيين بيانات الجلسات
+        setSessionLessonsData(buildEmptySessionData());
+        setActiveBlogLang(buildBlogLang());
+    }
+    setModuleStep(1);
+    setIsModalOpen(true);
+    setNewModuleProject("");
+};
+
+    // ✅ إضافة سيشن جديدة (بدرسين)
+    const addSession = () => {
+        if (!tempModule) return;
+        const next = tempModule.totalSessions + 1;
+
+        const newLessons: Lesson[] = Array.from({ length: LESSONS_PER_SESSION }, (_, i) => ({
+            title: "",
+            description: "",
+            order: tempModule.lessons.length + i + 1,
+            sessionNumber: next,
+            duration: "45 mins",
+        }));
+
+        setTempModule({
+            ...tempModule,
+            totalSessions: next,
+            lessons: [...tempModule.lessons, ...newLessons],
+            sessions: [...tempModule.sessions, { sessionNumber: next, presentationUrl: "" }],
+        });
+        setSessionLessonsData((prev) => ({ ...prev, [next]: emptySession() }));
+        setActiveBlogLang((prev) => ({ ...prev, [next]: "ar" }));
+        toast.success(`تمت إضافة السيشن ${next}`);
+    };
+
+    // ✅ حذف آخر سيشن (عشان الترقيم يفضل متسلسل)
+    const removeLastSession = () => {
+        if (!tempModule) return;
+        const last = tempModule.totalSessions;
+
+        if (last <= 1) {
+            toast.error("لازم يفضل سيشن واحدة على الأقل");
+            return;
         }
-        setModuleStep(1);
-        setActiveBlogLang({ 1: 'ar', 2: 'ar', 3: 'ar' });
-        setIsModalOpen(true);
-        setNewModuleProject("");
+
+        const d = sessionLessonsData[last];
+        const hasContent = !!d && Object.values(d).some((v) => String(v).trim());
+        if (hasContent && !confirm(`السيشن ${last} فيها بيانات، متأكد إنك عايز تحذفها؟`)) return;
+
+        // لو واقف على السيشن اللي هتتحذف، ارجع خطوة
+        if (moduleStep - 1 === last) {
+            setModuleStep(moduleStep - 1);
+        }
+
+        setTempModule({
+            ...tempModule,
+            totalSessions: last - 1,
+            lessons: tempModule.lessons.filter((l) => l.sessionNumber !== last),
+            sessions: tempModule.sessions.filter((s) => s.sessionNumber !== last),
+        });
+        setSessionLessonsData((prev) => {
+            const { [last]: _removed, ...rest } = prev;
+            return rest;
+        });
+        setActiveBlogLang((prev) => {
+            const { [last]: _removed, ...rest } = prev;
+            return rest;
+        });
     };
 
     const saveModule = () => {
@@ -440,9 +513,11 @@ export default function CourseManager({
             return;
         }
 
-        // التحقق من أن جميع الجلسات لها عنوان
-        for (let i = 1; i <= 3; i++) {
-            if (!sessionLessonsData[i].title.trim()) {
+        const total = tempModule.totalSessions;
+
+        // ✅ التحقق من أن جميع الجلسات لها عنوان
+        for (let i = 1; i <= total; i++) {
+            if (!sessionLessonsData[i]?.title.trim()) {
                 toast.error(`Session ${i} lessons title is required`);
                 return;
             }
@@ -466,24 +541,29 @@ export default function CourseManager({
         }
 
         // تحديث الدروس بناءً على بيانات الجلسات
-        const updatedLessons = tempModule.lessons.map(lesson => ({
+        const updatedLessons = tempModule.lessons.map((lesson) => ({
             ...lesson,
-            title: sessionLessonsData[lesson.sessionNumber].title,
-            description: sessionLessonsData[lesson.sessionNumber].description,
+            title: sessionLessonsData[lesson.sessionNumber]?.title || lesson.title,
+            description: sessionLessonsData[lesson.sessionNumber]?.description || "",
         }));
 
         // تحديث الـ sessions بناءً على presentation URLs + blog Ar/En + image
-        const updatedSessions = tempModule.sessions.map(session => ({
-            sessionNumber: session.sessionNumber,
-            presentationUrl: sessionLessonsData[session.sessionNumber].presentationUrl,
-            blogBodyAr: sessionLessonsData[session.sessionNumber].blogBodyAr,
-            blogBodyEn: sessionLessonsData[session.sessionNumber].blogBodyEn,
-            blogImage: sessionLessonsData[session.sessionNumber].blogImage,
-        }));
+        const updatedSessions = Array.from({ length: total }, (_, i) => {
+            const n = i + 1;
+            const d = sessionLessonsData[n] || emptySession();
+            return {
+                sessionNumber: n,
+                presentationUrl: d.presentationUrl,
+                blogBodyAr: d.blogBodyAr,
+                blogBodyEn: d.blogBodyEn,
+                blogImage: d.blogImage,
+            };
+        });
 
         // ✅ Use flat blog structure (module-level, legacy) + certificate fields
-        const updatedModule = {
+        const updatedModule: Module = {
             ...tempModule,
+            totalSessions: total,
             lessons: updatedLessons,
             sessions: updatedSessions,
             blogBodyAr: tempModule.blogBodyAr || "",
@@ -497,9 +577,10 @@ export default function CourseManager({
 
         console.log("💾 Saving module with blog data:", {
             title: updatedModule.title,
+            totalSessions: updatedModule.totalSessions,
             blogBodyAr: updatedModule.blogBodyAr?.substring(0, 100),
             blogBodyEn: updatedModule.blogBodyEn?.substring(0, 100),
-            sessionsWithBlog: updatedSessions.filter(s => s.blogBodyAr || s.blogBodyEn).length,
+            sessionsWithBlog: updatedSessions.filter((s) => s.blogBodyAr || s.blogBodyEn).length,
             hasCertificate: updatedModule.hasCertificate,
         });
 
@@ -520,7 +601,8 @@ export default function CourseManager({
         setCurrentModuleIndex(null);
         setModuleStep(1);
         setNewModuleProject("");
-        setSessionLessonsData(emptySessionData());
+        setSessionLessonsData(buildEmptySessionData());
+        setActiveBlogLang(buildBlogLang());
     };
 
     const removeModule = (moduleIndex: number) => {
@@ -539,15 +621,15 @@ export default function CourseManager({
 
     const updateSessionLessonsData = (
         sessionNumber: number,
-        field: 'title' | 'description' | 'presentationUrl' | 'blogBodyAr' | 'blogBodyEn' | 'blogImage',
+        field: keyof SessionFormData,
         value: string
     ) => {
-        setSessionLessonsData(prev => ({
+        setSessionLessonsData((prev) => ({
             ...prev,
             [sessionNumber]: {
-                ...prev[sessionNumber],
-                [field]: value
-            }
+                ...(prev[sessionNumber] || emptySession()),
+                [field]: value,
+            },
         }));
     };
 
@@ -565,7 +647,7 @@ export default function CourseManager({
             return;
         }
 
-        setUploadingImage(prev => ({ ...prev, [sessionNumber]: true }));
+        setUploadingImage((prev) => ({ ...prev, [sessionNumber]: true }));
         try {
             const formData = new FormData();
             formData.append("file", file);
@@ -588,51 +670,60 @@ export default function CourseManager({
             console.error("Error uploading image:", err);
             toast.error("Failed to upload image");
         } finally {
-            setUploadingImage(prev => ({ ...prev, [sessionNumber]: false }));
+            setUploadingImage((prev) => ({ ...prev, [sessionNumber]: false }));
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+   const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-        if (!form.title.trim()) {
-            toast.error("Title is required");
-            return;
-        }
+    if (!form.title.trim()) {
+        toast.error("Title is required");
+        return;
+    }
 
-        if (!form.description?.trim() || form.description.trim().length < 10) {
-            toast.error("Description is required (at least 10 characters)");
-            return;
-        }
+    if (!form.description?.trim() || form.description.trim().length < 10) {
+        toast.error("Description is required (at least 10 characters)");
+        return;
+    }
 
-        setLoading(true);
-        try {
-            const method = editingCourse?._id ? "PUT" : "POST";
-            const url = editingCourse?._id
-                ? `/api/courses/${editingCourse._id}`
-                : "/api/courses";
+    setLoading(true);
+    try {
+        const method = editingCourse?._id ? "PUT" : "POST";
+        const url = editingCourse?._id
+            ? `/api/courses/${editingCourse._id}`
+            : "/api/courses";
 
-            const payload = {
-                title: form.title,
-                description: form.description || "",
-                level: form.level,
-                curriculum: form.curriculum.map((module) => ({
+        const payload = {
+            title: form.title,
+            description: form.description || "",
+            level: form.level,
+            curriculum: form.curriculum.map((module) => {
+                // ✅ عدد السيشنز الفعلي للموديول (من الدروس/السيشنز)
+                const sessionsCount = Math.max(getModuleSessionsCount(module), 1);
+
+                return {
                     title: module.title,
                     description: module.description || "",
                     order: module.order,
-                    totalSessions: 3,
+                    totalSessions: sessionsCount,
                     lessons: module.lessons.map((lesson) => ({
                         title: lesson.title,
                         description: lesson.description || "",
                         order: lesson.order,
-                        sessionNumber: calculateSessionNumber(lesson.order),
+                        sessionNumber: lesson.sessionNumber || calculateSessionNumber(lesson.order),
                         duration: lesson.duration || "45 mins",
                     })),
-                    sessions: module.sessions || [
-                        { sessionNumber: 1, presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
-                        { sessionNumber: 2, presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
-                        { sessionNumber: 3, presentationUrl: "", blogBodyAr: "", blogBodyEn: "", blogImage: "" },
-                    ],
+                    sessions:
+                        module.sessions && module.sessions.length > 0
+                            ? module.sessions
+                            : Array.from({ length: sessionsCount }, (_, i) => ({
+                                sessionNumber: i + 1,
+                                presentationUrl: "",
+                                blogBodyAr: "",
+                                blogBodyEn: "",
+                                blogImage: "",
+                            })),
                     projects: module.projects || [],
                     blog: {
                         bodyAr: module.blogBodyAr || "",
@@ -644,57 +735,58 @@ export default function CourseManager({
                     certificateBackground: module.hasCertificate ? module.certificateBackground || "" : "",
                     certificateSignatureName: module.hasCertificate ? module.certificateSignatureName || "" : "",
                     certificateCaption: module.hasCertificate ? module.certificateCaption || "" : "",
-                })),
-                grade: form.grade,
-                subject: form.subject,
-                duration: form.duration,
-                isActive: form.isActive,
-                featured: form.featured,
-                thumbnail: form.thumbnail,
-            };
+                };
+            }),
+            grade: form.grade,
+            subject: form.subject,
+            duration: form.duration,
+            isActive: form.isActive,
+            featured: form.featured,
+            thumbnail: form.thumbnail,
+        };
 
-            const res = await fetch(url, {
-                method,
-                headers: { "Content-Type": "application/json" },
-                credentials: "same-origin", // ✅ عشان الكوكيز تتبعت
-                body: JSON.stringify(payload),
-            });
+        const res = await fetch(url, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify(payload),
+        });
 
-            const json = await res.json();
+        const json = await res.json();
 
-            if (!res.ok) {
-                console.error("❌ API Error Response:", json);
-                toast.error(json.error || json.message || "Failed to save course");
-                return;
-            }
-
-            toast.success(
-                method === "POST" ? "Course created successfully" : "Course updated successfully"
-            );
-
-            await loadCourses();
-            setShowForm(false);
-            setEditingCourse(null);
-            setCurrentStep(1);
-            setForm({
-                title: "",
-                description: "",
-                level: "beginner",
-                curriculum: [],
-                grade: "",
-                subject: "",
-                duration: "",
-                isActive: true,
-                featured: false,
-                thumbnail: "",
-            });
-        } catch (err) {
-            console.error("❌ Error saving course:", err);
-            toast.error("Failed to save course");
-        } finally {
-            setLoading(false);
+        if (!res.ok) {
+            console.error("❌ API Error Response:", json);
+            toast.error(json.error || json.message || "Failed to save course");
+            return;
         }
-    };
+
+        toast.success(
+            method === "POST" ? "Course created successfully" : "Course updated successfully"
+        );
+
+        await loadCourses();
+        setShowForm(false);
+        setEditingCourse(null);
+        setCurrentStep(1);
+        setForm({
+            title: "",
+            description: "",
+            level: "beginner",
+            curriculum: [],
+            grade: "",
+            subject: "",
+            duration: "",
+            isActive: true,
+            featured: false,
+            thumbnail: "",
+        });
+    } catch (err) {
+        console.error("❌ Error saving course:", err);
+        toast.error("Failed to save course");
+    } finally {
+        setLoading(false);
+    }
+};
 
     const handleDelete = async (id: string) => {
         if (!confirm("Are you sure you want to delete this course?")) return;
@@ -756,13 +848,11 @@ export default function CourseManager({
         }
     };
 
-    const getModuleStepLabel = (step: number): string => {
+    // ✅ خطوات المودال ديناميك: 1 = Basic, 2..(total+1) = Sessions, (total+2) = Blog
+    const getModuleStepLabel = (step: number, total: number): string => {
         if (step === 1) return "Basic Info";
-        if (step === 2) return "Session 1";
-        if (step === 3) return "Session 2";
-        if (step === 4) return "Session 3";
-        if (step === 5) return "Blog Content";
-        return "";
+        if (step === total + 2) return "Blog Content";
+        return `Session ${step - 1}`;
     };
 
     if (authLoading) {
@@ -775,6 +865,10 @@ export default function CourseManager({
 
     // ========== COURSE FORM VIEW ==========
     if (showForm) {
+        const modalTotalSessions = tempModule?.totalSessions || DEFAULT_SESSIONS;
+        const blogStep = modalTotalSessions + 2;
+        const moduleStepsList = Array.from({ length: modalTotalSessions + 2 }, (_, i) => i + 1);
+
         return (
             <div className="min-h-screen bg-gradient-to-br from-blue-50/50 via-purple-50/30 to-pink-50/50 dark:from-darkmode dark:via-darklight dark:to-darkmode py-8 px-4">
                 <div className="max-w-5xl mx-auto">
@@ -1005,6 +1099,9 @@ export default function CourseManager({
                                                             <h4 className="text-base sm:text-lg font-bold text-MidnightNavyText dark:text-white break-words">
                                                                 {module.title || "Untitled Module"}
                                                             </h4>
+                                                            <span className="bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-xs">
+                                                                {getModuleSessionsCount(module)} sessions
+                                                            </span>
                                                         </div>
                                                         {module.description && (
                                                             <p className="text-xs sm:text-sm text-SlateBlueText dark:text-darktext line-clamp-2 mb-2">
@@ -1128,16 +1225,17 @@ export default function CourseManager({
                         setCurrentModuleIndex(null);
                         setModuleStep(1);
                         setNewModuleProject("");
-                        setSessionLessonsData(emptySessionData());
+                        setSessionLessonsData(buildEmptySessionData());
+                        setActiveBlogLang(buildBlogLang());
                     }}
                     title={`Module ${currentModuleIndex !== null ? currentModuleIndex + 1 : form.curriculum.length + 1}: ${tempModule?.title || "Untitled"}`}
                 >
                     {tempModule && (
                         <div className="space-y-6">
-                            {/* Module Step Indicator */}
+                            {/* Module Step Indicator (ديناميك) */}
                             <div className="pb-4 sm:pb-6 border-b border-gray-200 dark:border-dark_border overflow-x-auto">
                                 <div className="flex items-center justify-center gap-1 sm:gap-2 min-w-max px-2">
-                                    {[1, 2, 3, 4, 5].map((step, idx) => (
+                                    {moduleStepsList.map((step, idx) => (
                                         <React.Fragment key={step}>
                                             <div className="flex flex-col items-center">
                                                 <div
@@ -1154,10 +1252,10 @@ export default function CourseManager({
                                                     ? "text-primary dark:text-primary"
                                                     : "text-gray-600 dark:text-gray-400"
                                                     }`}>
-                                                    {getModuleStepLabel(step)}
+                                                    {getModuleStepLabel(step, modalTotalSessions)}
                                                 </span>
                                             </div>
-                                            {idx < 4 && (
+                                            {idx < moduleStepsList.length - 1 && (
                                                 <div
                                                     className={`w-4 sm:w-6 md:w-8 h-0.5 rounded-full transition-all mb-3 sm:mb-4 ${step < moduleStep
                                                         ? "bg-green-500"
@@ -1196,6 +1294,36 @@ export default function CourseManager({
                                             rows={3}
                                             className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-white dark:bg-dark_input text-MidnightNavyText dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
                                         />
+                                    </div>
+
+                                    {/* ✅ Sessions count control */}
+                                    <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border-2 border-gray-200 dark:border-dark_border bg-gray-50/60 dark:bg-dark_input/50">
+                                        <div>
+                                            <p className="text-sm font-semibold text-MidnightNavyText dark:text-white">
+                                                عدد السيشنز: {tempModule.totalSessions}
+                                            </p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                كل سيشن فيها {LESSONS_PER_SESSION} دروس — تقدر تزود أو تقلل
+                                            </p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={addSession}
+                                                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:opacity-90 text-sm font-semibold"
+                                            >
+                                                <Plus className="w-4 h-4" /> إضافة سيشن
+                                            </button>
+                                            {tempModule.totalSessions > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={removeLastSession}
+                                                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-sm font-semibold"
+                                                >
+                                                    <Trash2 className="w-4 h-4" /> حذف آخر سيشن
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* Module Projects Section */}
@@ -1393,32 +1521,55 @@ export default function CourseManager({
                                 </div>
                             )}
 
-                            {/* Module Steps 2-4: Individual Sessions */}
-                            {moduleStep >= 2 && moduleStep <= 4 && (
+                            {/* Module Steps 2..(total+1): Individual Sessions (ديناميك) */}
+                            {moduleStep >= 2 && moduleStep <= modalTotalSessions + 1 && (
                                 <div className="space-y-4">
                                     {(() => {
                                         const sessionNum = moduleStep - 1;
+                                        const sd = sessionLessonsData[sessionNum] || emptySession();
+                                        const isLastSession = sessionNum === modalTotalSessions;
 
                                         return (
                                             <>
                                                 <div className={`border-2 rounded-xl p-6 ${getSessionColor(sessionNum)}`}>
-                                                    <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-6 flex items-center gap-2">
-                                                        <span className={`px-3 py-1 rounded-lg text-sm ${getSessionBadgeColor(sessionNum)}`}>
-                                                            Session {sessionNum}
-                                                        </span>
-                                                        <span className="text-sm font-normal text-gray-600 dark:text-gray-400">
-                                                            Configure lessons for Session {sessionNum}
-                                                        </span>
-                                                    </h4>
+                                                    <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                                                        <h4 className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                                                            <span className={`px-3 py-1 rounded-lg text-sm ${getSessionBadgeColor(sessionNum)}`}>
+                                                                Session {sessionNum}
+                                                            </span>
+                                                            <span className="text-sm font-normal text-gray-600 dark:text-gray-400">
+                                                                Configure lessons for Session {sessionNum} (من {modalTotalSessions})
+                                                            </span>
+                                                        </h4>
+
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={addSession}
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white hover:opacity-90 text-xs font-semibold"
+                                                            >
+                                                                <Plus className="w-3.5 h-3.5" /> إضافة سيشن
+                                                            </button>
+                                                            {modalTotalSessions > 1 && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={removeLastSession}
+                                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs font-semibold"
+                                                                >
+                                                                    <Trash2 className="w-3.5 h-3.5" /> حذف آخر سيشن
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
 
                                                     <div className="space-y-4 bg-white dark:bg-dark_input rounded-lg p-4 border-2 border-gray-200 dark:border-dark_border">
                                                         <div>
                                                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
-                                                                📚 Lessons Title (for both Lesson {sessionNum * 2 - 1} & Lesson {sessionNum * 2})
+                                                                📚 Lessons Title (for both Lesson {sessionNum * LESSONS_PER_SESSION - 1} & Lesson {sessionNum * LESSONS_PER_SESSION})
                                                             </label>
                                                             <input
                                                                 type="text"
-                                                                value={sessionLessonsData[sessionNum].title}
+                                                                value={sd.title}
                                                                 onChange={(e) => updateSessionLessonsData(sessionNum, 'title', e.target.value)}
                                                                 placeholder={`Enter title for Session ${sessionNum} lessons`}
                                                                 className="w-full px-4 py-2.5 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
@@ -1427,10 +1578,10 @@ export default function CourseManager({
 
                                                         <div>
                                                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
-                                                                📝 Lessons Description (for both Lesson {sessionNum * 2 - 1} & Lesson {sessionNum * 2})
+                                                                📝 Lessons Description (for both Lesson {sessionNum * LESSONS_PER_SESSION - 1} & Lesson {sessionNum * LESSONS_PER_SESSION})
                                                             </label>
                                                             <textarea
-                                                                value={sessionLessonsData[sessionNum].description}
+                                                                value={sd.description}
                                                                 onChange={(e) => updateSessionLessonsData(sessionNum, 'description', e.target.value)}
                                                                 placeholder={`Enter description for Session ${sessionNum} lessons`}
                                                                 rows={3}
@@ -1445,7 +1596,7 @@ export default function CourseManager({
                                                             </label>
                                                             <input
                                                                 type="url"
-                                                                value={sessionLessonsData[sessionNum].presentationUrl}
+                                                                value={sd.presentationUrl}
                                                                 onChange={(e) => updateSessionLessonsData(sessionNum, 'presentationUrl', e.target.value)}
                                                                 placeholder="https://..."
                                                                 className="w-full px-4 py-2.5 rounded-lg border-2 border-gray-300 dark:border-dark_border bg-white dark:bg-dark_input text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
@@ -1456,7 +1607,7 @@ export default function CourseManager({
                                                             <p className="text-xs text-blue-700 dark:text-blue-300 flex items-start gap-2">
                                                                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                                                                 <span>
-                                                                    This title and description will be used for <strong>both Lesson {sessionNum * 2 - 1}</strong> and <strong>Lesson {sessionNum * 2}</strong> in Session {sessionNum}.
+                                                                    This title and description will be used for <strong>both Lesson {sessionNum * LESSONS_PER_SESSION - 1}</strong> and <strong>Lesson {sessionNum * LESSONS_PER_SESSION}</strong> in Session {sessionNum}.
                                                                 </span>
                                                             </p>
                                                         </div>
@@ -1488,10 +1639,10 @@ export default function CourseManager({
                                                                 }}
                                                                 className="hidden"
                                                             />
-                                                            {sessionLessonsData[sessionNum].blogImage ? (
+                                                            {sd.blogImage ? (
                                                                 <div className="relative inline-block">
                                                                     <img
-                                                                        src={sessionLessonsData[sessionNum].blogImage}
+                                                                        src={sd.blogImage}
                                                                         alt="Session blog cover"
                                                                         className="w-full max-w-xs h-32 object-cover rounded-lg border-2 border-gray-200 dark:border-dark_border"
                                                                     />
@@ -1549,13 +1700,15 @@ export default function CourseManager({
                                                         <div className="border-2 border-gray-200 dark:border-dark_border rounded-xl overflow-hidden bg-white dark:bg-darklight">
                                                             {(activeBlogLang[sessionNum] || 'ar') === 'ar' ? (
                                                                 <RichTextEditor
-                                                                    value={sessionLessonsData[sessionNum].blogBodyAr}
+                                                                    key={`ar-${sessionNum}`}
+                                                                    value={sd.blogBodyAr}
                                                                     onChange={(value) => updateSessionLessonsData(sessionNum, "blogBodyAr", value)}
                                                                     placeholder="أدخل محتوى المدونة لهذه الجلسة بالعربية..."
                                                                 />
                                                             ) : (
                                                                 <RichTextEditor
-                                                                    value={sessionLessonsData[sessionNum].blogBodyEn}
+                                                                    key={`en-${sessionNum}`}
+                                                                    value={sd.blogBodyEn}
                                                                     onChange={(value) => updateSessionLessonsData(sessionNum, "blogBodyEn", value)}
                                                                     placeholder="Enter session blog content in English..."
                                                                 />
@@ -1567,13 +1720,7 @@ export default function CourseManager({
                                                 <div className="flex flex-col sm:flex-row justify-between gap-3 pt-4">
                                                     <button
                                                         type="button"
-                                                        onClick={() => {
-                                                            if (moduleStep === 2) {
-                                                                setModuleStep(1);
-                                                            } else {
-                                                                setModuleStep(moduleStep - 1);
-                                                            }
-                                                        }}
+                                                        onClick={() => setModuleStep(moduleStep === 2 ? 1 : moduleStep - 1)}
                                                         className="border-2 border-gray-300 dark:border-dark_border text-gray-700 dark:text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-dark_input transition-all text-sm sm:text-base order-2 sm:order-1"
                                                     >
                                                         <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1583,7 +1730,7 @@ export default function CourseManager({
                                                     <button
                                                         type="button"
                                                         onClick={() => {
-                                                            if (!sessionLessonsData[sessionNum].title.trim()) {
+                                                            if (!sd.title.trim()) {
                                                                 toast.error(`Please enter a title for Session ${sessionNum} lessons`);
                                                                 return;
                                                             }
@@ -1591,7 +1738,7 @@ export default function CourseManager({
                                                         }}
                                                         className="bg-primary hover:bg-primary/90 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all text-sm sm:text-base order-1 sm:order-2"
                                                     >
-                                                        {moduleStep === 4 ? 'Next: Blog Content' : `Next: Session ${sessionNum + 1}`}
+                                                        {isLastSession ? 'Next: Blog Content' : `Next: Session ${sessionNum + 1}`}
                                                         <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
                                                     </button>
                                                 </div>
@@ -1601,8 +1748,8 @@ export default function CourseManager({
                                 </div>
                             )}
 
-                            {/* Module Step 5: Blog Content (Module-level, legacy) */}
-                            {moduleStep === 5 && (
+                            {/* Final Module Step: Blog Content (Module-level, legacy) */}
+                            {moduleStep === blogStep && (
                                 <div className="space-y-6">
                                     <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-2 border-blue-200 dark:border-blue-800 rounded-xl p-4">
                                         <h4 className="text-lg font-bold text-MidnightNavyText dark:text-white flex items-center gap-2 mb-2">
@@ -1625,7 +1772,6 @@ export default function CourseManager({
                                                 value={tempModule.blogBodyAr || ""}
                                                 onChange={(value) => {
                                                     if (!tempModule) return;
-                                                    console.log("📝 Updating Arabic blog:", value.substring(0, 100));
                                                     setTempModule({
                                                         ...tempModule,
                                                         blogBodyAr: value,
@@ -1651,7 +1797,6 @@ export default function CourseManager({
                                                 value={tempModule.blogBodyEn || ""}
                                                 onChange={(value) => {
                                                     if (!tempModule) return;
-                                                    console.log("📝 Updating English blog:", value.substring(0, 100));
                                                     setTempModule({
                                                         ...tempModule,
                                                         blogBodyEn: value,
@@ -1680,11 +1825,11 @@ export default function CourseManager({
                                     <div className="flex flex-col sm:flex-row justify-between gap-3 pt-4">
                                         <button
                                             type="button"
-                                            onClick={() => setModuleStep(4)}
+                                            onClick={() => setModuleStep(blogStep - 1)}
                                             className="border-2 border-gray-300 dark:border-dark_border text-gray-700 dark:text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-dark_input transition-all text-sm sm:text-base order-2 sm:order-1"
                                         >
                                             <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-                                            Back to Session 3
+                                            Back to Session {modalTotalSessions}
                                         </button>
 
                                         <button
@@ -1883,6 +2028,9 @@ export default function CourseManager({
                                                             Module {moduleIndex + 1}
                                                         </span>
                                                         {module.title}
+                                                        <span className="bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-xs">
+                                                            {getModuleSessionsCount(module)} sessions
+                                                        </span>
                                                         {module.hasCertificate && (
                                                             <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-0.5 rounded text-xs flex items-center gap-1">
                                                                 <Award className="w-3 h-3" />

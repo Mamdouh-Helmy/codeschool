@@ -1536,9 +1536,11 @@ function GroupRow({
                         </ActionButton>
                     )}
 
-                    <ActionButton onClick={() => onSendMessage(group.id)} hoverColor="blue" title="إرسال رسالة">
-                        <MessageSquare className="w-4 h-4 text-blue-600" />
-                    </ActionButton>
+                    {(group.status === "active" || isOnHold) && (
+                        <ActionButton onClick={() => onSendMessage(group.id)} hoverColor="blue" title="إرسال رسالة">
+                            <MessageSquare className="w-4 h-4 text-blue-600" />
+                        </ActionButton>
+                    )}
 
 
                     {group.status === "active" && !group.isFull && !isOnHold && (

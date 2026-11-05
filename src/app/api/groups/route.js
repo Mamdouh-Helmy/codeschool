@@ -4,7 +4,11 @@ import { connectDB } from "@/lib/mongodb";
 import Group from "../../models/Group";
 import Course from "../../models/Course";
 import { requireAdmin } from "@/utils/authMiddleware";
-import { getSessionDistributionSummary } from "@/utils/sessionGenerator";
+import {
+  calculateTotalSessions,
+  getSessionDistributionSummary,
+} from "@/utils/sessionGenerator";
+import { countModuleSessions } from "@/utils/courseSessionSlots";
 import { getSessionsLinkHealthForGroups } from "@/utils/checkMeetingLinks";
 import {
   VALID_GROUP_TYPES,
@@ -422,21 +426,16 @@ export async function POST(req) {
       );
     }
 
-    let totalSessions;
-    if (
-      moduleSelection?.mode === "specific" &&
-      moduleSelection.selectedModules.length > 0
-    ) {
-      totalSessions = moduleSelection.selectedModules.reduce(
-        (sum, idx) => sum + (course.curriculum[idx]?.totalSessions || 3),
-        0,
-      );
-    } else {
-      totalSessions = course.curriculum.reduce(
-        (sum, m) => sum + (m.totalSessions || 3),
-        0,
-      );
-    }
+    const effectiveSelection = moduleSelection || {
+      mode: "all",
+      selectedModules: [],
+    };
+
+    // ✅ نفس الدالة اللي بيستخدمها الـ generator (من الدروس الفعلية)
+    const totalSessions = calculateTotalSessions(
+      course.curriculum,
+      effectiveSelection,
+    );
 
     const courseSnapshot = {
       title: course.title,
@@ -449,12 +448,14 @@ export async function POST(req) {
       totalSessions,
       curriculum: course.curriculum.map((m) => ({
         title: m.title,
+        description: m.description || "",
         order: m.order,
+        totalSessions: countModuleSessions(m),
         lessons:
           m.lessons?.map((l) => ({
             title: l.title,
             order: l.order,
-            sessionsCount: l.sessionsCount || 2,
+            sessionNumber: l.sessionNumber || 1,
           })) || [],
       })),
     };
@@ -516,7 +517,7 @@ export async function POST(req) {
         notifyOnSessionUpdate: true,
         completionMessage: true,
       },
-      moduleSelection: moduleSelection || { mode: "all", selectedModules: [] },
+      moduleSelection: effectiveSelection,
       status: "draft",
       sessionsGenerated: false,
       totalSessionsCount: totalSessions,
@@ -555,7 +556,7 @@ export async function POST(req) {
         message: "Group created successfully",
         sessionDistribution: getSessionDistributionSummary(
           course.curriculum,
-          moduleSelection,
+          effectiveSelection,
         ),
         scheduleInfo: {
           daysPerWeek: schedule.daysOfWeek.length,
