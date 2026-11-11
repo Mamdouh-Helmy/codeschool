@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ClipboardCheck, Inbox, Loader2, X } from "lucide-react";
 // ⚠️ عدّل المسار لو الصفحة عندك في مكان تاني
-import { ReportDialog, buildStudentReport } from "../../app/(dashboard)/admin/evaluations/page";
+import { ReportDialog } from "../../app/(dashboard)/admin/evaluations/_components/ReportDialog";
+import { buildStudentReport } from "../../app/(dashboard)/admin/evaluations/_components/helpers";
 
 function Shell({ onClose, children }) {
   useEffect(() => {
