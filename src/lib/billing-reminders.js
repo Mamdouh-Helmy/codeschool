@@ -11,9 +11,13 @@
 //
 // 🆕 منطق التكرار:
 //   - يوم الاستحقاق: رسالة "due_today" مرة واحدة.
-//   - بعد الاستحقاق: رسالة "overdue" كل يوم طول ما فيه تنبيه overdue مفتوح
-//     (يعني الأدمن لسه ماخدش إجراء). أول ما الأدمن يمدّ الموعد / يوقف الطالب /
+//   - بعد الاستحقاق: رسالة "overdue" كل 48 ساعة (يومين تقويميين بتوقيت القاهرة)
+//     طول ما فيه تنبيه overdue مفتوح (يعني الأدمن لسه ماخدش إجراء).
+//     أول ما الأدمن يمدّ الموعد / يوقف الطالب / يسجّل دفعة كاملة /
 //     الفاتورة تتسدد أو تتلغي، التنبيه بيتقفل والرسايل بتقف.
+//
+// ℹ️ الكرون نفسه لسه بيشتغل يوميًا — الـ throttle (OVERDUE_INTERVAL_DAYS) هو
+// اللي بيمنع الإرسال في اليوم اللي بين الرسالتين.
 //
 // ⚠️ مفيش فحص على canReceiveMessages()/رصيد الساعات هنا عمدًا — الرسالة دي
 // تحصيل مش تسويق، ولازم توصل حتى لو رصيد الطالب صفر أو الإشعارات متوقفة.
@@ -35,6 +39,9 @@ const STALE_REMINDER_MS = 30 * 60 * 1000; // 30 دقيقة
 // المتأخرة بتتجاب بالـ ids من التنبيهات المفتوحة، مش بالنافذة دي
 const WINDOW_DAYS = 1;
 
+// 🆕 الفاصل بين رسايل التأخير بالأيام التقويمية (48 ساعة = يومين)
+const OVERDUE_INTERVAL_DAYS = 2;
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 // "2026-09-20" بتوقيت القاهرة — عشان الحسبة تبقى بالأيام التقويمية مش بالساعات
@@ -47,10 +54,15 @@ function cairoDateKey(date) {
   }).format(new Date(date));
 }
 
-function daysUntilDueCairo(now, dueDate) {
-  const a = new Date(`${cairoDateKey(now)}T00:00:00Z`).getTime();
-  const b = new Date(`${cairoDateKey(dueDate)}T00:00:00Z`).getTime();
+// عدد الأيام التقويمية (بتوقيت القاهرة) من تاريخ لتاريخ — موجب لو `to` بعد `from`
+function calendarDaysBetween(from, to) {
+  const a = new Date(`${cairoDateKey(from)}T00:00:00Z`).getTime();
+  const b = new Date(`${cairoDateKey(to)}T00:00:00Z`).getTime();
   return Math.round((b - a) / 86400000);
+}
+
+function daysUntilDueCairo(now, dueDate) {
+  return calendarDaysBetween(now, dueDate);
 }
 
 function formatDueDate(date, language = "ar") {
@@ -70,9 +82,9 @@ function formatArabicDays(n) {
   return `${abs} يومًا`;
 }
 
-// 🆕 مرحلة يوم الاستحقاق: مرة واحدة. بعدها كل يوم "overdue" (مفتاح مختلف لكل
-// يوم عشان الـ unique index { invoiceId, stageKey, dueDateKey } يسمح برسالة
-// واحدة في اليوم بس، ويمنع التكرار لو الكرون اشتغل مرتين في نفس اليوم)
+// 🆕 مرحلة يوم الاستحقاق: مرة واحدة. بعدها "overdue" (مفتاح مختلف لكل يوم
+// إرسال عشان الـ unique index { invoiceId, stageKey, dueDateKey } يمنع التكرار
+// لو الكرون اشتغل مرتين في نفس اليوم)
 function stageFor(daysUntilDue, todayKey) {
   if (daysUntilDue === 0) {
     return { key: "due_today", reminderType: "due_today" };
@@ -81,6 +93,23 @@ function stageFor(daysUntilDue, todayKey) {
     return { key: `overdue_${todayKey}`, reminderType: "overdue" };
   }
   return null;
+}
+
+// 🆕 هل لسه ماعداش 48 ساعة على آخر رسالة اتبعتت لنفس الفاتورة وتاريخ الاستحقاق؟
+// بنحسب بالأيام التقويمية (مش بالساعات) عشان فروق ثواني التشغيل بين يوم
+// ويوم ماتأخرش الرسالة يوم زيادة.
+async function isThrottled({ invoiceId, dueDateKey, now }) {
+  const last = await BillingReminder.findOne({
+    invoiceId,
+    dueDateKey,
+    status: "sent",
+  })
+    .sort({ sentAt: -1 })
+    .select("sentAt")
+    .lean();
+
+  if (!last?.sentAt) return false;
+  return calendarDaysBetween(last.sentAt, now) < OVERDUE_INTERVAL_DAYS;
 }
 
 // ============================================================
@@ -296,6 +325,17 @@ export async function sendDueDateReminders({ now = new Date() } = {}) {
         continue;
       }
 
+      const dueDateKey = cairoDateKey(invoice.dueDate);
+
+      // 🆕 رسايل التأخير كل 48 ساعة — لو لسه ماعداش يومين على آخر رسالة نتخطى
+      if (
+        stage.reminderType === "overdue" &&
+        (await isThrottled({ invoiceId: invoice._id, dueDateKey, now }))
+      ) {
+        skipped++;
+        continue;
+      }
+
       const student = await Student.findById(invoice.studentId).select(
         "personalInfo guardianInfo communicationPreferences isDeleted",
       );
@@ -318,8 +358,6 @@ export async function sendDueDateReminders({ now = new Date() } = {}) {
       }
 
       const target = { recipientType: "guardian", phone: guardianPhone };
-
-      const dueDateKey = cairoDateKey(invoice.dueDate);
 
       // ✅ بنحجز المرحلة الأول (unique index) عشان لو الكرون اشتغل مرتين
       // بالغلط ما تتبعتش الرسالة مرتين

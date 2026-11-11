@@ -15,6 +15,7 @@ import {
     Wallet,
     PieChart,
     BarChart3,
+    CreditCard,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import AdminDrawer from "../../../../components/Admin/AdminDrawer"; // ← عدّل المسار حسب مكان الملف عندك
@@ -37,7 +38,7 @@ function daysSince(date) {
 const remainingOf = (inv) =>
     Math.max(0, Number(inv?.totalAmount || 0) - Number(inv?.paidAmount || 0));
 
-// ✅ NEW: الفاتورة اتسددت أو اتلغت؟
+// الفاتورة اتسددت أو اتلغت؟
 const isSettled = (inv) =>
     !inv || ["Paid", "Voided"].includes(inv.status) || remainingOf(inv) <= 0;
 
@@ -61,7 +62,7 @@ const TYPES = {
         icon: CalendarClock,
         badge: "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300",
         hex: "#ef4444",
-        actions: ["extend", "suspend"],
+        actions: ["pay", "extend", "suspend"],
     },
     escrow_review: {
         label: "مراجعة إسكرو",
@@ -73,6 +74,15 @@ const TYPES = {
 };
 
 const ACTIONS = {
+    pay: {
+        title: "دفع المبلغ المستحق",
+        desc: "سجّل دفعة على الفاتورة. لو سدد كل المتبقي التنبيه بيتقفل تلقائيًا.",
+        icon: CreditCard,
+        selected: "border-green-500 bg-green-50/70 dark:bg-green-500/10",
+        dot: "bg-green-600",
+        confirm: "bg-green-600 hover:bg-green-700",
+        confirmLabel: "تسجيل الدفعة",
+    },
     extend: {
         title: "تمديد موعد الاستحقاق",
         desc: "حدد تاريخ استحقاق جديد للفاتورة.",
@@ -110,6 +120,14 @@ const ACTIONS = {
         confirmLabel: "تنفيذ الاسترجاع",
     },
 };
+
+const PAYMENT_METHODS = [
+    { value: "cash", label: "كاش" },
+    { value: "instapay", label: "Instapay" },
+    { value: "vodafone_cash", label: "فودافون كاش" },
+    { value: "bank_transfer", label: "تحويل بنكي" },
+    { value: "other", label: "أخرى" },
+];
 
 const RESOLUTION_LABEL = {
     extend: "تم تمديد الموعد",
@@ -226,6 +244,8 @@ export default function BillingAlertsPage() {
     const [resolveAction, setResolveAction] = useState("");
     const [newDueDate, setNewDueDate] = useState("");
     const [refundAmount, setRefundAmount] = useState("");
+    const [payAmount, setPayAmount] = useState("");
+    const [payMethod, setPayMethod] = useState("cash");
     const [reason, setReason] = useState("");
 
     const fetchAlerts = useCallback(async () => {
@@ -236,7 +256,7 @@ export default function BillingAlertsPage() {
             const res = await fetch(`/api/billing-alerts?${params.toString()}`);
             const data = await res.json();
             if (data.success) {
-                // ✅ NEW: طبقة أمان — تنبيه overdue مفتوح على فاتورة مسددة ميظهرش
+                // طبقة أمان — تنبيه overdue مفتوح على فاتورة مسددة ميظهرش
                 const list = (data.data || []).filter(
                     (a) =>
                         a.type !== "overdue" ||
@@ -300,6 +320,8 @@ export default function BillingAlertsPage() {
         setResolveAction("");
         setNewDueDate("");
         setRefundAmount("");
+        setPayAmount("");
+        setPayMethod("cash");
         setReason("");
     };
 
@@ -309,6 +331,13 @@ export default function BillingAlertsPage() {
     }, []);
 
     const maxRefund = Number(actingAlert?.paymentId?.amount || 0);
+    const maxPay = actingAlert?.type === "overdue" ? remainingOf(actingAlert.invoiceId) : 0;
+
+    // اختيار القرار — لو "دفع" نملا المبلغ بالمتبقي كله كقيمة افتراضية
+    const selectAction = (key) => {
+        setResolveAction(key);
+        if (key === "pay" && !payAmount) setPayAmount(String(maxPay));
+    };
 
     const handleSubmitResolve = async () => {
         if (!actingAlert || !resolveAction) return;
@@ -316,6 +345,11 @@ export default function BillingAlertsPage() {
         if (resolveAction === "extend" && !newDueDate) {
             toast.error("حدد تاريخ الاستحقاق الجديد");
             return;
+        }
+        if (resolveAction === "pay") {
+            const amt = Number(payAmount);
+            if (!amt || amt <= 0) return toast.error("ادخل مبلغ دفع صحيح");
+            if (amt > maxPay) return toast.error(`المبلغ أكبر من المتبقي (${formatMoney(maxPay)})`);
         }
         if (resolveAction === "refund") {
             const amt = Number(refundAmount);
@@ -332,12 +366,14 @@ export default function BillingAlertsPage() {
                     action: resolveAction,
                     newDueDate: resolveAction === "extend" ? newDueDate : undefined,
                     refundAmount: resolveAction === "refund" ? Number(refundAmount) : undefined,
+                    amount: resolveAction === "pay" ? Number(payAmount) : undefined,
+                    method: resolveAction === "pay" ? payMethod : undefined,
                     reason,
                 }),
             });
             const data = await res.json();
             if (data.success) {
-                // ✅ NEW: لو السيرفر قفل التنبيه لأن الفاتورة اتسددت، نعرض رسالته
+                // السيرفر بيرجّع رسالة مخصصة (مثلًا: دفعة جزئية والتنبيه لسه مفتوح)
                 toast.success(data.message || "تم تنفيذ الإجراء بنجاح");
                 closeResolve();
                 fetchAlerts();
@@ -639,7 +675,7 @@ export default function BillingAlertsPage() {
                                             type="button"
                                             role="radio"
                                             aria-checked={on}
-                                            onClick={() => setResolveAction(key)}
+                                            onClick={() => selectAction(key)}
                                             className={`w-full text-right flex items-start gap-3 p-3.5 rounded-xl border transition-colors ${focusRing} ${
                                                 on
                                                     ? a.selected
@@ -667,6 +703,49 @@ export default function BillingAlertsPage() {
                         </fieldset>
 
                         {/* حقول مشروطة */}
+                        {resolveAction === "pay" && (
+                            <>
+                                <div>
+                                    <label className={labelCls}>
+                                        المبلغ المدفوع (EGP) <span className="text-red-500">*</span>
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max={maxPay || undefined}
+                                            value={payAmount}
+                                            onChange={(e) => setPayAmount(e.target.value)}
+                                            className={inputCls}
+                                        />
+                                        {maxPay > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPayAmount(String(maxPay))}
+                                                className={`px-3 text-xs font-semibold rounded-lg border border-gray-300 dark:border-dark_border text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-darkhover whitespace-nowrap ${focusRing}`}
+                                            >
+                                                المبلغ كامل
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className={`text-[11px] mt-1 ${muted}`}>
+                                        المتبقي: {formatMoney(maxPay)} — لو دفع جزء بس، التنبيه هيفضل مفتوح.
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label className={labelCls}>طريقة الدفع</label>
+                                    <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)} className={inputCls}>
+                                        {PAYMENT_METHODS.map((m) => (
+                                            <option key={m.value} value={m.value}>
+                                                {m.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </>
+                        )}
+
                         {resolveAction === "extend" && (
                             <div>
                                 <label className={labelCls}>

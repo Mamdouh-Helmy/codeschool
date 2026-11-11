@@ -20,8 +20,17 @@ import {
   ArrowLeftRight,
   ShieldCheck,
   PauseCircle,
+  Languages,
 } from "lucide-react";
 import ModalShell from "./ModalShell";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ✅ لغة الطالب (ar | en) — مصدر واحد للقرار في كل المودال
+// ─────────────────────────────────────────────────────────────────────────────
+function getStudentLang(student) {
+  const l = String(student?.communicationPreferences?.preferredLanguage || "ar").toLowerCase();
+  return l === "en" ? "en" : "ar";
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // resolveVar / buildVariables / renderTemplate — unchanged business logic
@@ -55,7 +64,7 @@ function resolveVar(dbVars, key, lang = "ar", genderContext = {}) {
 
 function buildVariables(student, session, formData, dbVars = {}) {
   if (!student) return {};
-  const lang         = (student.communicationPreferences?.preferredLanguage || "ar").toLowerCase();
+  const lang         = getStudentLang(student);
   const gender       = (student.personalInfo?.gender       || "male").toLowerCase().trim();
   const relationship = (student.guardianInfo?.relationship || "father").toLowerCase().trim();
   const isMale       = gender !== "female";
@@ -173,7 +182,7 @@ function formatShortDate(date, isRTL) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STATUS PICKER — redesigned as a segmented row instead of 4 equal SaaS cards
+// STATUS PICKER
 // ─────────────────────────────────────────────────────────────────────────────
 const STATUS_OPTIONS = [
   { value: "scheduled", labelAr: "مجدولة", labelEn: "Scheduled", hintAr: "هتفضل زي ما هي", hintEn: "Stays as is", icon: CalendarCheck, accent: "sky" },
@@ -323,20 +332,29 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
   const guardianTextareaRef = useRef(null);
   const hintsRef = useRef({ student: null, guardian: null });
 
+  // ✅ FIX: drafts منفصلة لكل لغة { ar: {studentMessage, guardianMessage, edited}, en: {...} }
+  // عشان رسالة اللغة العربية متتبعتش لطالب إنجليزي والعكس.
+  const langDrafts = useRef({});
+  // ✅ FIX: يمنع ردود قديمة (stale) من الـ API تكتب فوق لغة تانية
+  const fetchSeq = useRef(0);
+
   const showReasonField = formData.status === "cancelled" || formData.status === "postponed";
   const isPostponed     = formData.status === "postponed";
   const isCancelling    = formData.status === "cancelled" && session?.status !== "cancelled";
 
   const groupIsOnHold = !!session?.group?.isOnHold;
 
-  // ✅ NEW: هل الطالب المختار للـ preview بالغ؟
   const isAdultStudent = selectedStudentForPreview?.studentType === "adults";
 
-  // ✅ هل الجروب فيه طلاب بالغين بس؟ (للتفاصيل بس)
-  const groupHasAdults = useMemo(
-    () => (groupStudents || []).some((s) => s.studentType === "adults"),
-    [groupStudents]
-  );
+  // ✅ لغة الرسائل اللي بتتعدل حاليًا (لغة الطالب المختار في الـ preview)
+  const previewLang = getStudentLang(selectedStudentForPreview);
+
+  // ✅ اللغات الموجودة في الجروب
+  const groupLangs = useMemo(() => {
+    const set = new Set((groupStudents || []).map((s) => getStudentLang(s)));
+    return [...set];
+  }, [groupStudents]);
+  const hasMixedLangs = groupLangs.length > 1;
 
   const cascadePreview = useMemo(() => {
     if (!isCancelling || groupIsOnHold) return { shifting: [], skipped: [] };
@@ -372,7 +390,7 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
   }, [groupStudents]);
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ✅ fetchTemplates — بتتخطى ولي الأمر للطالب البالغ
+  // ✅ fetchTemplates — بتجيب قالب بلغة الطالب المختار، وبتتجاهل أي رد قديم
   // ═══════════════════════════════════════════════════════════════════════
   useEffect(() => {
     if (groupIsOnHold) return;
@@ -380,13 +398,13 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
     const fetchTemplates = async () => {
       if (!showReasonField || !selectedStudentForPreview) return;
 
-      // ✅ للطالب البالغ: بنحتاج student template بس
       if (isAdultStudent) {
         if (manuallyEdited.student) return;
       } else {
         if (manuallyEdited.student && manuallyEdited.guardian) return;
       }
 
+      const seq = ++fetchSeq.current;
       setLoadingTemplates(true);
       try {
         const eventType = formData.status === "cancelled" ? "session_cancelled" : "session_postponed";
@@ -402,18 +420,18 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
         });
 
         const json = await res.json();
+        if (seq !== fetchSeq.current) return; // رد قديم — تجاهله
+
         if (json.success) {
           if (!manuallyEdited.student && json.data.student) {
             setFormData((prev) => ({ ...prev, studentMessage: json.data.student.rawContent || json.data.student.content || "" }));
           }
 
-          // ✅ ولي الأمر — للـ kids بس
           if (!isAdultStudent) {
             if (!manuallyEdited.guardian && json.data.guardian) {
               setFormData((prev) => ({ ...prev, guardianMessage: json.data.guardian.rawContent || json.data.guardian.content || "" }));
             }
           } else {
-            // نفضّي رسالة ولي الأمر لأي طالب بالغ
             setFormData((prev) => ({ ...prev, guardianMessage: "" }));
           }
         }
@@ -421,7 +439,7 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
         console.error("Error fetching templates:", error);
         toast.error(isRTL ? "فشل تحميل القوالب" : "Failed to load templates");
       } finally {
-        setLoadingTemplates(false);
+        if (seq === fetchSeq.current) setLoadingTemplates(false);
       }
     };
 
@@ -429,7 +447,7 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
   }, [formData.status, selectedStudentForPreview?._id, formData.newDate, formData.newTime, groupIsOnHold, isAdultStudent]);
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ✅ Preview effect — بتتخطى guardian preview للطالب البالغ
+  // ✅ Preview effect
   // ═══════════════════════════════════════════════════════════════════════
   useEffect(() => {
     if (!selectedStudentForPreview) return;
@@ -444,7 +462,7 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
   }, [formData.studentMessage, formData.guardianMessage, formData.meetingLink, formData.newDate, formData.newTime, selectedStudentForPreview, session, dbVars, isAdultStudent]);
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ✅ saveTemplateToDatabase — بتمنع حفظ قالب ولي الأمر للطالب البالغ
+  // ✅ saveTemplateToDatabase — بيحفظ في خانة لغة الطالب المختار (previewLang)
   // ═══════════════════════════════════════════════════════════════════════
   const saveTemplateToDatabase = useCallback(
     async (type, content) => {
@@ -453,7 +471,6 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
         return;
       }
 
-      // ✅ حماية: مايحفظش قوالب ولي أمر لطالب بالغ
       if (isAdultStudent && type === "guardian") return;
 
       if (!selectedStudentForPreview || !content?.trim()) return;
@@ -468,7 +485,7 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
         } else return;
 
         const recipientType = type === "student" ? "student" : "guardian";
-        const studentLang = selectedStudentForPreview.communicationPreferences?.preferredLanguage || "ar";
+        const studentLang = getStudentLang(selectedStudentForPreview);
         const templateName = formData.status === "cancelled"
           ? (type === "student" ? "Session Cancelled - Student" : "Session Cancelled - Guardian")
           : (type === "student" ? "Session Postponed - Student" : "Session Postponed - Guardian");
@@ -526,9 +543,6 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
     return buildVariables(selectedStudentForPreview, session, formData, dbVars);
   }, [selectedStudentForPreview, session, formData, dbVars]);
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // ✅ availableVariables — بتشيل متغيرات ولي الأمر للطالب البالغ
-  // ═══════════════════════════════════════════════════════════════════════
   const availableVariables = useMemo(() => {
     const studentVars = [
       { key: "{studentSalutation}",  label: isRTL ? "تحية الطالب"    : "Student Salutation",  icon: "👶" },
@@ -546,7 +560,6 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
       { key: "{childTitle}",         label: isRTL ? "ابنك/ابنتك"     : "Son/Daughter",         icon: "👪" },
     ];
 
-    // ✅ للطالب البالغ: متغيرات الطالب فقط
     const vars = isAdultStudent
       ? [...studentVars]
       : [...studentVars.slice(0, 2), ...guardianVars, ...studentVars.slice(2)];
@@ -625,55 +638,52 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
   );
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ✅ handleStudentPreviewChange — بتتخطى guardian fetch للطالب البالغ
+  // ✅ handleStudentPreviewChange
+  // لو اللغة اتغيرت: نحفظ اللي كتبه الأدمن في draft اللغة القديمة،
+  // ونحمّل draft اللغة الجديدة (أو نسيب الـ effect يجيب قالبها الافتراضي).
   // ═══════════════════════════════════════════════════════════════════════
   const handleStudentPreviewChange = useCallback(
-    async (studentId) => {
+    (studentId) => {
       const student = groupStudents.find((s) => s._id === studentId);
       if (!student) return;
-      setSelectedStudentForPreview(student);
-      if (groupIsOnHold) return;
 
-      const studentIsAdult = student.studentType === "adults";
+      const newLang = getStudentLang(student);
 
-      // ✅ للطالب البالغ: student بس
-      const needsStudentFetch  = !manuallyEdited.student;
-      const needsGuardianFetch = !studentIsAdult && !manuallyEdited.guardian;
+      if (newLang !== previewLang) {
+        // خزّن الحالة الحالية للغة القديمة
+        langDrafts.current[previewLang] = {
+          studentMessage: formData.studentMessage,
+          guardianMessage: formData.guardianMessage,
+          edited: { ...manuallyEdited },
+        };
 
-      if (!needsStudentFetch && !needsGuardianFetch) return;
-
-      setLoadingTemplates(true);
-      try {
-        const eventType = formData.status === "cancelled" ? "session_cancelled" : "session_postponed";
-        const res  = await fetch(`/api/sessions/${session.id}/templates`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ eventType, studentId: student._id }) });
-        const json = await res.json();
-        if (json.success) {
-          if (needsStudentFetch && json.data.student) {
-            setFormData((prev) => ({ ...prev, studentMessage: json.data.student.rawContent || json.data.student.content || "" }));
-          }
-          if (needsGuardianFetch && json.data.guardian) {
-            setFormData((prev) => ({ ...prev, guardianMessage: json.data.guardian.rawContent || json.data.guardian.content || "" }));
-          }
-          // ✅ للطالب البالغ: نفضّي رسالة ولي الأمر
-          if (studentIsAdult) {
-            setFormData((prev) => ({ ...prev, guardianMessage: "" }));
-          }
+        const draft = langDrafts.current[newLang];
+        if (draft) {
+          setFormData((prev) => ({
+            ...prev,
+            studentMessage: draft.studentMessage,
+            guardianMessage: draft.guardianMessage,
+          }));
+          setManuallyEdited({ ...draft.edited });
+        } else {
+          // مفيش draft للغة دي → فضّي وخلّي الـ effect يجيب القالب الافتراضي بلغتها
+          setFormData((prev) => ({ ...prev, studentMessage: "", guardianMessage: "" }));
+          setManuallyEdited({ student: false, guardian: false });
         }
-      } catch (error) {
-        console.error("Error fetching templates:", error);
-      } finally {
-        setLoadingTemplates(false);
       }
+
+      setSelectedStudentForPreview(student);
     },
-    [groupStudents, manuallyEdited, formData.status, session.id, groupIsOnHold]
+    [groupStudents, previewLang, formData.studentMessage, formData.guardianMessage, manuallyEdited]
   );
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ✅ resetToDefault — بتتخطى guardian للطالب البالغ
+  // ✅ resetToDefault — بيرجّع قوالب لغة الطالب المختار بس
   // ═══════════════════════════════════════════════════════════════════════
   const resetToDefault = useCallback(async () => {
     if (groupIsOnHold) return;
     if (!selectedStudentForPreview) return;
+    const seq = ++fetchSeq.current;
     setLoadingTemplates(true);
     try {
       const eventType = formData.status === "cancelled" ? "session_cancelled" : "session_postponed";
@@ -682,25 +692,26 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
         body: JSON.stringify({ eventType, studentId: selectedStudentForPreview._id, extraData: { newDate: formData.newDate, newTime: formData.newTime, meetingLink: formData.meetingLink } }),
       });
       const json = await res.json();
+      if (seq !== fetchSeq.current) return;
       if (json.success) {
         setFormData((prev) => ({
           ...prev,
           studentMessage: json.data.student?.rawContent || json.data.student?.content || "",
-          // ✅ للطالب البالغ: منحدثش رسالة ولي الأمر
           guardianMessage: isAdultStudent
             ? ""
             : (json.data.guardian?.rawContent || json.data.guardian?.content || ""),
         }));
         setManuallyEdited({ student: false, guardian: false });
+        delete langDrafts.current[previewLang];
         toast.success(isRTL ? "تم استعادة القوالب الافتراضية" : "Default templates restored");
       }
     } catch (error) {
       console.error("Error resetting templates:", error);
       toast.error(isRTL ? "فشل استعادة القوالب" : "Failed to reset templates");
     } finally {
-      setLoadingTemplates(false);
+      if (seq === fetchSeq.current) setLoadingTemplates(false);
     }
-  }, [selectedStudentForPreview, formData.status, formData.newDate, formData.newTime, formData.meetingLink, session.id, isRTL, groupIsOnHold, isAdultStudent]);
+  }, [selectedStudentForPreview, formData.status, formData.newDate, formData.newTime, formData.meetingLink, session.id, isRTL, groupIsOnHold, isAdultStudent, previewLang]);
 
   const renderHints = (type) => {
     if (!showHints[type]) return null;
@@ -733,7 +744,12 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
   };
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ✅ handleSave — بتبني guardianMessages للـ kids بس
+  // ✅ handleSave
+  // كل طالب بياخد رسالة "بلغته" بس:
+  //   - لغة الـ preview الحالية → الرسالة اللي على الشاشة.
+  //   - لغة تانية اتعدّلت → draft اللغة دي (للحقل اللي اتعدّل بس).
+  //   - لغة تانية ما اتعدّلتش → ما نبعتش حاجة، والسيرفر يستخدم القالب
+  //     الافتراضي بلغة الطالب.
   // ═══════════════════════════════════════════════════════════════════════
   const handleSave = useCallback(async () => {
     if (groupIsOnHold) {
@@ -741,7 +757,6 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
       return;
     }
 
-    // ✅ التحقق من الرسائل حسب نوع الطالب المختار للـ preview
     if (showReasonField) {
       if (isAdultStudent) {
         if (!formData.studentMessage?.trim()) {
@@ -762,15 +777,31 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
       const guardianMessages = {};
 
       if (showReasonField) {
+        // ثبّت اللغة الحالية في الـ drafts
+        langDrafts.current[previewLang] = {
+          studentMessage: formData.studentMessage,
+          guardianMessage: formData.guardianMessage,
+          edited: { ...manuallyEdited },
+        };
+
         groupStudents.forEach((student) => {
           const sid  = student._id.toString();
-          const vars = buildVariables(student, session, formData, dbVars);
-          studentMessages[sid]  = renderTemplate(formData.studentMessage,  vars);
+          const lang = getStudentLang(student);
+          const draft = langDrafts.current[lang];
+          if (!draft) return; // السيرفر هيستخدم قالب لغته الافتراضي
 
-          // ✅ للطالب البالغ: مش بنضيف رسالة ولي الأمر
+          const isCurrentLang = lang === previewLang;
+          const vars = buildVariables(student, session, formData, dbVars);
+
+          // رسالة الطالب
+          if ((isCurrentLang || draft.edited?.student) && draft.studentMessage?.trim()) {
+            studentMessages[sid] = renderTemplate(draft.studentMessage, vars);
+          }
+
+          // رسالة ولي الأمر — للـ kids بس
           const studentIsAdult = student.studentType === "adults";
-          if (!studentIsAdult) {
-            guardianMessages[sid] = renderTemplate(formData.guardianMessage, vars);
+          if (!studentIsAdult && (isCurrentLang || draft.edited?.guardian) && draft.guardianMessage?.trim()) {
+            guardianMessages[sid] = renderTemplate(draft.guardianMessage, vars);
           }
         });
       }
@@ -810,7 +841,7 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
     } finally {
       setSaving(false);
     }
-  }, [formData, showReasonField, isPostponed, session, groupStudents, dbVars, isRTL, onClose, onRefresh, groupIsOnHold, isAdultStudent]);
+  }, [formData, showReasonField, isPostponed, session, groupStudents, dbVars, isRTL, onClose, onRefresh, groupIsOnHold, isAdultStudent, previewLang, manuallyEdited]);
 
   const footer = (
     <>
@@ -892,6 +923,8 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
               if (groupIsOnHold) return;
               setFormData((prev) => ({ ...prev, status: val }));
               setManuallyEdited({ student: false, guardian: false });
+              // ✅ تغيير الحالة (إلغاء ↔ تأجيل) = قوالب مختلفة، فامسح كل الـ drafts
+              langDrafts.current = {};
             }}
           />
         </div>
@@ -974,13 +1007,32 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
               </button>
             </div>
 
+            {/* ✅ بانر اللغة — بيوضح إن كل لغة ليها رسالتها */}
+            <div className="flex items-start gap-2.5 rounded-xl border border-indigo-200 bg-white p-3 dark:border-indigo-500/20 dark:bg-white/5">
+              <Languages className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />
+              <div className="text-xs text-slate-700 dark:text-slate-200">
+                <p className="font-semibold">
+                  {isRTL
+                    ? `بتعدّل دلوقتي رسائل الطلاب اللي لغتهم: ${previewLang === "ar" ? "العربية 🇸🇦" : "الإنجليزية 🇬🇧"}`
+                    : `You're editing messages for students whose language is: ${previewLang === "ar" ? "Arabic 🇸🇦" : "English 🇬🇧"}`}
+                </p>
+                {hasMixedLangs && (
+                  <p className="mt-0.5 leading-relaxed opacity-80">
+                    {isRTL
+                      ? "الجروب فيه لغتين. الرسالة اللي بتكتبها بتروح لطلاب لغتها بس، ولو عدّلت لغة تانية (باختيار طالب منها) بتتحفظ لوحدها. اللغة اللي متعدّلتش هتتبعت بقالبها الافتراضي."
+                      : "This group has two languages. Your message goes only to students of that language. Switch to a student of the other language to edit its own message; untouched languages use their default template."}
+                  </p>
+                )}
+              </div>
+            </div>
+
             {groupStudents.length > 0 && (
               <div className="space-y-2">
                 <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">{isRTL ? "اختر طالباً لمعاينة الرسالة:" : "Select student to preview:"}</label>
                 <div className="flex flex-wrap gap-2">
                   {groupStudents.map((student) => {
                     const isSelected = selectedStudentForPreview?._id?.toString() === student._id?.toString();
-                    const lang   = student.communicationPreferences?.preferredLanguage || "ar";
+                    const lang   = getStudentLang(student);
                     const gender = (student.personalInfo?.gender || "male").toLowerCase();
                     const rel    = (student.guardianInfo?.relationship || "father").toLowerCase();
                     const isAdult = student.studentType === "adults";
@@ -1009,7 +1061,6 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
                       <span className="font-semibold text-slate-700 dark:text-slate-200">{salutationPreview.studentSalutation}</span>
                     </div>
 
-                    {/* ✅ تحية ولي الأمر + childTitle — للـ kids بس */}
                     {!isAdultStudent && (
                       <>
                         <div className="flex items-center gap-2">
@@ -1031,7 +1082,6 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
               </div>
             )}
 
-            {/* ✅ للطالب البالغ: بانر توضيحي */}
             {isAdultStudent && (
               <div className="flex items-start gap-2.5 rounded-xl border border-indigo-200 bg-indigo-100/60 p-3.5 dark:border-indigo-500/20 dark:bg-indigo-500/10">
                 <span className="text-lg shrink-0">🧑</span>
@@ -1048,7 +1098,6 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
               </div>
             )}
 
-            {/* ✅ رسالة الطالب — دايمًا */}
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-500/20">
@@ -1066,7 +1115,7 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
                   onSelect={(e) => setCursorPosition((prev) => ({ ...prev, student: e.target.selectionStart }))}
                   placeholder={isRTL ? "اكتب @ لإظهار المتغيرات..." : "Type @ for variables..."}
                   className="h-36 w-full resize-none rounded-lg border border-sky-200 bg-white px-3 py-2.5 font-mono text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-sky-500/20 dark:bg-white/5 dark:text-white"
-                  dir={(selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar" ? "rtl" : "ltr"}
+                  dir={previewLang === "ar" ? "rtl" : "ltr"}
                 />
                 {renderHints("student")}
               </div>
@@ -1076,14 +1125,13 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
                     <MessageCircle className="h-3.5 w-3.5 text-sky-600 dark:text-sky-300" />
                     <span className="text-xs font-medium text-sky-700 dark:text-sky-300">{isRTL ? "معاينة رسالة الطالب" : "Student Preview"}</span>
                   </div>
-                  <div className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words p-3 text-sm" dir={(selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar" ? "rtl" : "ltr"}>
+                  <div className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words p-3 text-sm" dir={previewLang === "ar" ? "rtl" : "ltr"}>
                     {previewStudentMessage}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* ✅ رسالة ولي الأمر — للـ kids بس */}
             {!isAdultStudent && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -1101,7 +1149,7 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
                     onSelect={(e) => setCursorPosition((prev) => ({ ...prev, guardian: e.target.selectionStart }))}
                     placeholder={isRTL ? "اكتب @ لإظهار المتغيرات..." : "Type @ for variables..."}
                     className="h-36 w-full resize-none rounded-lg border border-violet-200 bg-white px-3 py-2.5 font-mono text-sm outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-violet-500/20 dark:bg-white/5 dark:text-white"
-                    dir={(selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar" ? "rtl" : "ltr"}
+                    dir={previewLang === "ar" ? "rtl" : "ltr"}
                   />
                   {renderHints("guardian")}
                 </div>
@@ -1111,7 +1159,7 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
                       <MessageCircle className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />
                       <span className="text-xs font-medium text-violet-700 dark:text-violet-300">{isRTL ? "معاينة رسالة ولي الأمر" : "Guardian Preview"}</span>
                     </div>
-                    <div className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words p-3 text-sm" dir={(selectedStudentForPreview?.communicationPreferences?.preferredLanguage || "ar") === "ar" ? "rtl" : "ltr"}>
+                    <div className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words p-3 text-sm" dir={previewLang === "ar" ? "rtl" : "ltr"}>
                       {previewGuardianMessage}
                     </div>
                   </div>
@@ -1119,13 +1167,11 @@ export default function EditSessionModal({ session, groupStudents, allSessions =
               </div>
             )}
 
-            {/* ✅ أزرار الحفظ */}
             <div className="flex justify-end gap-2 border-t border-indigo-100 pt-3 dark:border-indigo-500/10">
               <button onClick={() => saveTemplateToDatabase("student", formData.studentMessage)} disabled={!formData.studentMessage || savingTemplate.student || loadingTemplates} className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
                 {savingTemplate.student ? <><RefreshCw className="h-3 w-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</> : <><Save className="h-3 w-3" /> {isRTL ? "حفظ قالب الطالب" : "Save Student Template"}</>}
               </button>
 
-              {/* ✅ زر حفظ قالب ولي الأمر — للـ kids بس */}
               {!isAdultStudent && (
                 <button onClick={() => saveTemplateToDatabase("guardian", formData.guardianMessage)} disabled={!formData.guardianMessage || savingTemplate.guardian || loadingTemplates} className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
                   {savingTemplate.guardian ? <><RefreshCw className="h-3 w-3 animate-spin" /> {isRTL ? "جاري الحفظ..." : "Saving..."}</> : <><Save className="h-3 w-3" /> {isRTL ? "حفظ قالب ولي الأمر" : "Save Guardian Template"}</>}
