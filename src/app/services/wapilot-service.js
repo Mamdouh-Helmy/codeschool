@@ -295,7 +295,7 @@ class WapilotService {
     }
   }
 
-    // ✅ NEW: تحديد "نطاق" الـ dedupe (سيشن أو مقابلة)
+  // ✅ NEW: تحديد "نطاق" الـ dedupe (سيشن أو مقابلة)
   resolveDedupeScope(metadata = {}) {
     if (metadata.sessionId)
       return { field: "metadata.sessionId", value: metadata.sessionId };
@@ -1288,6 +1288,12 @@ The Code School Team 💻`;
               status: messageData.status,
               failureReason: messageData.error || "",
               sentAt: new Date(),
+              ...(messageData.groupId
+                ? {
+                    groupId: messageData.groupId,
+                    groupName: messageData.groupName || "",
+                  }
+                : {}),
             },
           },
           $set: { "metadata.lastGroupNotificationSent": new Date() },
@@ -1335,6 +1341,8 @@ The Code School Team 💻`;
           error: sendResult.success
             ? null
             : sendResult.error || "Unknown error",
+          groupId: metadata.groupId || null,
+          groupName: metadata.groupName || "",
         });
       }
 

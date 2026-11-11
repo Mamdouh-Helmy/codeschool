@@ -5,8 +5,8 @@ import Group from "../models/Group.js";
 import Session from "../models/Session.js";
 import TemplateVariable from "../models/TemplateVariable.js";
 import "../models/Course.js";
-import "../models/Student.js";
-import "../models/User.js";
+import Student from "../models/Student.js";
+import User from "../models/User.js";
 import wapilotService from "./wapilot-service.js";
 import {
   ALL_DB_KEYS,
@@ -414,7 +414,13 @@ function validateAgainstGroup(templates, groupInfo) {
 
 // ─── Delivery ────────────────────────────────────────────────────────────────
 
-function dispatch(recipient, { text, language }, groupInfo) {
+function dispatch(recipient, { text, language }, groupInfo, extra = {}) {
+  const groupMeta = {
+    groupId: groupInfo.id,
+    groupName: groupInfo.name,
+    groupCode: groupInfo.code,
+  };
+
   if (recipient.type === RECIPIENT_TYPE.INSTRUCTOR) {
     return wapilotService.sendAndLogUserMessage({
       userId: recipient.refId,
@@ -422,6 +428,7 @@ function dispatch(recipient, { text, language }, groupInfo) {
       messageContent: text,
       messageType: "group_custom_message",
       language,
+      metadata: groupMeta,
     });
   }
 
@@ -433,12 +440,11 @@ function dispatch(recipient, { text, language }, groupInfo) {
     messageType: "custom",
     language,
     metadata: {
-      groupId: groupInfo.id,
-      groupName: groupInfo.name,
-      groupCode: groupInfo.code,
+      ...groupMeta,
       isCustomMessage: true,
       recipientType: recipient.type,
       automationType: "group_custom_message",
+      ...extra,
     },
   });
 }
@@ -504,5 +510,175 @@ export async function sendGroupMessage({
     failed: countBy(results, "failed"),
     skipped: countBy(results, "skipped"),
     results,
+  };
+}
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ✅ رسائل عضو واحد (طالب + ولي أمر / مدرس): السجل + الإرسال المباشر
+// ═════════════════════════════════════════════════════════════════════════════
+
+const maskPhone = (n) => (n ? `••••${String(n).slice(-4)}` : "");
+
+async function loadGroupSessionIds(groupId) {
+  const sessions = await Session.find({ groupId, isDeleted: false }).select("_id").lean();
+  return new Set(sessions.map((s) => String(s._id)));
+}
+
+function studentHistory(student, groupId, sessionIds, scope) {
+  return (student?.whatsappMessages || [])
+    .filter((m) => {
+      if (scope === "all") return true;
+      const md = m.metadata || {};
+      return (
+        (md.groupId && String(md.groupId) === String(groupId)) ||
+        (md.sessionId && sessionIds.has(String(md.sessionId)))
+      );
+    })
+    .map((m) => ({
+      id: String(m._id),
+      type: m.messageType,
+      content: m.messageContent || "",
+      language: m.language || "ar",
+      status: m.status || "sent",
+      error: m.error || "",
+      sentAt: m.sentAt || m.createdAt || null,
+      role: m.metadata?.recipientType === "guardian" ? "guardian" : "student",
+      number: maskPhone(m.recipientNumber),
+      sessionTitle: m.metadata?.sessionTitle || "",
+      groupName: m.metadata?.groupName || "",
+      isCustom: !!m.metadata?.isCustomMessage,
+    }));
+}
+
+function instructorHistory(user, groupId, scope) {
+  return (user?.notificationHistory || [])
+    .filter((m) => scope === "all" || (m.groupId && String(m.groupId) === String(groupId)))
+    .map((m) => ({
+      id: String(m._id || `${m.messageType}-${new Date(m.sentAt).getTime()}`),
+      type: m.messageType || "group_custom_message",
+      content: m.messageContent || "",
+      language: m.language || "ar",
+      status: m.status || "sent",
+      error: m.failureReason || "",
+      sentAt: m.sentAt || null,
+      role: "instructor",
+      number: "",
+      sessionTitle: "",
+      groupName: m.groupName || "",
+      isCustom: true,
+    }));
+}
+
+/** سجل رسائل عضو + مستلميه (الطالب وولي أمره، أو المدرس) */
+export async function getMemberMessages(groupId, { kind, id, scope = "group" } = {}) {
+  if (!["student", "instructor"].includes(kind)) {
+    throw new GroupMessageError("نوع العضو غير صالح");
+  }
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new GroupMessageError("Invalid member ID", 400);
+  }
+
+  const ctx = await loadContext(groupId);
+  const res = createResolvers(ctx.docs);
+  const everyone = buildRecipients(ctx.group, res);
+
+  const recipients = everyone.filter((r) =>
+    kind === "instructor"
+      ? r.type === RECIPIENT_TYPE.INSTRUCTOR && r.refId === String(id)
+      : r.type !== RECIPIENT_TYPE.INSTRUCTOR && r.studentId === String(id),
+  );
+  if (!recipients.length) throw new GroupMessageError("العضو مش موجود في الجروب ده", 404);
+
+  const effectiveScope = scope === "all" ? "all" : "group";
+  let messages = [];
+
+  if (kind === "student") {
+    const [student, sessionIds] = await Promise.all([
+      Student.findById(id).select("whatsappMessages").lean(),
+      effectiveScope === "group" ? loadGroupSessionIds(groupId) : Promise.resolve(new Set()),
+    ]);
+    messages = studentHistory(student, groupId, sessionIds, effectiveScope);
+  } else {
+    const user = await User.findById(id).select("notificationHistory").lean();
+    messages = instructorHistory(user, groupId, effectiveScope);
+  }
+
+  messages.sort((a, b) => new Date(b.sentAt || 0) - new Date(a.sentAt || 0));
+
+  return {
+    group: buildGroupInfo(ctx.group, ctx),
+    recipients: recipients.map(({ phone, ...rest }) => ({
+      ...rest,
+      hasPhone: !!phone,
+      phoneHint: maskPhone(phone),
+    })),
+    messages: messages.slice(0, 150),
+    totalMessages: messages.length,
+    scope: effectiveScope,
+  };
+}
+
+/**
+ * إرسال رسالة لمستلم واحد.
+ *  - raw=false: النص بيعدّي على المتغيرات ({salutation}, {studentName}...) حسب المستلم
+ *  - raw=true : النص بيتبعت زي ما هو (إعادة إرسال رسالة قديمة)
+ *  - language: auto = لغة المستلم | ar | en (إجبار لغة معينة)
+ */
+export async function sendDirectMessage({
+  groupId,
+  recipientKey,
+  content = "",
+  language = "auto",
+  raw = false,
+}) {
+  const text = String(content || "").trim();
+  if (!text) throw new GroupMessageError("اكتب نص الرسالة");
+  if (text.length > MAX_MESSAGE_LENGTH) {
+    throw new GroupMessageError(`الرسالة أطول من ${MAX_MESSAGE_LENGTH} حرف`);
+  }
+  const forced = ["ar", "en"].includes(language) ? language : "auto";
+
+  const ctx = await loadContext(groupId);
+  const groupInfo = buildGroupInfo(ctx.group, ctx);
+  const res = createResolvers(ctx.docs);
+
+  const base = buildRecipients(ctx.group, res).find((r) => r.key === recipientKey);
+  if (!base) throw new GroupMessageError("المستلم مش موجود في الجروب ده", 404);
+  if (!base.phone) throw new GroupMessageError("المستلم ده معندوش رقم واتساب");
+
+  const recipient = forced === "auto" ? base : { ...base, language: forced };
+
+  let message;
+  if (raw) {
+    message = { text, language: recipient.language };
+  } else {
+    const templates = { contentAr: text, contentEn: text, overrides: normalizeOverrides({}) };
+    const unknown = findUnknownVariables(text);
+    if (unknown.length) throw new GroupMessageError(`متغيرات غير معروفة: ${unknown.join(" ")}`);
+    validateAgainstGroup(templates, groupInfo);
+
+    message = composeMessage(recipient, groupInfo, templates);
+    if (!message?.text?.trim()) {
+      throw new GroupMessageError("الرسالة طلعت فاضية بعد تعويض المتغيرات");
+    }
+  }
+
+  let result;
+  try {
+    result = await dispatch(recipient, message, groupInfo, {
+      automationType: raw ? "member_message_resend" : "member_direct_message",
+    });
+  } catch (error) {
+    throw new GroupMessageError(error.message || "فشل الإرسال", 502);
+  }
+  if (!result?.success) throw new GroupMessageError(result?.error || "فشل الإرسال", 502);
+
+  return {
+    status: "sent",
+    key: recipient.key,
+    name: recipient.names[recipient.language],
+    language: message.language,
+    text: message.text,
   };
 }

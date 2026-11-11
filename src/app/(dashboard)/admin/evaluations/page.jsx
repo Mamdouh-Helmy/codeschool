@@ -577,7 +577,7 @@ function SessionRow({ e, open, onToggle }) {
     );
 }
 
-function ReportDialog({ report, rows, focusEvalId, onClose, onSelect, onPrev, onNext, position }) {
+export function ReportDialog({ report, rows, focusEvalId, onClose, onSelect, onPrev, onNext, position, hideRail = false }) {
     const [mounted, setMounted] = useState(false);
     const [show, setShow] = useState(false);
     const [openId, setOpenId] = useState(focusEvalId || report.newest._id);
@@ -656,12 +656,11 @@ function ReportDialog({ report, rows, focusEvalId, onClose, onSelect, onPrev, on
             />
 
             <div
-                className={`relative w-full max-w-6xl h-[94dvh] sm:h-[90dvh] flex overflow-hidden rounded-3xl bg-white dark:bg-darklight shadow-2xl border border-gray-200 dark:border-dark_border transition-all duration-500 ${
-                    show ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-8 scale-95"
-                }`}
+                className={`relative w-full max-w-6xl h-[94dvh] sm:h-[90dvh] flex overflow-hidden rounded-3xl bg-white dark:bg-darklight shadow-2xl border border-gray-200 dark:border-dark_border transition-all duration-500 ${show ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-8 scale-95"
+                    }`}
             >
                 {/* ── Rail: قائمة الطلبة ── */}
-                <aside className="hidden lg:flex w-72 shrink-0 flex-col border-l border-gray-200 dark:border-dark_border bg-gray-50 dark:bg-darkmode">
+                <aside className={`${hideRail ? "hidden" : "hidden lg:flex"} w-72 shrink-0 flex-col border-l border-gray-200 dark:border-dark_border bg-gray-50 dark:bg-darkmode`}>
                     <div className="px-4 py-4 border-b border-gray-200 dark:border-dark_border flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <Users className="w-4 h-4 text-primary" />
@@ -679,11 +678,10 @@ function ReportDialog({ report, rows, focusEvalId, onClose, onSelect, onPrev, on
                                         id={`rail-${s.id}`}
                                         onClick={() => onSelect(s.id)}
                                         aria-current={on}
-                                        className={`w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-right transition-colors border-r-[3px] ${focusRing} ${
-                                            on
+                                        className={`w-full flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-right transition-colors border-r-[3px] ${focusRing} ${on
                                                 ? "bg-white dark:bg-darklight shadow-sm border-primary"
                                                 : "border-transparent hover:bg-white/70 dark:hover:bg-darkhover"
-                                        }`}
+                                            }`}
                                     >
                                         <Avatar name={s.name} color={t.hex} size="sm" />
                                         <div className="min-w-0 flex-1">
@@ -862,6 +860,36 @@ function ReportDialog({ report, rows, focusEvalId, onClose, onSelect, onPrev, on
     );
 }
 
+/** بيبني تقرير طالب من قائمة تقييماته (مستخدمة في الصفحة وفي مودال تفاصيل الجروب) */
+export function buildStudentReport(rawList) {
+    const list = [...(rawList || [])].sort((a, b) => new Date(evalDate(a)) - new Date(evalDate(b)));
+    if (list.length === 0) return null;
+
+    const criteriaAvg = {};
+    CRITERIA.forEach((c) => (criteriaAvg[c.key] = avg(list.map((e) => e.criteria?.[c.key] || 0))));
+
+    const count = (field, labels) => {
+        const m = {};
+        list.forEach((e) => (e[field] || []).forEach((k) => (m[k] = (m[k] || 0) + 1)));
+        return Object.entries(m)
+            .sort((a, b) => b[1] - a[1])
+            .map(([k, n]) => ({ key: k, label: labels[k] || k, n }));
+    };
+
+    const newest = list[list.length - 1];
+    return {
+        head: list[0],
+        newest,
+        list,
+        overall: avg(list.map(overallOf)),
+        criteriaAvg,
+        passRate: Math.round((list.filter((e) => e.finalDecision === "pass").length / list.length) * 100),
+        trend: list.length > 1 ? overallOf(newest) - overallOf(list[0]) : 0,
+        strengths: count("strengths", STRENGTH_LABEL),
+        weak: count("weakPoints", WEAK_LABEL),
+    };
+}
+
 /* ═════════════ Page ═════════════ */
 
 export default function StudentEvaluationsPage() {
@@ -1035,37 +1063,9 @@ export default function StudentEvaluationsPage() {
         </li>
     );
 
-    /* تقرير الطالب المختار (من كل التقييمات مش المفلترة) */
-    const report = useMemo(() => {
+        const report = useMemo(() => {
         if (!selectedStudent) return null;
-        const list = evaluations
-            .filter((e) => e.studentId?._id === selectedStudent.id)
-            .sort((a, b) => new Date(evalDate(a)) - new Date(evalDate(b)));
-        if (list.length === 0) return null;
-
-        const criteriaAvg = {};
-        CRITERIA.forEach((c) => (criteriaAvg[c.key] = avg(list.map((e) => e.criteria?.[c.key] || 0))));
-
-        const count = (field, labels) => {
-            const m = {};
-            list.forEach((e) => (e[field] || []).forEach((k) => (m[k] = (m[k] || 0) + 1)));
-            return Object.entries(m)
-                .sort((a, b) => b[1] - a[1])
-                .map(([k, n]) => ({ key: k, label: labels[k] || k, n }));
-        };
-
-        const newest = list[list.length - 1];
-        return {
-            head: list[0],
-            newest,
-            list,
-            overall: avg(list.map(overallOf)),
-            criteriaAvg,
-            passRate: Math.round((list.filter((e) => e.finalDecision === "pass").length / list.length) * 100),
-            trend: list.length > 1 ? overallOf(newest) - overallOf(list[0]) : 0,
-            strengths: count("strengths", STRENGTH_LABEL),
-            weak: count("weakPoints", WEAK_LABEL),
-        };
+        return buildStudentReport(evaluations.filter((e) => e.studentId?._id === selectedStudent.id));
     }, [selectedStudent, evaluations]);
 
     /* التنقل بين الطلبة داخل التقرير */
@@ -1163,11 +1163,10 @@ export default function StudentEvaluationsPage() {
                                 role="tab"
                                 aria-selected={view === tab.id}
                                 onClick={() => setView(tab.id)}
-                                className={`px-3.5 py-1.5 text-sm font-medium rounded-lg transition-colors inline-flex items-center gap-1.5 ${focusRing} ${
-                                    view === tab.id
+                                className={`px-3.5 py-1.5 text-sm font-medium rounded-lg transition-colors inline-flex items-center gap-1.5 ${focusRing} ${view === tab.id
                                         ? "bg-white dark:bg-darklight text-primary shadow-sm"
                                         : "text-gray-500 dark:text-darkmuted hover:text-gray-800 dark:hover:text-white"
-                                }`}
+                                    }`}
                             >
                                 <tab.icon className="w-4 h-4" />
                                 {tab.label}
@@ -1184,11 +1183,10 @@ export default function StudentEvaluationsPage() {
                                 key={d.id}
                                 onClick={() => setDecision(d.id)}
                                 aria-pressed={on}
-                                className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-full border transition-all ${focusRing} ${
-                                    on
+                                className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-full border transition-all ${focusRing} ${on
                                         ? "text-white border-transparent shadow-sm"
                                         : "border-gray-200 dark:border-dark_border text-gray-600 dark:text-darkmuted hover:bg-gray-50 dark:hover:bg-darkhover"
-                                }`}
+                                    }`}
                                 style={on ? { backgroundColor: d.hex } : undefined}
                             >
                                 {!on && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: d.hex }} />}

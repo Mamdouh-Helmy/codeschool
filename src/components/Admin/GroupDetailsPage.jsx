@@ -6,13 +6,15 @@ import {
   Users, BookOpen, Clock, GraduationCap, TrendingUp, AlertCircle,
   CheckCircle, Mail, Phone, Trash2, UserMinus, BarChart3, XCircle,
   ChevronDown, ChevronUp, Calendar, X, Link as LinkIcon, FileText, Video,
-  UserPlus, Package, Wallet, Timer, Settings2, Gift, Plus, Search, Loader2,
+  UserPlus, Package, Wallet, Timer, Settings2, Gift, Plus, Search, Loader2, MessageSquare, ClipboardCheck,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
 import AddStudentsToGroup from "./AddStudentsToGroup";
 import StudentPackageModal from "./StudentPackageModal";
 import InstructorNotificationModal from "./InstructorNotificationModal";
+import MemberMessagesModal from "./MemberMessagesModal";
+import StudentEvaluationModal from "./StudentEvaluationModal";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const DAY_AR = {
@@ -179,11 +181,10 @@ function SessionsList({ sessions, t, language, tx }) {
             <button
               key={k}
               onClick={() => setFilter(k)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${
-                filter === k
-                  ? "bg-secondary text-white shadow-md shadow-secondary/25"
-                  : "text-gray-500 dark:text-darkmuted hover:bg-white dark:hover:bg-dark_input"
-              }`}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${filter === k
+                ? "bg-secondary text-white shadow-md shadow-secondary/25"
+                : "text-gray-500 dark:text-darkmuted hover:bg-white dark:hover:bg-dark_input"
+                }`}
             >
               {label} <span className="opacity-70 tabular-nums">{counts[k]}</span>
             </button>
@@ -210,13 +211,11 @@ function SessionsList({ sessions, t, language, tx }) {
                 <div
                   key={sess.id || i}
                   ref={isNext ? nextRef : null}
-                  className={`relative overflow-hidden rounded-xl border transition-all duration-200 ${
-                    dim ? "opacity-60" : "hover:-translate-y-0.5 hover:shadow-md"
-                  } ${
-                    isNext
+                  className={`relative overflow-hidden rounded-xl border transition-all duration-200 ${dim ? "opacity-60" : "hover:-translate-y-0.5 hover:shadow-md"
+                    } ${isNext
                       ? "border-primary/50 bg-gradient-to-r from-primary/[0.06] to-transparent dark:from-primary/[0.09] shadow-[0_0_0_1px_rgba(255,103,0,.15)]"
                       : "border-gray-100 dark:border-dark_border bg-white dark:bg-darklight"
-                  }`}
+                    }`}
                 >
                   {isNext && <div className="absolute inset-y-0 start-0 w-1 bg-primary" />}
                   <div className="flex items-center gap-3 px-4 py-3.5">
@@ -379,6 +378,8 @@ export default function GroupDetailsPage({ groupId, onClose }) {
   const [expanded, setExpanded] = useState({});
   const [addOpen, setAddOpen] = useState(false);
   const [pkgStudentId, setPkgStudentId] = useState(null);
+  const [msgTarget, setMsgTarget] = useState(null); // { kind: "student" | "instructor", id, name }
+  const [evalTarget, setEvalTarget] = useState(null); // { id, name }
 
   // ── حذف طالب (مودال التأكيد) ──
   const [removeDialog, setRemoveDialog] = useState({
@@ -770,10 +771,24 @@ export default function GroupDetailsPage({ groupId, onClose }) {
                                 <span className="text-sm font-black min-w-[44px] text-gray-700 dark:text-gray-200 tabular-nums">{att.attendancePct}%</span>
                               </div>
                             </div>
-                            <button onClick={() => removeStudent(st.id, st.name)} title={t("students.remove")}
-                              className="flex-shrink-0 p-2.5 rounded-xl bg-red-50 dark:bg-red-900/15 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
-                              <UserMinus size={16} />
-                            </button>
+                            <div className="flex flex-shrink-0 items-center gap-2">
+                              <button
+                                onClick={() => setMsgTarget({ kind: "student", id: st.id, name: st.name })}
+                                title={tx("الرسائل", "Messages")}
+                                className="p-2.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/15 transition-colors">
+                                <MessageSquare size={16} />
+                              </button>
+                              <button onClick={() => removeStudent(st.id, st.name)} title={t("students.remove")}
+                                className="p-2.5 rounded-xl bg-red-50 dark:bg-red-900/15 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
+                                <UserMinus size={16} />
+                              </button>
+                              <button
+                                onClick={() => setEvalTarget({ id: st.id, name: st.name })}
+                                title={tx("التقييمات", "Evaluations")}
+                                className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/15 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">
+                                <ClipboardCheck size={16} />
+                              </button>
+                            </div>
                           </div>
 
                           {/* ✅ package */}
@@ -790,11 +805,10 @@ export default function GroupDetailsPage({ groupId, onClose }) {
 
                           {st.log.length > 0 && (
                             <button onClick={() => toggle(st.id)}
-                              className={`flex items-center gap-2 mt-4 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
-                                isOpen
-                                  ? "bg-primary/5 border-primary/30 text-primary"
-                                  : "bg-gray-50 dark:bg-darkmode border-gray-200 dark:border-dark_border text-darktext hover:text-primary hover:border-primary/30"
-                              }`}>
+                              className={`flex items-center gap-2 mt-4 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${isOpen
+                                ? "bg-primary/5 border-primary/30 text-primary"
+                                : "bg-gray-50 dark:bg-darkmode border-gray-200 dark:border-dark_border text-darktext hover:text-primary hover:border-primary/30"
+                                }`}>
                               {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                               {isOpen ? t("attendance.hideLog") : t("attendance.showLog", { count: st.log.length })}
                             </button>
@@ -873,10 +887,18 @@ export default function GroupDetailsPage({ groupId, onClose }) {
                                 </div>
                               )}
                             </div>
-                            <button onClick={() => removeInstructor(inst.id, inst.name)}
-                              className="flex-shrink-0 p-2 rounded-lg bg-red-50 dark:bg-red-900/15 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
-                              <Trash2 size={14} />
-                            </button>
+                            <div className="flex flex-shrink-0 items-center gap-1.5">
+                              <button
+                                onClick={() => setMsgTarget({ kind: "instructor", id: inst.id, name: inst.name })}
+                                title={tx("الرسائل", "Messages")}
+                                className="p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/15 transition-colors">
+                                <MessageSquare size={14} />
+                              </button>
+                              <button onClick={() => removeInstructor(inst.id, inst.name)}
+                                className="p-2 rounded-lg bg-red-50 dark:bg-red-900/15 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
 
                           {/* ✅ hours + money */}
@@ -1130,16 +1152,14 @@ export default function GroupDetailsPage({ groupId, onClose }) {
                         type="button"
                         disabled={removeDialog.busy}
                         onClick={() => setRemoveDialog((d) => ({ ...d, removePackage: opt.value }))}
-                        className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-start transition ${
-                          selected
-                            ? opt.on
-                            : "border-gray-200 dark:border-dark_border hover:bg-gray-50 dark:hover:bg-dark_input"
-                        }`}
+                        className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-start transition ${selected
+                          ? opt.on
+                          : "border-gray-200 dark:border-dark_border hover:bg-gray-50 dark:hover:bg-dark_input"
+                          }`}
                       >
                         <span
-                          className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                            selected ? `${opt.dot} border-transparent` : "border-gray-300 dark:border-gray-600"
-                          }`}
+                          className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selected ? `${opt.dot} border-transparent` : "border-gray-300 dark:border-gray-600"
+                            }`}
                         >
                           {selected && <span className="w-2 h-2 rounded-full bg-white" />}
                         </span>
@@ -1197,6 +1217,27 @@ export default function GroupDetailsPage({ groupId, onClose }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ══ Member messages (طالب + ولي أمر / مدرس) ══ */}
+      {msgTarget && (
+        <MemberMessagesModal
+          groupId={groupId}
+          kind={msgTarget.kind}
+          memberId={msgTarget.id}
+          memberName={msgTarget.name}
+          onClose={() => setMsgTarget(null)}
+        />
+      )}
+
+      {/* ══ Student evaluations ══ */}
+      {evalTarget && (
+        <StudentEvaluationModal
+          groupId={groupId}
+          studentId={evalTarget.id}
+          studentName={evalTarget.name}
+          onClose={() => setEvalTarget(null)}
+        />
       )}
 
       {/* ══ Package management ══ */}
