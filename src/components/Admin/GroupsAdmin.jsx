@@ -874,14 +874,14 @@ export default function GroupsAdmin() {
     // ── Render ─────────────────────────────────────────────────────────────────
     return (
         <div
-            className={`relative rounded-3xl p-3 md:p-5 bg-[#efeae2] dark:bg-[#0b141a]/60 ${isRTL ? "rtl" : "ltr"}`}
+            className={`relative rounded-3xl p-3 md:p-5  ${isRTL ? "rtl" : "ltr"}`}
             dir={isRTL ? "rtl" : "ltr"}
             style={{
                 backgroundImage: "radial-gradient(rgba(0,96,109,0.07) 1.2px, transparent 1.2px)",
                 backgroundSize: "20px 20px",
             }}
         >
-            <div className="max-w-6xl mx-auto space-y-4 md:space-y-5">
+            <div className="max-w-7xl mx-auto space-y-4 md:space-y-5">
 
                 {/* ── Stories row ── */}
                 <div className="-mx-1 px-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
