@@ -6,7 +6,7 @@ import {
   Users, BookOpen, Clock, GraduationCap, TrendingUp, AlertCircle,
   CheckCircle, Mail, Phone, Trash2, UserMinus, BarChart3, XCircle,
   ChevronDown, ChevronUp, Calendar, X, Link as LinkIcon, FileText, Video,
-  UserPlus, Package, Wallet, Timer, Settings2, Gift, Plus, Search, Loader2, MessageSquare, ClipboardCheck,
+  UserPlus, Package, Wallet, Timer, Settings2, Gift, Plus, Search, Loader2, MessageSquare, ClipboardCheck, PauseCircle, PlayCircle, Archive,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -15,6 +15,7 @@ import StudentPackageModal from "./StudentPackageModal";
 import InstructorNotificationModal from "./InstructorNotificationModal";
 import MemberMessagesModal from "./MemberMessagesModal";
 import StudentEvaluationModal from "./StudentEvaluationModal";
+import { useConfirm } from "./ConfirmDialog";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const DAY_AR = {
@@ -372,10 +373,21 @@ export default function GroupDetailsPage({ groupId, onClose }) {
   const isRTL = language === "ar";
   const tx = (ar, en) => (isRTL ? ar : en);
 
+  // ✨ Custom confirm dialog (بديل window.confirm)
+  const [confirm, confirmDialog] = useConfirm(isRTL);
+
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState({});
+  // ── إيقاف طالب داخل الجروب ──
+  const [pauseDialog, setPauseDialog] = useState({
+    open: false,
+    studentId: null,
+    name: "",
+    reason: "",
+    busy: false,
+  });
   const [addOpen, setAddOpen] = useState(false);
   const [pkgStudentId, setPkgStudentId] = useState(null);
   const [msgTarget, setMsgTarget] = useState(null); // { kind: "student" | "instructor", id, name }
@@ -548,8 +560,76 @@ export default function GroupDetailsPage({ groupId, onClose }) {
     }
   }
 
+  // ── Pause / resume student (داخل الجروب ده بس) ───────────────────────────
+  function openPauseDialog(st) {
+    setPauseDialog({ open: true, studentId: st.id, name: st.name, reason: "", busy: false });
+  }
+
+  async function confirmPauseStudent() {
+    const { studentId, reason } = pauseDialog;
+    setPauseDialog((d) => ({ ...d, busy: true }));
+    const tid = toast.loading(tx("جاري الإيقاف...", "Pausing..."));
+    try {
+      const r = await fetch(`/api/groups/${groupId}/students/${studentId}/hold`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      const j = await r.json();
+      if (r.ok && j.success) {
+        toast.success(j.message || tx("تم إيقاف الطالب", "Student paused"), { id: tid });
+        setPauseDialog((d) => ({ ...d, open: false, busy: false }));
+        load();
+      } else {
+        toast.error(j.error || t("common.error"), { id: tid });
+        setPauseDialog((d) => ({ ...d, busy: false }));
+      }
+    } catch {
+      toast.error(t("common.error"), { id: tid });
+      setPauseDialog((d) => ({ ...d, busy: false }));
+    }
+  }
+
+  async function resumeStudent(st) {
+    const ok = await confirm({
+      variant: "success",
+      title: tx("تشغيل الطالب", "Resume student"),
+      itemName: st.name,
+      message: tx(
+        "هترجعله الرسائل والحضور والتقييم في الجروب ده.",
+        "Messages, attendance and evaluation will be restored in this group.",
+      ),
+      confirmText: tx("تشغيل", "Resume"),
+      cancelText: tx("إلغاء", "Cancel"),
+    });
+    if (!ok) return;
+
+    const tid = toast.loading(tx("جاري التشغيل...", "Resuming..."));
+    try {
+      const r = await fetch(`/api/groups/${groupId}/students/${st.id}/hold`, { method: "DELETE" });
+      const j = await r.json();
+      if (r.ok && j.success) {
+        toast.success(j.message || tx("تم تشغيل الطالب", "Student resumed"), { id: tid });
+        load();
+      } else {
+        toast.error(j.error || t("common.error"), { id: tid });
+      }
+    } catch {
+      toast.error(t("common.error"), { id: tid });
+    }
+  }
+
   async function removeInstructor(instructorId, name) {
-    if (!confirm(t("group.instructor.removeConfirm", { name }))) return;
+    const ok = await confirm({
+      variant: "danger",
+      title: tx("حذف المدرس من الجروب", "Remove instructor"),
+      itemName: name,
+      message: t("group.instructor.removeConfirm", { name }),
+      confirmText: tx("حذف", "Remove"),
+      cancelText: tx("إلغاء", "Cancel"),
+    });
+    if (!ok) return;
+
     const tid = toast.loading(t("common.removing"));
     try {
       const r = await fetch(`/api/groups/${groupId}/remove-instructor`, {
@@ -560,12 +640,21 @@ export default function GroupDetailsPage({ groupId, onClose }) {
 
       if (j.requiresConfirmation) {
         toast.dismiss(tid);
-        const confirmed = confirm(
-          t("group.instructor.lastInstructorWarning", {
+        const confirmed = await confirm({
+          variant: "danger",
+          title: tx("آخر مدرب في الجروب", "Last instructor"),
+          itemName: name,
+          message: t("group.instructor.lastInstructorWarning", {
             name,
             fallback: `"${name}" هو آخر مدرب في هذه المجموعة النشطة. هل أنت متأكد من الحذف؟`,
           }),
-        );
+          note: tx(
+            "الجروب النشط هيفضل من غير مدرب بعد الحذف.",
+            "The active group will have no instructor after this.",
+          ),
+          confirmText: tx("احذف برضو", "Remove anyway"),
+          cancelText: tx("إلغاء", "Cancel"),
+        });
         if (!confirmed) { toast.error(t("common.cancelled", { fallback: "تم الإلغاء" })); return; }
 
         const r2 = await fetch(`/api/groups/${groupId}/remove-instructor`, {
@@ -661,6 +750,11 @@ export default function GroupDetailsPage({ groupId, onClose }) {
                         {tx("أوفلاين", "Offline")}
                       </span>
                     )}
+                    {group.isArchived && (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold px-3.5 py-1.5 rounded-full bg-white/15 text-white">
+                        <Archive size={12} /> {tx("مؤرشف", "Archived")}
+                      </span>
+                    )}
                   </div>
                   <h1 className="text-white text-3xl md:text-4xl font-black mb-1 leading-tight">{group.name}</h1>
                   <p className="text-white/70 text-sm">{group.course.title}</p>
@@ -731,8 +825,8 @@ export default function GroupDetailsPage({ groupId, onClose }) {
                 right={
                   <button
                     onClick={() => setAddOpen(true)}
-                    disabled={isFull}
-                    title={isFull ? tx("المجموعة مكتملة", "Group is full") : ""}
+                    disabled={isFull || group.isArchived}
+                    title={group.isArchived ? tx("الجروب مؤرشف", "Group is archived") : isFull ? tx("المجموعة مكتملة", "Group is full") : ""}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-brand-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <UserPlus size={15} /> {tx("إضافة طالب", "Add student")}
@@ -752,7 +846,12 @@ export default function GroupDetailsPage({ groupId, onClose }) {
                     const isOpen = !!expanded[st.id];
                     const att = st.attendance;
                     return (
-                      <div key={st.id || idx} className={`${CARD} overflow-hidden transition-all duration-200 ${isOpen ? "border-primary/40 shadow-[0_0_0_3px_rgba(255,103,0,.08)]" : ""}`}>
+                      <div
+                        key={st.id || idx}
+                        className={`${CARD} overflow-hidden transition-all duration-200 ${
+                          isOpen ? "border-primary/40 shadow-[0_0_0_3px_rgba(255,103,0,.08)]" : ""
+                        } ${st.isPaused ? "border-amber-300/60 dark:border-amber-500/30 bg-amber-50/30 dark:bg-amber-900/5" : ""}`}
+                      >
                         <div className="p-5">
                           <div className="flex items-center gap-4">
                             <div className={`w-[52px] h-[52px] rounded-2xl flex-shrink-0 flex items-center justify-center text-xl font-black ${ri.avatarCls}`}>
@@ -764,8 +863,21 @@ export default function GroupDetailsPage({ groupId, onClose }) {
                                 {att.totalDone > 0 && (
                                   <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${ri.badgeCls}`}>{ri.label}</span>
                                 )}
+                                {st.isPaused && (
+                                  <span
+                                    title={st.pausedInfo?.reason || ""}
+                                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                                  >
+                                    <PauseCircle size={11} /> {tx("موقوف", "Paused")}
+                                  </span>
+                                )}
                               </div>
                               <p className="text-xs text-darktext mb-2.5">{st.enrollment}</p>
+                              {st.isPaused && st.pausedInfo?.reason && (
+                                <p className="text-[11px] text-amber-600 dark:text-amber-400 -mt-1.5 mb-2 truncate">
+                                  {st.pausedInfo.reason}
+                                </p>
+                              )}
                               <div className="flex items-center gap-3">
                                 <div className="flex-1"><Bar value={att.attendancePct} barCls={ri.barCls} trackCls={ri.trackCls} /></div>
                                 <span className="text-sm font-black min-w-[44px] text-gray-700 dark:text-gray-200 tabular-nums">{att.attendancePct}%</span>
@@ -788,6 +900,23 @@ export default function GroupDetailsPage({ groupId, onClose }) {
                                 className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/15 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">
                                 <ClipboardCheck size={16} />
                               </button>
+                              {st.isPaused ? (
+                                <button
+                                  onClick={() => resumeStudent(st)}
+                                  title={tx("تشغيل الطالب", "Resume student")}
+                                  className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                                >
+                                  <PlayCircle size={16} />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => openPauseDialog(st)}
+                                  title={tx("إيقاف الطالب في الجروب", "Pause student in group")}
+                                  className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/15 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                                >
+                                  <PauseCircle size={16} />
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -855,7 +984,9 @@ export default function GroupDetailsPage({ groupId, onClose }) {
                 title={`${t("instructors.title")} (${group.instructors.length})`}>
                 <button
                   onClick={openInstructorPicker}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 mb-3.5 rounded-xl border border-dashed border-secondary/30 dark:border-teal-700 text-secondary dark:text-teal-300 text-xs font-bold hover:bg-secondary/5 dark:hover:bg-teal-900/20 transition"
+                  disabled={group.isArchived}
+                  title={group.isArchived ? tx("الجروب مؤرشف", "Group is archived") : ""}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 mb-3.5 rounded-xl border border-dashed border-secondary/30 dark:border-teal-700 text-secondary dark:text-teal-300 text-xs font-bold hover:bg-secondary/5 dark:hover:bg-teal-900/20 transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Plus size={14} /> {tx("إضافة مدرس", "Add instructor")}
                 </button>
@@ -1219,6 +1350,77 @@ export default function GroupDetailsPage({ groupId, onClose }) {
         </div>
       )}
 
+      {/* ══ Pause student dialog ══ */}
+      {pauseDialog.open && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-darkmode/60 backdrop-blur-sm p-3"
+          onClick={(e) =>
+            e.target === e.currentTarget && !pauseDialog.busy &&
+            setPauseDialog((d) => ({ ...d, open: false }))
+          }
+        >
+          <div
+            dir={isRTL ? "rtl" : "ltr"}
+            className="w-full max-w-md rounded-3xl bg-white dark:bg-darklight border border-gray-100 dark:border-dark_border shadow-2xl overflow-hidden"
+          >
+            <div className="flex items-start gap-3 px-5 pt-5">
+              <div className="w-11 h-11 rounded-2xl bg-amber-50 dark:bg-amber-900/20 text-amber-600 flex items-center justify-center flex-shrink-0">
+                <PauseCircle size={20} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-black text-gray-900 dark:text-white text-base">
+                  {tx("إيقاف الطالب في الجروب", "Pause student in group")}
+                </h3>
+                <p className="text-sm text-darktext mt-0.5">
+                  <b className="text-gray-900 dark:text-white">{pauseDialog.name}</b>
+                </p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 px-3.5 py-3 text-xs text-amber-800 dark:text-amber-300 leading-relaxed space-y-1">
+                <p>• {tx("هيتوقف إرسال أي رسائل له ولولي أمره (تذكيرات، غياب، شهادات، رسائل يدوية).", "All messages to the student and guardian stop (reminders, absence, certificates, manual).")}</p>
+                <p>• {tx("هيختفي من قايمة الحضور والتقييم، ومش هيتخصم منه رصيد.", "Hidden from attendance and evaluation; no credit is deducted.")}</p>
+                <p>• {tx("باقي جروباته مش بتتأثر، ومرتب المدرس زي ما هو.", "His other groups are unaffected, instructor pay is unchanged.")}</p>
+                <p>• {tx("فواتير التحصيل مش بتتأثر.", "Billing reminders are not affected.")}</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-darkmuted mb-1.5">
+                  {tx("السبب (اختياري)", "Reason (optional)")}
+                </label>
+                <input
+                  value={pauseDialog.reason}
+                  onChange={(e) => setPauseDialog((d) => ({ ...d, reason: e.target.value }))}
+                  disabled={pauseDialog.busy}
+                  maxLength={200}
+                  placeholder={tx("مثال: سافر / إجازة / ظروف خاصة", "e.g. travelling / on break")}
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-dark_border bg-gray-50 dark:bg-dark_input text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/25"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 px-5 pb-5">
+              <button
+                onClick={() => setPauseDialog((d) => ({ ...d, open: false }))}
+                disabled={pauseDialog.busy}
+                className="px-5 py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-dark_border text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-dark_input disabled:opacity-50 transition"
+              >
+                {tx("إلغاء", "Cancel")}
+              </button>
+              <button
+                onClick={confirmPauseStudent}
+                disabled={pauseDialog.busy}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 transition"
+              >
+                {pauseDialog.busy && <Loader2 size={15} className="animate-spin" />}
+                {tx("إيقاف الطالب", "Pause student")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ══ Member messages (طالب + ولي أمر / مدرس) ══ */}
       {msgTarget && (
         <MemberMessagesModal
@@ -1249,6 +1451,9 @@ export default function GroupDetailsPage({ groupId, onClose }) {
           onChanged={() => load()}
         />
       )}
+
+      {/* ✨ Custom Confirm Dialog */}
+      {confirmDialog}
     </div>
   );
 }

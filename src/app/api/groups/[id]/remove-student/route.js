@@ -54,6 +54,8 @@ export async function POST(req, { params }) {
     );
     const currentPackage = student?.creditSystem?.currentPackage || null;
 
+    const groupObjectId = new mongoose.Types.ObjectId(id);
+
     await Group.findByIdAndUpdate(id, {
       $pull: { students: studentId },
       $inc: { currentStudentsCount: -1 },
@@ -61,7 +63,11 @@ export async function POST(req, { params }) {
     });
 
     await Student.findByIdAndUpdate(studentId, {
-      $pull: { "academicInfo.groupIds": id },
+      $pull: {
+        "academicInfo.groupIds": groupObjectId,
+        // ✅ NEW: لو كان موقوف في الجروب ده، الإيقاف يتشال معاه
+        "academicInfo.pausedGroups": { groupId: groupObjectId },
+      },
       $set: { "metadata.updatedAt": new Date() },
     });
 

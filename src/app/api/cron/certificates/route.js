@@ -12,6 +12,7 @@ import path from "path";
 import { buildCertificateHtml } from "../../../../utils/certificateHtml";
 import { getBrowser } from "../../../../utils/browserPool";
 import { GENERATED_DIR } from "../../../../utils/generatedFilesPaths";
+import { isStudentPausedInGroup } from "../../../services/holdGuard";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 
 // ✅ فك أي generation claim قديم اتعلق أكتر من ساعتين
@@ -369,6 +370,7 @@ export async function GET(request) {
       guardianSent: 0,
       adultGuardianSkipped: 0,
       makeupGroupsSkipped: 0,
+      pausedSkipped: 0, // ✅ NEW: الطالب موقوف في الجروب
       pendingNoRecipient: 0,
       cloudinaryUploads: 0,
       portfolioSynced: 0,
@@ -376,7 +378,7 @@ export async function GET(request) {
       noAttendanceYet: 0,
       alreadyClaimed: 0,
       alreadyDeliveredDedup: 0, // ✅ اتمنع تكرارها بالـ dedup
-      uncertainSends: 0, // ✅ NEW: إرسال غير مؤكد (الحجز اتساب)
+      uncertainSends: 0, // ✅ إرسال غير مؤكد (الحجز اتساب)
       errors: 0,
     };
 
@@ -386,6 +388,7 @@ export async function GET(request) {
       const groups = await Group.find({
         students: student._id,
         isDeleted: false,
+        isArchived: { $ne: true }, // ✅ NEW: الجروب المؤرشف مفيهوش شهادات
         isMakeupGroup: { $ne: true },
       })
         .populate("courseId")
@@ -397,6 +400,12 @@ export async function GET(request) {
             `⏭️ [MAKEUP GUARD] Skipping makeup group ${group._id} for ${student.personalInfo?.fullName}`,
           );
           summary.makeupGroupsSkipped++;
+          continue;
+        }
+
+        // ✅ NEW: الطالب موقوف في الجروب ده → مفيش شهادات
+        if (isStudentPausedInGroup(student, group._id)) {
+          summary.pausedSkipped++;
           continue;
         }
 

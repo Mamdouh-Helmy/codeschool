@@ -11,7 +11,11 @@ import {
 import Session from "../../../../../models/Session";
 import Student from "../../../../../models/Student";
 import Group from "../../../../../models/Group";
-import { resolveSessionLock } from "../../../../../services/holdGuard";
+import {
+  resolveSessionLock,
+  getPausedStudentIds,
+  notPausedInGroup,
+} from "../../../../../services/holdGuard";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ AUTH / OWNERSHIP HELPERS
@@ -59,7 +63,7 @@ const CREDIT_DEDUCTION = 2;
 
 const SESSION_POPULATE = {
   path: "groupId",
-  select: "name code students instructors hold status",
+  select: "name code students instructors hold status isArchived",
 };
 
 /**
@@ -85,10 +89,18 @@ async function loadAuthorizedSession(req, id, { lean = false } = {}) {
   return { user, session };
 }
 
-// ─── Helper: صلاحية الجروب / السيشن لتسجيل الحضور ────────
 async function checkGroupAvailability(session) {
   const group = session?.groupId;
   if (!group?._id) return { ok: false, error: "Session has no group" };
+
+  // ✅ NEW: الجروب المؤرشف
+  if (group.isArchived) {
+    return {
+      ok: false,
+      code: "GROUP_ARCHIVED",
+      error: "الجروب مؤرشف — مينفعش تسجل حضور",
+    };
+  }
 
   if (!group.hold?.isHeld) {
     if (group.status !== "active" && group.status !== "completed") {
@@ -127,11 +139,17 @@ export async function GET(req, { params }) {
 
     const group = session.groupId;
     const isOnHold = !!group?.hold?.isHeld;
-    const sessionLocked = isOnHold ? await resolveSessionLock(session, group) : false;
+    let sessionLocked = isOnHold ? await resolveSessionLock(session, group) : false;
+    // ✅ الجروب المؤرشف مقفول للتسجيل
+    if (group?.isArchived) sessionLocked = true;
 
     const studentIds = (group?.students || []).map((s) => s.studentId || s);
 
-    const students = await Student.find({ _id: { $in: studentIds } })
+    // ✅ NEW: من غير الطلبة الموقوفين في الجروب
+    const students = await Student.find({
+      _id: { $in: studentIds },
+      ...notPausedInGroup(group._id),
+    })
       .select(
         "_id enrollmentNumber personalInfo.fullName personalInfo.gender personalInfo.nickname " +
           "guardianInfo.name guardianInfo.phone guardianInfo.whatsappNumber guardianInfo.relationship guardianInfo.nickname " +
@@ -175,6 +193,7 @@ export async function GET(req, { params }) {
         session,
         students: studentsWithAttendance,
         groupIsOnHold: isOnHold,
+        groupIsArchived: !!group?.isArchived,
         sessionLocked,
         groupHold: group?.hold || null,
         isComplimentary: session.isComplimentary === true,
@@ -279,7 +298,6 @@ export async function POST(req, { params }) {
   }
 }
 
-// ─── PATCH (save attendance + credits) ───────────────────
 export async function PATCH(req, { params }) {
   try {
     const { id } = await params;
@@ -293,7 +311,7 @@ export async function PATCH(req, { params }) {
       return json({ success: false, error: "Invalid JSON" }, 400);
     }
 
-    const { attendanceRecords } = body;
+    let attendanceRecords = body.attendanceRecords;
     if (!Array.isArray(attendanceRecords) || attendanceRecords.length === 0) {
       return json({ success: false, error: "attendanceRecords array is required" }, 400);
     }
@@ -306,6 +324,24 @@ export async function PATCH(req, { params }) {
     if (invalidRecord) {
       return json(
         { success: false, error: "سجل حضور غير صالح أو طالب مش في جروب السيشن", code: "INVALID_RECORD" },
+        400,
+      );
+    }
+
+    // ✅ NEW: الموقوفين يتشالوا من الطلب بدل ما نرفضه كله
+    const pausedIds = await getPausedStudentIds(
+      session.groupId._id,
+      attendanceRecords.map((r) => r.studentId),
+    );
+    const skippedPaused = attendanceRecords
+      .filter((r) => pausedIds.has(String(r.studentId)))
+      .map((r) => String(r.studentId));
+    attendanceRecords = attendanceRecords.filter(
+      (r) => !pausedIds.has(String(r.studentId)),
+    );
+    if (attendanceRecords.length === 0) {
+      return json(
+        { success: false, error: "كل الطلبة المحددين موقوفين في الجروب", code: "STUDENT_PAUSED" },
         400,
       );
     }
@@ -469,6 +505,7 @@ export async function PATCH(req, { params }) {
       success: true,
       data: {
         results,
+        skippedPaused,
         creditUpdates: {
           lowBalanceAlerts: lowBalanceStudents.length,
           zeroBalanceAlerts: zeroBalanceStudents.length,

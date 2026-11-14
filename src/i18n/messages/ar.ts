@@ -4982,6 +4982,11 @@ const ar = {
   "groups.groupType.mixed": "مختلطة",
   "dashboard.interviews": "المقابلات الشخصية",
   "dashboard.studentEvaluations": "تقييمات الطلبة",
+  "groups.filters.archivedGroups": "المجموعات المؤرشفة",
+  "groups.actions.archive": "أرشفة المجموعة",
+  "groups.archived": "مؤرشفة",
+  "groups.actions.more": "المزيد",
+  "groups.actions.restore": "استعادة المجموعة",
 };
 
 export default ar;

@@ -49,6 +49,8 @@ export async function GET(req) {
     const tagsParam = searchParams.get("tags");
     const makeupFilter = searchParams.get("isMakeupGroup");
     const groupTypeFilter = searchParams.get("groupType");
+    // ✅ NEW: "only" = المؤرشفة بس | "all" = الكل | (فاضي) = الشغالة بس
+    const archivedParam = searchParams.get("archived");
 
     const query = { isDeleted: false };
 
@@ -111,6 +113,13 @@ export async function GET(req) {
       query.groupType = groupTypeFilter;
     }
 
+    // ✅ NEW: الأرشفة — الافتراضي إن المؤرشف مايظهرش
+    if (archivedParam === "only") {
+      query.isArchived = true;
+    } else if (archivedParam !== "all") {
+      query.isArchived = { $ne: true };
+    }
+
     console.log("🔍 Query:", JSON.stringify(query, null, 2));
 
     const total = await Group.countDocuments(query);
@@ -145,6 +154,16 @@ export async function GET(req) {
         name: group.name,
         code: group.code,
         status: group.status,
+
+        // ✅ NEW
+        isArchived: !!group.isArchived,
+        archive: group.archive
+          ? {
+              archivedAt: group.archive.archivedAt || null,
+              reason: group.archive.reason || "",
+              restoredAt: group.archive.restoredAt || null,
+            }
+          : null,
 
         isMakeupGroup: !!group.isMakeupGroup,
         makeupInfo: group.makeupInfo
@@ -228,6 +247,11 @@ export async function GET(req) {
       }),
       kids: await Group.countDocuments({ ...query, groupType: "kids" }),
       adults: await Group.countDocuments({ ...query, groupType: "adults" }),
+      // ✅ NEW: عدد المؤرشف الكلي (مستقل عن الفلاتر)
+      archived: await Group.countDocuments({
+        isDeleted: false,
+        isArchived: true,
+      }),
     };
 
     return NextResponse.json({

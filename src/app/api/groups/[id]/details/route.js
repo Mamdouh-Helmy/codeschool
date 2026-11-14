@@ -3,11 +3,11 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Group from "../../../../models/Group";
 import Session from "../../../../models/Session";
-import InstructorRate from "../../../../models/InstructorRate"; // ✅ NEW
+import InstructorRate from "../../../../models/InstructorRate";
 import { requireAdmin } from "@/utils/authMiddleware";
 import mongoose from "mongoose";
 
-// ─── Helpers (NEW) ───────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 const toMin = (t) => {
   if (!t || typeof t !== "string" || !t.includes(":")) return null;
   const [h, m] = t.split(":").map(Number);
@@ -67,14 +67,16 @@ export async function GET(req, { params }) {
 
     // ══════════════════════════════════════════════
     // 1. جلب بيانات المجموعة
-    // ✅ NEW: بنجيب creditSystem للطلاب (الباقة الحالية بس)
+    // ✅ بنجيب creditSystem للطلاب (الباقة الحالية بس)
+    // ✅ NEW: academicInfo.pausedGroups — عشان نعرف مين موقوف في الجروب ده
+    //    (الموقوف لازم يفضل ظاهر هنا عشان الأدمن يقدر يشغّله)
     // ══════════════════════════════════════════════
     const group = await Group.findOne({ _id: groupId, isDeleted: false })
       .populate({ path: "instructors.userId", select: "name email gender profile" })
       .populate({
         path: "students",
         select:
-          "personalInfo.fullName personalInfo.whatsappNumber enrollmentNumber creditSystem.currentPackage creditSystem.status",
+          "personalInfo.fullName personalInfo.whatsappNumber enrollmentNumber creditSystem.currentPackage creditSystem.status academicInfo.pausedGroups",
       })
       .populate({ path: "courseId", select: "title level" })
       .lean();
@@ -143,9 +145,9 @@ export async function GET(req, { params }) {
         attendanceTaken: !!s.attendanceTaken,
         isComplimentary: !!s.isComplimentary,
         meetingLink: s.meetingLink || null,
-        meetingPlatform: s.meetingPlatform || null, // ✅ كانت ناقصة والـ UI بيستخدمها
+        meetingPlatform: s.meetingPlatform || null,
         recordingLink: s.recordingLink || null,
-        instructorNotes: s.instructorNotes || "", // ✅ كانت ناقصة والـ UI بيستخدمها
+        instructorNotes: s.instructorNotes || "",
         summary: {
           total: att.length,
           present: att.filter((a) => a.status === "present").length,
@@ -162,7 +164,7 @@ export async function GET(req, { params }) {
     });
 
     // ══════════════════════════════════════════════
-    // 5. إحصائيات كل طالب + الباقة (NEW)
+    // 5. إحصائيات كل طالب + الباقة + حالة الإيقاف
     // ══════════════════════════════════════════════
     const doneSessions = sessionsList.filter(
       (s) => s.status === "completed" && s.attendanceTaken,
@@ -171,6 +173,17 @@ export async function GET(req, { params }) {
 
     const studentsData = (group.students || []).map((student) => {
       const sid = student._id.toString();
+
+      // ✅ NEW: هل الطالب موقوف في الجروب ده؟
+      const pausedEntry =
+        (student.academicInfo?.pausedGroups || []).find(
+          (p) => String(p.groupId) === String(group._id),
+        ) || null;
+      const isPaused = !!pausedEntry;
+      const pausedDateStr = pausedEntry?.pausedAt
+        ? new Date(pausedEntry.pausedAt).toISOString().split("T")[0]
+        : null;
+
       let present = 0;
       let absent = 0;
       let late = 0;
@@ -179,6 +192,11 @@ export async function GET(req, { params }) {
 
       doneSessions.forEach((sess) => {
         const record = sess.attendanceRecords.find((r) => r.studentId === sid);
+
+        // ✅ NEW: الطالب الموقوف مش بيتحسب "غايب" عن حصص حصلت بعد الإيقاف
+        // (مفيش له سجل حضور فيها لأنه كان مخفي من قايمة الحضور)
+        if (!record && isPaused && pausedDateStr && sess.date >= pausedDateStr) return;
+
         const status = record ? record.status : "absent";
         if (status === "present") present++;
         else if (status === "absent") absent++;
@@ -235,7 +253,7 @@ export async function GET(req, { params }) {
       const attended = present + late;
       const attendancePct = totalDone > 0 ? Math.round((attended / totalDone) * 100) : 0;
 
-      // ✅ NEW: ملخص الباقة الحالية
+      // ملخص الباقة الحالية
       const pkg = student.creditSystem?.currentPackage || null;
       const totalHours = pkg?.totalHours || 0;
       const remainingHours = pkg?.remainingHours || 0;
@@ -262,14 +280,20 @@ export async function GET(req, { params }) {
         whatsapp: student.personalInfo?.whatsappNumber || null,
         attendance: { present, absent, late, excused, totalDone, attended, attendancePct },
         credit,
+        // ✅ NEW
+        isPaused,
+        pausedInfo: pausedEntry
+          ? {
+              reason: pausedEntry.reason || "",
+              pausedAt: pausedEntry.pausedAt || null,
+            }
+          : null,
         log,
       };
     });
 
     // ══════════════════════════════════════════════
-    // 6. المدرسين + ساعاتهم وحسابهم لحد دلوقتي (NEW)
-    //   - الدقايق = مجموع مدة السيشنات المكتملة في الجروب ده
-    //   - الحساب = دقايق/60 × السعر السارِي وقت كل سيشن
+    // 6. المدرسين + ساعاتهم وحسابهم لحد دلوقتي
     //   - بدل الانتقال: بيتحسب لكل سيشن أوفلاين (اضبطه لو منطق الـ payroll عندك مختلف)
     // ══════════════════════════════════════════════
     const instructorIds = (group.instructors || [])
@@ -307,9 +331,8 @@ export async function GET(req, { params }) {
         if (isOffline) transportation += r.transportationAllowance;
       });
 
-      // ✅ FIX: الوقت المنسوب للمدرس = countTime بتاعه (بيتراكم وقت حساب كل سيشن)
+      // ✅ الوقت المنسوب للمدرس = countTime بتاعه (بيتراكم وقت حساب كل سيشن)
       // عشان مدرس اتضاف متأخر ما يتحسبلوش سيشنات قبل انضمامه.
-      // الحساب = الساعات الفعلية × متوسط سعر الساعة الفعلي على سيشنات الجروب.
       const workedMinutes = Math.round((entry.countTime || 0) * 60);
       const sessionsHours = minutes / 60;
       const avgRate =
@@ -346,6 +369,14 @@ export async function GET(req, { params }) {
           name: group.name,
           code: group.code,
           status: group.status,
+          // ✅ NEW
+          isArchived: !!group.isArchived,
+          archive: group.archive
+            ? {
+                archivedAt: group.archive.archivedAt || null,
+                reason: group.archive.reason || "",
+              }
+            : null,
           maxStudents: group.maxStudents,
           currentStudentsCount: group.currentStudentsCount || 0,
           deliveryMode: group.deliveryMode || "online",
@@ -368,7 +399,11 @@ export async function GET(req, { params }) {
         stats: {
           sessions: { total, completed, scheduled, cancelled, postponed, progressPct },
           attendance: { avgPct: avgAttPct, sessionsWithAttendance: sessionsWithAtt.length },
-          students: { total: group.students?.length || 0, maxSlots: group.maxStudents },
+          students: {
+            total: group.students?.length || 0,
+            maxSlots: group.maxStudents,
+            paused: studentsData.filter((s) => s.isPaused).length, // ✅ NEW
+          },
         },
 
         sessions: sessionsList,

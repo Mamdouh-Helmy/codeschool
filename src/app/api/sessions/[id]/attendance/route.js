@@ -26,6 +26,7 @@ import {
   sendLowBalanceAlerts,
   disableZeroBalanceNotifications,
 } from "../../../../services/groupAutomation";
+import { getPausedStudentIds, notPausedInGroup } from "../../../../services/holdGuard";
 import mongoose from "mongoose";
 
 export const dynamic = "force-dynamic";
@@ -96,9 +97,6 @@ function isSessionLockedByHold(sessionId, group, allSessions) {
   return false;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// POST — حفظ الحضور
-// ═══════════════════════════════════════════════════════════════════════════
 export async function POST(req, { params }) {
   try {
     const { id } = await params;
@@ -118,13 +116,13 @@ export async function POST(req, { params }) {
       );
     }
 
-    // ✅ populate hold + status
+    // ✅ populate hold + status + isArchived
     const session = await Session.findOne({
       _id: id,
       isDeleted: false,
     }).populate({
       path: "groupId",
-      select: "name code hold status",
+      select: "name code hold status isArchived",
     });
     if (!session) {
       return NextResponse.json(
@@ -136,10 +134,23 @@ export async function POST(req, { params }) {
     const group = session.groupId;
 
     // ═══════════════════════════════════════════════════════════════════
+    // ✅ ARCHIVE GUARD — الجروب المؤرشف مينفعش يتسجل فيه حضور
+    // ═══════════════════════════════════════════════════════════════════
+    if (group?.isArchived) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "الجروب مؤرشف — استرجعه من الأرشيف الأول",
+          code: "GROUP_ARCHIVED",
+        },
+        { status: 403 },
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // ✅ HOLD GUARD — منع تسجيل الحضور على سيشن مقفولة
     // ═══════════════════════════════════════════════════════════════════
     if (group?.hold?.isHeld) {
-      // جيب كل سيشنات الجروب للترتيب
       const allSessions = await Session.find({
         groupId: group._id,
         isDeleted: false,
@@ -164,9 +175,19 @@ export async function POST(req, { params }) {
       }
     }
 
-    // ✅ NEW: الحصة التعويضية (Makeup) — بيتسجل الحضور عادي، بس من غير أي
-    // خصم من رصيد الطالب خالص. مفيش أي تأثير على مرتب المدرس (ده بيتحسب
-    // عادي من processSessionPayroll لما السيشن تتحدد completed).
+    // ═══════════════════════════════════════════════════════════════════
+    // ✅ NEW: الطلبة الموقوفين في الجروب مالهمش حضور ولا خصم
+    // ═══════════════════════════════════════════════════════════════════
+    const pausedIds = await getPausedStudentIds(group._id);
+    const activeAttendance = (attendance || []).filter(
+      (r) => !pausedIds.has(String(r.studentId)),
+    );
+    const skippedPaused = (attendance || [])
+      .filter((r) => pausedIds.has(String(r.studentId)))
+      .map((r) => String(r.studentId));
+
+    // ✅ الحصة التعويضية (Makeup) — بيتسجل الحضور عادي، بس من غير أي
+    // خصم من رصيد الطالب خالص.
     const isComplimentary = !!session.isComplimentary;
 
     // ── مين اللي أصلاً متسجل له حضور في السيشن دي قبل الحفظة الحالية ─────────
@@ -178,16 +199,14 @@ export async function POST(req, { params }) {
     const lowBalanceStudents = [];
     const zeroBalanceStudents = [];
 
-    for (const record of attendance) {
+    for (const record of activeAttendance) {
       const studentId = record.studentId?.toString();
       const newStatus = record.status;
 
       // ✅ لو الطالب ده أصلاً متسجل له حضور في السيشن دي من قبل → متلمسش الرصيد
       if (alreadyRecordedStudentIds.has(studentId)) continue;
 
-      // ✅ الحصة التعويضية: نسجل الحضور من غير أي خصم من رصيد الطالب،
-      // ونتخطى كل منطق الخصم والتنبيهات (low balance / zero balance) لأنها
-      // كلها مبنية على خصم فعلي حصل، وده مش الحال هنا.
+      // ✅ الحصة التعويضية: نسجل الحضور من غير أي خصم ولا تنبيهات رصيد
       if (isComplimentary) continue;
 
       // ✅ أول مرة يتسجل له حضور في السيشن دي → اخصم ساعتين
@@ -216,7 +235,7 @@ export async function POST(req, { params }) {
         reason: `First record for this session: ${newStatus}`,
       });
 
-            const previousBalance = remainingHours + HOURS_PER_SESSION;
+      const previousBalance = remainingHours + HOURS_PER_SESSION;
 
       // ✅ عتبة 2 ساعة → قالب "4h" (التنبيه المبدئي)
       if (previousBalance > 2 && remainingHours <= 2 && remainingHours > 0) {
@@ -241,9 +260,10 @@ export async function POST(req, { params }) {
     }
 
     // ── إرسال تنبيهات الرصيد المنخفض ────────────────────────────────────────
+    // ✅ بنمرر id السيشن عشان الـ guards (Hold/أرشيف/موقوف) تشتغل
     if (lowBalanceStudents.length > 0) {
       try {
-        await sendLowBalanceAlerts(lowBalanceStudents);
+        await sendLowBalanceAlerts(lowBalanceStudents, id);
       } catch (err) {
         console.error("Low balance alerts error:", err);
       }
@@ -258,7 +278,7 @@ export async function POST(req, { params }) {
     }
 
     // ── حفظ الحضور الجديد على الجلسة ────────────────────────────────────────
-    const attendanceRecords = attendance.map((record) => ({
+    const attendanceRecords = activeAttendance.map((record) => ({
       studentId: record.studentId,
       status: record.status,
       notes: record.notes || "",
@@ -266,11 +286,16 @@ export async function POST(req, { params }) {
       markedBy: adminUser.id,
     }));
 
+    // ✅ سجلات الحضور القديمة للطلبة اللي اتوقفوا بعد ما حضروا — منمسحهاش
+    const keptPausedRecords = (session.attendance || [])
+      .filter((r) => pausedIds.has(String(r.studentId)))
+      .map((r) => (r.toObject ? r.toObject() : r));
+
     const updatedSession = await Session.findByIdAndUpdate(
       id,
       {
         $set: {
-          attendance: attendanceRecords,
+          attendance: [...keptPausedRecords, ...attendanceRecords],
           attendanceTaken: true,
           "metadata.updatedBy": adminUser.id,
           "metadata.updatedAt": new Date(),
@@ -280,10 +305,8 @@ export async function POST(req, { params }) {
     );
 
     // ── إشعارات الغياب/التأخير/الاعتذار ─────────────────────────────────────
-    // ✅ الحصة التعويضية برضو بتاخد إشعارات غياب/تأخير عادي لو حصلت — ده
-    // مستقل تمامًا عن الرصيد، فمحدش لمسه هنا.
     let automationResult = { successCount: 0, failCount: 0 };
-    const studentsNeedingMessages = attendance.filter((r) =>
+    const studentsNeedingMessages = activeAttendance.filter((r) =>
       ["absent", "late", "excused"].includes(r.status),
     );
 
@@ -313,6 +336,7 @@ export async function POST(req, { params }) {
         sessionId: updatedSession._id,
         sessionTitle: updatedSession.title,
         stats,
+        skippedPaused,
       },
       isComplimentary,
       creditUpdates: {
@@ -336,9 +360,6 @@ export async function POST(req, { params }) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// GET — جلب بيانات الحضور + Hold info
-// ═══════════════════════════════════════════════════════════════════════════
 export async function GET(req, { params }) {
   try {
     const authCheck = await requireAdmin(req);
@@ -348,9 +369,9 @@ export async function GET(req, { params }) {
 
     const { id } = await params;
 
-    // ✅ جيب session + hold + status في الجروب
+    // ✅ جيب session + hold + status + isArchived في الجروب
     const session = await Session.findOne({ _id: id, isDeleted: false })
-      .populate("groupId", "name code hold status")
+      .populate("groupId", "name code hold status isArchived")
       .populate("attendance.studentId", "_id")
       .lean();
 
@@ -392,10 +413,14 @@ export async function GET(req, { params }) {
       };
     }
 
-    // جيب طلاب الجروب
+    // ✅ الجروب المؤرشف مقفول زي الـ Hold (القراءة شغالة، التسجيل لأ)
+    if (group?.isArchived) sessionLocked = true;
+
+    // جيب طلاب الجروب — ✅ من غير الموقوفين
     const groupStudents = await Student.find({
       "academicInfo.groupIds": group._id,
       isDeleted: false,
+      ...notPausedInGroup(group._id),
     })
       .select(
         "personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem",
@@ -456,12 +481,18 @@ export async function GET(req, { params }) {
       };
     });
 
+    // ✅ الإحصائيات على الطلبة الظاهرين بس
+    const visibleIds = new Set(students.map((s) => String(s._id)));
+    const visibleAttendance = attendance.filter((a) =>
+      visibleIds.has(String(a.studentId)),
+    );
+
     const stats = {
       total: students.length,
-      present: attendance.filter((a) => a.status === "present").length,
-      absent: attendance.filter((a) => a.status === "absent").length,
-      late: attendance.filter((a) => a.status === "late").length,
-      excused: attendance.filter((a) => a.status === "excused").length,
+      present: visibleAttendance.filter((a) => a.status === "present").length,
+      absent: visibleAttendance.filter((a) => a.status === "absent").length,
+      late: visibleAttendance.filter((a) => a.status === "late").length,
+      excused: visibleAttendance.filter((a) => a.status === "excused").length,
     };
 
     return NextResponse.json({
@@ -471,10 +502,8 @@ export async function GET(req, { params }) {
         sessionTitle: session.title,
         scheduledDate: session.scheduledDate,
         attendanceTaken: session.attendanceTaken || false,
-        // ✅ NEW: الفرونت محتاجها عشان يعرض بادج "حصة تعويضية" ويخفي منطق
-        // الرصيد/التنبيهات في الواجهة بدل ما يفضل يحاول يحسبه من غير داعي
         isComplimentary: !!session.isComplimentary,
-        attendance,
+        attendance: visibleAttendance,
         students,
         stats,
         group: {
@@ -482,10 +511,10 @@ export async function GET(req, { params }) {
           name: group.name,
           code: group.code,
           status: group.status || null,
+          isArchived: !!group.isArchived,
           isOnHold: !!group.hold?.isHeld,
           hold: holdInfo,
         },
-        // ✅ الحقلين دول بس هما اللي المودال محتاجهم
         sessionLocked,
       },
     });

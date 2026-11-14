@@ -331,6 +331,15 @@ const groupSchema = new mongoose.Schema(
       default: false,
     },
 
+        // ✅ الأرشفة (بتفضل status زي ما هو عشان الاسترجاع يرجّعه زي ما كان)
+    isArchived: { type: Boolean, default: false, index: true },
+    archive: {
+      archivedAt: { type: Date, default: null },
+      archivedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+      reason: { type: String, default: "" },
+      restoredAt: { type: Date, default: null },
+    },
+
     // Marketing Automation Metadata
     marketing: {
       enabled: {
@@ -786,6 +795,40 @@ groupSchema.methods.releaseGroup = async function ({
       holdHistoryCount: this.holdHistory.length,
     },
   };
+};
+
+groupSchema.methods.reopenAfterNewContent = async function () {
+  if (this.isArchived) return { reopened: false };
+
+  const Session = mongoose.model("Session");
+  const pending = await Session.countDocuments({
+    groupId: this._id,
+    isDeleted: false,
+    status: { $in: ["scheduled", "postponed"] },
+  });
+  if (pending === 0) return { reopened: false };
+
+  const wasCompleted = this.status === "completed";
+  const wasNotified = !!this.metadata?.completionNotification?.sent;
+  if (!wasCompleted && !wasNotified) return { reopened: false };
+
+  await this.constructor.updateOne(
+    { _id: this._id },
+    {
+      $set: {
+        ...(wasCompleted ? { status: "active" } : {}),
+        "metadata.completionNotification.sent": false,
+        "metadata.completionNotification.sentAt": null,
+        "metadata.completionNotification.studentsNotified": 0,
+        "metadata.completionNotification.studentsFailed": 0,
+        "metadata.completionNotification.results": [],
+        "metadata.completionNotifiedAt": null,
+        "metadata.completedAt": null,
+        "metadata.updatedAt": new Date(),
+      },
+    },
+  );
+  return { reopened: true, wasCompleted };
 };
 
 /**

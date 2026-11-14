@@ -335,7 +335,7 @@ export async function POST(req) {
 }
 
 // ============================================================
-// PUT
+// PUT  (استبدل بيه shiftTimeByDuration + PUT القديمين في route.js)
 // ============================================================
 
 function shiftTimeByDuration(oldStart, oldEnd, newStart) {
@@ -462,6 +462,11 @@ export async function PUT(req, { params }) {
     let updatedSession = null;
 
     if (isNewlyCancelled) {
+      // ─────────────────────────────────────────────────────────────────
+      // ✅ الإلغاء = ترحيل أسبوع. الـ static بترحّل السيشن + اللي بعدها،
+      //    وبتسيب السيشن "scheduled" على تاريخها الجديد وبتسجّل الإلغاء
+      //    في cancellation. عشان كدا هنا مفيش basePayload.status.
+      // ─────────────────────────────────────────────────────────────────
       try {
         cascadeResult = await Session.cascadeShiftOnCancel(id, adminUser.id, 7);
         console.log(
@@ -477,6 +482,11 @@ export async function PUT(req, { params }) {
           { status: 400 },
         );
       }
+
+      // السيشن لسه هتشتغل في معادها الجديد، فمنمسحش اللينك بتاعها
+      // لو الفرونت مبعتوش (الـ basePayload بيحط "" كـ default)
+      delete basePayload.meetingLink;
+      delete basePayload.recordingLink;
 
       updatedSession = await Session.findByIdAndUpdate(id, basePayload, {
         new: true,
@@ -521,7 +531,9 @@ export async function PUT(req, { params }) {
     }
 
     console.log(
-      `✅ Session updated: ${updatedSession.title} | ${oldStatus} → ${newStatus}`,
+      `✅ Session updated: ${updatedSession.title} | ${oldStatus} → ${updatedSession.status}${
+        isNewlyCancelled ? " (cancelled & rescheduled +7d)" : ""
+      }`,
     );
 
     let instructorHoursResult = null;
@@ -583,6 +595,16 @@ export async function PUT(req, { params }) {
     ) {
       console.log(`🔄 Triggering ${newStatus} notifications...`);
 
+      // ✅ في الإلغاء: السيشن بقت scheduled على تاريخ جديد، فبنبعت
+      //    التاريخ الأصلي والجديد مع الـ metadata عشان رسالة الإلغاء تبقى صح
+      const notificationMetadata = isNewlyCancelled
+        ? {
+            ...(updateData.metadata || {}),
+            originalDate: cascadeResult?.triggerOriginalDate || null,
+            rescheduledToDate: updatedSession?.scheduledDate || null,
+          }
+        : updateData.metadata || {};
+
       setTimeout(async () => {
         try {
           const automationResult = await onSessionStatusChanged(
@@ -591,7 +613,7 @@ export async function PUT(req, { params }) {
             null,
             newStatus === "postponed" ? updateData.newDate : null,
             newStatus === "postponed" ? updateData.newTime : null,
-            updateData.metadata || {},
+            notificationMetadata,
           );
 
           console.log("✅ Automation completed:", {

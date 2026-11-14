@@ -134,9 +134,6 @@ async function unlockInterviewFlag(interviewId, flagField) {
   }
 }
 
-// ============================================================
-// ✅ GET — نقطة الدخول للكرون
-// ============================================================
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
@@ -182,6 +179,9 @@ export async function GET(req) {
 
       // 🛠️ عدد السيشنات اللي اتصلح deliveryMode بتاعها تلقائيًا
       autoFixedDeliveryMode: 0,
+
+      // 🗄️ عدد السيشنات اللي اتخطت لأن جروبها مؤرشف
+      archivedGroupsSkipped: 0,
 
       // 🌐 ONLINE
       reminder24h: {
@@ -267,7 +267,7 @@ export async function GET(req) {
 
     dayEnd.setUTCHours(23, 59, 59, 999);
 
-    const allCandidates = await Session.find({
+    const rawCandidates = await Session.find({
       status: { $ne: "completed" },
       isDeleted: false,
       scheduledDate: {
@@ -275,10 +275,23 @@ export async function GET(req) {
         $lte: dayEnd,
       },
     })
-      .populate("groupId", "deliveryMode location locationDetails name code")
+      .populate(
+        "groupId",
+        "deliveryMode location locationDetails name code isArchived",
+      )
       .lean();
 
-    console.log(`\n📋 Total candidates in window: ${allCandidates.length}`);
+    // ✅ NEW: الجروبات المؤرشفة تتشال من الكرون بالكامل
+    // (من غير ده الكرون كان هيقفل الفلاج ويفتحه كل دقيقة على سيشنات مش هتتبعت)
+    const allCandidates = rawCandidates.filter((s) => !s.groupId?.isArchived);
+    results.archivedGroupsSkipped = rawCandidates.length - allCandidates.length;
+
+    console.log(
+      `\n📋 Total candidates in window: ${allCandidates.length}` +
+        (results.archivedGroupsSkipped
+          ? ` (skipped ${results.archivedGroupsSkipped} from archived groups)`
+          : ""),
+    );
 
     // ============================================================
     // 🛠️ SELF-HEALING: أي سيشن deliveryMode بتاعها مختلف عن الجروب

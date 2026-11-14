@@ -6,7 +6,11 @@ import Session from "../models/Session";
 import User from "../models/User";
 import MessageTemplate from "../models/MessageTemplate";
 import { wapilotService } from "./wapilot-service";
-import { isSessionLockedByHold } from "./holdGuard";
+import {
+  isSessionLockedByHold,
+  notPausedInGroup,
+  isStudentPausedInGroup,
+} from "./holdGuard";
 import { routeMessage } from "./messageRouting";
 import { resolveDeliveryMode } from "./deliveryMode";
 
@@ -19,11 +23,12 @@ export async function canGroupSendMessages(groupId) {
 
   try {
     const group = await Group.findById(groupId)
-      .select("name code status hold isDeleted")
+      .select("name code status hold isDeleted isArchived")
       .lean();
 
     if (!group) return { ok: false, reason: "group_not_found" };
     if (group.isDeleted) return { ok: false, reason: "group_deleted" };
+    if (group.isArchived) return { ok: false, reason: "group_archived", group };
     if (group.status !== "active") {
       return { ok: false, reason: `group_status_${group.status}`, group };
     }
@@ -54,7 +59,10 @@ export async function canSessionSendMessages(sessionId) {
 
   try {
     const session = await Session.findById(sessionId)
-      .populate({ path: "groupId", select: "name code status hold isDeleted" })
+      .populate({
+        path: "groupId",
+        select: "name code status hold isDeleted isArchived",
+      })
       .select("_id moduleIndex sessionNumber scheduledDate status groupId")
       .lean();
 
@@ -63,6 +71,7 @@ export async function canSessionSendMessages(sessionId) {
     const group = session.groupId;
     if (!group) return { ok: false, reason: "group_not_found" };
     if (group.isDeleted) return { ok: false, reason: "group_deleted" };
+    if (group.isArchived) return { ok: false, reason: "group_archived", group };
     if (group.status !== "active") {
       return { ok: false, reason: `group_status_${group.status}`, group };
     }
@@ -554,6 +563,17 @@ export async function sendAbsenceNotifications(
       const student = await Student.findById(record.studentId);
       if (!student) {
         skippedCount++;
+        continue;
+      }
+
+       // ✅ NEW: الطالب موقوف في الجروب ده → مفيش رسائل
+      if (isStudentPausedInGroup(student, group._id)) {
+        skippedCount++;
+        results.push({
+          studentId: student._id,
+          status: "skipped",
+          reason: "student_paused",
+        });
         continue;
       }
 
@@ -2184,6 +2204,17 @@ export async function sendLowBalanceAlerts(students, sessionId = null) {
           }
         }
 
+        // ✅ NEW: جروب مؤرشف أو الطالب موقوف فيه → متبعتش
+        if (group?.isArchived || (group && isStudentPausedInGroup(student, group._id))) {
+          failCount++;
+          results.push({
+            studentId: student._id,
+            status: "skipped",
+            reason: group?.isArchived ? "group_archived" : "student_paused",
+          });
+          continue;
+        }
+
         const { variables: baseVariables, language } =
           await prepareStudentVariables(student, group || {}, null, {});
 
@@ -2622,6 +2653,16 @@ export async function sendInstructorWelcomeMessages(
 
     if (!group) throw new Error("Group not found");
 
+     if (group.isArchived) {
+      return {
+        success: false,
+        message: "Group is archived",
+        reason: "group_archived",
+        instructorsCount: group.instructors?.length || 0,
+        notificationsSent: 0,
+      };
+    }
+
     if (group.hold?.isHeld) {
       console.log(
         `⏭️ [HOLD GUARD] sendInstructorWelcomeMessages skipped — group_on_hold`,
@@ -2927,6 +2968,10 @@ export async function onStudentAddedToGroup(
 
     if (!student || !group) throw new Error("Student or Group not found");
 
+    if (group.isArchived) {
+      throw new Error("لا يمكن إضافة طالب لجروب مؤرشف — استرجعه الأول");
+    }
+
     if (group.hold?.isHeld) {
       console.log(
         `⏭️ [HOLD GUARD] onStudentAddedToGroup skipped — group_on_hold`,
@@ -2937,10 +2982,11 @@ export async function onStudentAddedToGroup(
     // ✅ NEW: هل الطالب بالغ؟
     const isAdult = student.studentType === "adults";
 
-    await Student.findByIdAndUpdate(
+        await Student.findByIdAndUpdate(
       studentId,
       {
         $addToSet: { "academicInfo.groupIds": groupId },
+        $pull: { "academicInfo.pausedGroups": { groupId } }, // ✅ NEW
         $set: { "metadata.updatedAt": new Date() },
       },
       { new: true },
@@ -3519,9 +3565,10 @@ export async function onSessionStatusChanged(
       };
     }
 
-    const students = await Student.find({
+     const students = await Student.find({
       "academicInfo.groupIds": group._id,
       isDeleted: false,
+      ...notPausedInGroup(group._id), // ✅ NEW
     }).lean();
 
     let successCount = 0;
@@ -3723,9 +3770,10 @@ export async function sendManualSessionReminder(
       };
     }
 
-    const students = await Student.find({
+        const students = await Student.find({
       "academicInfo.groupIds": group._id,
       isDeleted: false,
+      ...notPausedInGroup(group._id), // ✅ NEW
     }).lean();
 
     if (students.length === 0)
@@ -4017,22 +4065,22 @@ export async function onGroupCompleted(
       .lean();
     if (!group) return { success: false, error: "Group not found" };
 
+   if (group.isArchived) {
+      console.log(`⏭️ [ARCHIVE GUARD] onGroupCompleted skipped — group_archived`);
+      return { success: false, error: "Group is archived", reason: "group_archived" };
+    }
     if (group.hold?.isHeld) {
       console.log(`⏭️ [HOLD GUARD] onGroupCompleted skipped — group_on_hold`);
-      return {
-        success: false,
-        error: "Group is on hold",
-        reason: "group_on_hold",
-      };
+      return { success: false, error: "Group is on hold", reason: "group_on_hold" };
     }
 
-    // ✅ FIX: ضفنا "studentType" في الـ select عشان الـ Kids/Adults يشتغل
-    const students = await Student.find({
+        const students = await Student.find({
       "academicInfo.groupIds": new mongoose.Types.ObjectId(groupId),
       isDeleted: false,
+      ...notPausedInGroup(group._id), // ✅ NEW
     })
       .select(
-        "personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem issuedCertificates studentType",
+        "personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem issuedCertificates studentType academicInfo",
       )
       .lean();
 
@@ -5062,9 +5110,10 @@ async function releaseModuleOverviewClaim(studentId, groupId, moduleIdx) {
 }
 
 export async function checkAndSendModuleOverviewNotifications() {
-  const groups = await Group.find({
+    const groups = await Group.find({
     status: "active",
     isDeleted: false,
+    isArchived: { $ne: true }, // ✅ NEW
     sessionsGenerated: true,
     "hold.isHeld": { $ne: true },
     isMakeupGroup: { $ne: true },
@@ -5094,7 +5143,9 @@ export async function checkAndSendModuleOverviewNotifications() {
       if (completedModules.length === 0) continue;
 
       const highestCompleted = Math.max(...completedModules);
-      const studentsInGroup = group.students || [];
+          const studentsInGroup = (group.students || []).filter(
+        (s) => s && !isStudentPausedInGroup(s, group._id), // ✅ NEW
+      );
 
       for (const student of studentsInGroup) {
         if (!student) continue;
@@ -5257,8 +5308,9 @@ async function getStudentCertificates(student, group, course) {
 export async function checkAndSendGroupCompletionNotifications() {
   console.log(`\n🎓 Checking for completed groups...`);
 
-  const groups = await Group.find({
+    const groups = await Group.find({
     isDeleted: false,
+    isArchived: { $ne: true }, // ✅ NEW
     status: { $in: ["active", "completed"] },
     "hold.isHeld": { $ne: true },
     "metadata.completionNotification.sent": { $ne: true },
@@ -5459,9 +5511,10 @@ export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
       };
     }
 
-    const students = await Student.find({
+       const students = await Student.find({
       "academicInfo.groupIds": group._id,
       isDeleted: false,
+      ...notPausedInGroup(group._id), // ✅ NEW
     }).lean();
 
     let sentCount = 0;
@@ -5595,9 +5648,10 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
       return { success: false, reason: "not_offline" };
     }
 
-    const students = await Student.find({
+      const students = await Student.find({
       "academicInfo.groupIds": group._id,
       isDeleted: false,
+      ...notPausedInGroup(group._id), // ✅ NEW
     }).lean();
 
     let sentCount = 0;
@@ -5725,9 +5779,10 @@ export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
       return { success: false, reason: "not_offline" };
     }
 
-    const students = await Student.find({
+        const students = await Student.find({
       "academicInfo.groupIds": group._id,
       isDeleted: false,
+      ...notPausedInGroup(group._id), // ✅ NEW
     }).lean();
 
     let sentCount = 0;

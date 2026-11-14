@@ -266,6 +266,15 @@ const SessionSchema = new mongoose.Schema(
       consumedAt: { type: Date },
     },
 
+        // ── Cancellation Log ───────────────────────────────────────────────────
+    // السيشن الملغية بتتأجل أسبوع وترجع scheduled، والحقل ده سجل إنها اتلغت
+    cancellation: {
+      count: { type: Number, default: 0 },
+      lastCancelledAt: { type: Date },
+      lastOriginalDate: { type: Date },
+      lastCancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    },
+
     // ── Automation Tracking ────────────────────────────────────────────────
     automationEvents: {
       // ─ Online Flow ─
@@ -1137,7 +1146,8 @@ SessionSchema.methods.submitSwapWithTodayRequest = async function (
 
 // ── Cascade shift on cancel ────────────────────────────────────────────────
 // عند إلغاء سيشن (trigger)، بترحل هي + كل السيشنات غير المكتملة في الجروب
-// بمقدار shiftDays أسبوع. الـ trigger بتفضل cancelled على تاريخها الجديد.
+// بمقدار shiftDays. الـ trigger بتفضل "scheduled" على تاريخها الجديد
+// (عشان تشتغل في معادها)، وسجل الإلغاء بيتخزن في cancellation.
 SessionSchema.statics.cascadeShiftOnCancel = async function (
   sessionId,
   userId,
@@ -1166,6 +1176,7 @@ SessionSchema.statics.cascadeShiftOnCancel = async function (
   const now = new Date();
   const shifted = [];
   const skipped = [];
+  let triggerOriginalDate = null;
 
   for (const session of chain) {
     const isTrigger = session._id.toString() === triggerSession._id.toString();
@@ -1179,6 +1190,7 @@ SessionSchema.statics.cascadeShiftOnCancel = async function (
       continue;
     }
 
+    // سيشنات ملغية قديمة (قبل التعديل ده) بنسيبها زي ما هي
     if (!isTrigger && session.status === "cancelled") {
       skipped.push({
         sessionId: session._id,
@@ -1193,7 +1205,30 @@ SessionSchema.statics.cascadeShiftOnCancel = async function (
     newScheduledDate.setDate(newScheduledDate.getDate() + shiftDays);
 
     session.scheduledDate = newScheduledDate;
-    if (isTrigger) session.status = "cancelled";
+
+    // ✅ الـ trigger بتفضل scheduled (متتحولش لـ cancelled)
+    //    وبنسجل الإلغاء في cancellation
+    if (isTrigger) {
+      triggerOriginalDate = oldScheduledDate;
+      session.cancellation = {
+        count: (session.cancellation?.count || 0) + 1,
+        lastCancelledAt: now,
+        lastOriginalDate: oldScheduledDate,
+        lastCancelledBy: userId,
+      };
+    }
+
+    // ✅ التاريخ اتغير، فلازم التذكيرات تتبعت تاني على المعاد الجديد
+    if (session.automationEvents) {
+      session.automationEvents.reminderSent = false;
+      session.automationEvents.reminder24hSent = false;
+      session.automationEvents.reminder1hSent = false;
+      session.automationEvents.reminder15minSent = false;
+      session.automationEvents.reminder24hOfflineSent = false;
+      session.automationEvents.reminder30minOfflineSent = false;
+      session.automationEvents.preAttendancePingSent = false;
+    }
+
     session.metadata.lastModifiedBy = userId;
     session.metadata.updatedAt = now;
     await session.save();
@@ -1209,6 +1244,7 @@ SessionSchema.statics.cascadeShiftOnCancel = async function (
 
   return {
     triggerSessionId: triggerSession._id,
+    triggerOriginalDate,
     shiftDays,
     shiftedCount: shifted.length,
     skippedCount: skipped.length,

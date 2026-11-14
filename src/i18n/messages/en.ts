@@ -4869,6 +4869,11 @@ const en = {
   "groups.groupType.mixed": "Mixed",
   "dashboard.interviews": "Interviews",
   "dashboard.studentEvaluations": "Student Evaluations",
+  "groups.filters.archivedGroups": "Archived Groups",
+  "groups.actions.archive": "Archive Group",
+  "groups.archived": "Archived",
+  "groups.actions.more": "More",
+  "groups.actions.restore": "Restore Group",
 };
 
 export default en;

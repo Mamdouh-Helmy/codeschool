@@ -28,6 +28,7 @@ import {
   normalizeOverrides,
   selectRecipients,
 } from "../../utils/groupMessageShared.js";
+import { isStudentPausedInGroup } from "./holdGuard.js";
 
 const SEND_DELAY_MS = 800; // فاصل بين الرسايل عشان نتجنب حظر واتساب
 
@@ -35,6 +36,12 @@ export class GroupMessageError extends Error {
   constructor(message, status = 400) {
     super(message);
     this.status = status;
+  }
+}
+
+function assertNotArchived(group) {
+  if (group.isArchived) {
+    throw new GroupMessageError("الجروب مؤرشف — استرجعه من الأرشيف الأول", 403);
   }
 }
 
@@ -55,7 +62,10 @@ async function loadGroup(groupId) {
 
   const group = await Group.findOne({ _id: groupId, isDeleted: false })
     .populate("courseId", "title")
-    .populate("students", "personalInfo guardianInfo communicationPreferences studentType isDeleted creditSystem.currentPackage")
+    .populate(
+      "students",
+      "personalInfo guardianInfo communicationPreferences studentType isDeleted creditSystem.currentPackage academicInfo.pausedGroups",
+    )
     .populate("instructors.userId", "name gender language profile")
     .lean();
 
@@ -287,14 +297,20 @@ function instructorRecipient(user, res) {
   );
 }
 
-function buildRecipients(group, res) {
-  const students = (group.students || []).filter((s) => s && !s.isDeleted);
+function buildRecipients(group, res, { includePaused = false } = {}) {
+  const all = (group.students || []).filter((s) => s && !s.isDeleted);
+  const isPaused = (s) => isStudentPausedInGroup(s, group._id);
+
+  // ✅ الطالب الموقوف في الجروب ده مخفي: لا هو ولا ولي أمره
+  const students = includePaused ? all : all.filter((s) => !isPaused(s));
   const instructors = (group.instructors || []).map((i) => i.userId).filter((u) => u?._id);
 
   return [
-    ...students.map((s) => studentRecipient(s, res)),
+    ...students.map((s) => ({ ...studentRecipient(s, res), paused: isPaused(s) })),
     // البالغين مفيش ليهم ولي أمر
-    ...students.filter((s) => s.studentType !== "adults").map((s) => guardianRecipient(s, res)),
+    ...students
+      .filter((s) => s.studentType !== "adults")
+      .map((s) => ({ ...guardianRecipient(s, res), paused: isPaused(s) })),
     ...instructors.map((u) => instructorRecipient(u, res)),
   ];
 }
@@ -341,6 +357,7 @@ function buildGroupInfo(group, { nextSession = null, linkFallback = "", original
     deliveryMode: isOffline ? "offline" : "online",
     groupType: group.groupType || null,
     isMakeup: !!group.isMakeupGroup,
+    isArchived: !!group.isArchived, // ✅ NEW
     startDate: group.schedule?.startDate || null,
     daysOfWeek: group.schedule?.daysOfWeek || [],
     timeFrom,
@@ -372,12 +389,18 @@ export async function getGroupRecipients(groupId) {
   const res = createResolvers(ctx.docs);
   const recipients = buildRecipients(ctx.group, res);
 
+  const pausedCount = (ctx.group.students || []).filter(
+    (s) => s && !s.isDeleted && isStudentPausedInGroup(s, ctx.group._id),
+  ).length;
+
   return {
     group: buildGroupInfo(ctx.group, ctx),
     // الرقم نفسه مبيروحش للـ client، بس hasPhone
     recipients: recipients.map(({ phone, ...rest }) => ({ ...rest, hasPhone: !!phone })),
     // متغيرات التحية اللي مش متسجلة في الداتابيز (بيتستخدم بدالها النص الافتراضي)
     fallbackKeys: [...res.fallbackKeys],
+    // ✅ NEW: عدد الطلبة الموقوفين (مخفيين من القايمة)
+    pausedCount,
   };
 }
 
@@ -488,10 +511,13 @@ export async function sendGroupMessage({
   validateRequest({ audience, selectedKeys, templates });
 
   const ctx = await loadContext(groupId);
+  assertNotArchived(ctx.group); // ✅ NEW
+
   const groupInfo = buildGroupInfo(ctx.group, ctx);
   validateAgainstGroup(templates, groupInfo);
 
   const res = createResolvers(ctx.docs);
+  // ✅ buildRecipients بيستبعد الطلبة الموقوفين (وأولياء أمورهم) تلقائيًا
   const targets = selectRecipients(buildRecipients(ctx.group, res), audience, selectedKeys);
 
   if (!targets.length) throw new GroupMessageError("مفيش مستلمين مطابقين للاختيار");
@@ -581,7 +607,8 @@ export async function getMemberMessages(groupId, { kind, id, scope = "group" } =
 
   const ctx = await loadContext(groupId);
   const res = createResolvers(ctx.docs);
-  const everyone = buildRecipients(ctx.group, res);
+  // ✅ includePaused: السجل بيتعرض حتى للطالب الموقوف
+  const everyone = buildRecipients(ctx.group, res, { includePaused: true });
 
   const recipients = everyone.filter((r) =>
     kind === "instructor"
@@ -609,7 +636,7 @@ export async function getMemberMessages(groupId, { kind, id, scope = "group" } =
   return {
     group: buildGroupInfo(ctx.group, ctx),
     recipients: recipients.map(({ phone, ...rest }) => ({
-      ...rest,
+      ...rest, // فيه paused: true للموقوف
       hasPhone: !!phone,
       phoneHint: maskPhone(phone),
     })),
@@ -619,12 +646,6 @@ export async function getMemberMessages(groupId, { kind, id, scope = "group" } =
   };
 }
 
-/**
- * إرسال رسالة لمستلم واحد.
- *  - raw=false: النص بيعدّي على المتغيرات ({salutation}, {studentName}...) حسب المستلم
- *  - raw=true : النص بيتبعت زي ما هو (إعادة إرسال رسالة قديمة)
- *  - language: auto = لغة المستلم | ar | en (إجبار لغة معينة)
- */
 export async function sendDirectMessage({
   groupId,
   recipientKey,
@@ -640,11 +661,19 @@ export async function sendDirectMessage({
   const forced = ["ar", "en"].includes(language) ? language : "auto";
 
   const ctx = await loadContext(groupId);
+  assertNotArchived(ctx.group); // ✅ NEW
+
   const groupInfo = buildGroupInfo(ctx.group, ctx);
   const res = createResolvers(ctx.docs);
 
-  const base = buildRecipients(ctx.group, res).find((r) => r.key === recipientKey);
+  // ✅ includePaused عشان نقدر نرد برسالة واضحة بدل "المستلم مش موجود"
+  const base = buildRecipients(ctx.group, res, { includePaused: true }).find(
+    (r) => r.key === recipientKey,
+  );
   if (!base) throw new GroupMessageError("المستلم مش موجود في الجروب ده", 404);
+  if (base.paused) {
+    throw new GroupMessageError("الطالب ده موقوف في الجروب — شغّله الأول عشان تبعتله", 403);
+  }
   if (!base.phone) throw new GroupMessageError("المستلم ده معندوش رقم واتساب");
 
   const recipient = forced === "auto" ? base : { ...base, language: forced };

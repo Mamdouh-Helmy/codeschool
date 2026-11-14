@@ -28,8 +28,12 @@ async function getInstructorsData(instructorsArray) {
     }).select("name email gender language profile");
     return users.map((user) => {
       const obj = user.toObject({ getters: true });
-      const gender = obj.gender ? String(obj.gender).toLowerCase().trim() : null;
-      const phone = obj.profile?.phone ? String(obj.profile.phone).trim() || null : null;
+      const gender = obj.gender
+        ? String(obj.gender).toLowerCase().trim()
+        : null;
+      const phone = obj.profile?.phone
+        ? String(obj.profile.phone).trim() || null
+        : null;
       const language = obj.language || "ar";
       const entry = instructorsArray.find(
         (i) => (i?.userId?.toString() || i?.toString()) === obj._id.toString(),
@@ -94,7 +98,9 @@ export async function GET(req, { params }) {
     }
 
     const instructorsArray = group.instructors || [];
-    console.log(`📋 Fetching ${instructorsArray.length} instructors separately...`);
+    console.log(
+      `📋 Fetching ${instructorsArray.length} instructors separately...`,
+    );
     const instructorsData = await getInstructorsData(instructorsArray);
 
     console.log(`🔗 Fetching first session meeting link...`);
@@ -219,7 +225,10 @@ export async function PUT(req, { params }) {
           (e) =>
             (e.userId?._id || e.userId)?.toString() === ni.userId?.toString(),
         );
-        return { userId: ni.userId, countTime: old?.countTime ?? ni.countTime ?? 0 };
+        return {
+          userId: ni.userId,
+          countTime: old?.countTime ?? ni.countTime ?? 0,
+        };
       });
     }
 
@@ -414,7 +423,14 @@ export async function DELETE(req, { params }) {
     await Session.deleteMany({ groupId: id });
     await Student.updateMany(
       { "academicInfo.groupIds": new mongoose.Types.ObjectId(id) },
-      { $pull: { "academicInfo.groupIds": new mongoose.Types.ObjectId(id) } },
+      {
+        $pull: {
+          "academicInfo.groupIds": new mongoose.Types.ObjectId(id),
+          "academicInfo.pausedGroups": {
+            groupId: new mongoose.Types.ObjectId(id),
+          },
+        },
+      },
     );
 
     console.log(

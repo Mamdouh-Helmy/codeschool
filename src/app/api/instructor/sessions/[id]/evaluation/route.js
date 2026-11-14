@@ -8,7 +8,11 @@ import Group from '../../../../../models/Group';
 import StudentEvaluation from '../../../../../models/StudentEvaluation';
 import MessageTemplate from '../../../../../models/MessageTemplate';
 import TemplateVariable from '../../../../../models/TemplateVariable';
-import { resolveSessionLock } from '../../../../../services/holdGuard';
+import {
+  resolveSessionLock,
+  getPausedStudentIds,
+  notPausedInGroup,
+} from '../../../../../services/holdGuard';
 import { routeMessage } from '../../../../../services/messageRouting';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -57,7 +61,8 @@ const EVAL_MESSAGE_TYPES = VALID_DECISIONS.flatMap((d) => [
   `evaluation_${d}_adult`,
 ]);
 
-const GROUP_POPULATE_SELECT = 'name code students instructors hold status deliveryMode';
+const GROUP_POPULATE_SELECT =
+  'name code students instructors hold status deliveryMode isArchived';
 
 function resolveDeliveryMode(session) {
   return session?.deliveryMode || session?.groupId?.deliveryMode || 'online';
@@ -159,9 +164,6 @@ function buildRecipientContext(student, dbVars) {
     ? salutationFromDb.replace(/\{guardianName\}/g, guardianFirstName)
     : buildGuardianSalutation(guardianFirstName, isFather, lang);
 
-  // ✅ {studentSalutation}: من المتغير المحفوظ باسم studentSalutation
-  //    - لو فيه {studentName} → الاسم يتحط مكانها
-  //    - لو مفيهاش → الاسم يتلزق في الآخر
   const buildStudentSal = (l) => {
     const name = studentNameFor(l);
     const fromDb = resolveVar(dbVars, 'studentSalutation', l, genderCtx);
@@ -202,7 +204,6 @@ function buildRecipientContext(student, dbVars) {
 function renderTemplate(template, variables) {
   let rendered = template || '';
   Object.entries(variables).forEach(([key, value]) => {
-    // function replacer عشان $& و $1 في القيمة (مثلاً تعليق المدرس) ما تتفسرش
     rendered = rendered.replace(
       new RegExp(`\\{${key}\\}`, 'g'),
       () => String(value ?? ''),
@@ -253,8 +254,7 @@ async function getSessionBlogInfo(session) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Evaluation message — الـ template والـ recipient من routeMessage
-//    Minor → قالب ولي الأمر + ولي الأمر | Adult → قالب _adult + الطالب
+// Evaluation message
 // ═══════════════════════════════════════════════════════════════════════════
 async function buildEvaluationMessage(student, decision, session, extra = {}) {
   const dbVars = await loadDbVars();
@@ -301,7 +301,6 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
   let template = extra.rawContent;
   let isFallback = false;
   if (!template) {
-    // ✅ بنمرر recipientType عشان قالب البالغ (student) ما يتلخبطش مع قالب ولي الأمر
     const result = await MessageTemplate.getOrFallback(templateType, lang, recipientType);
     template = result.content;
     isFallback = result.isFallback;
@@ -354,12 +353,8 @@ async function buildEvaluationMessage(student, decision, session, extra = {}) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ─── Recording message ─────────────────────────────────────────────────────
-//   - Child  → قالب session_recording (موجّه لولي الأمر)
-//   - Adult  → قالب session_recording_adult (موجّه للطالب)
-//   - المستلم (recipientPhone) بيتحدد في buildEvaluationMessage عن طريق
-//     routeMessage — نفس المستلم بيتستخدم هنا عشان يفضل تناسق كامل.
-// ────────────────────────────────────────────────────────────────────────────
+// Recording message
+// ═══════════════════════════════════════════════════════════════════════════
 async function buildRecordingMessage(student, session, recordingLink) {
   const dbVars = await loadDbVars();
   const ctx = buildRecipientContext(student, dbVars);
@@ -375,7 +370,6 @@ async function buildRecordingMessage(student, session, recordingLink) {
     isAdult ? 'student' : 'guardian',
   );
 
-  // ✅ متغيرات البالغ مختلفة عن متغيرات الطفل
   const vars = isAdult
     ? {
         studentSalutation: ctx.studentSalutation,
@@ -403,10 +397,7 @@ async function buildRecordingMessage(student, session, recordingLink) {
   };
 }
 
-// ─── Session blog message (للكل: الطفل → ولي الأمر | البالغ → الطالب) ─────
-// ✅ مشترك بين الأونلاين والأوفلاين
-// ✅ بيتبعت لو الملخص موجود بأي لغة (مش لغة الطالب المفضلة بس)
-// ✅ isAdult بيتمرر من routeMessage عشان يفضل نفس مصدر الحقيقة بتاع التقييم
+// ─── Session blog message ────────────────────────────────────────────────
 async function buildBlogMessage(student, session, blogInfo, opts = {}) {
   if (!blogInfo || (!blogInfo.hasAr && !blogInfo.hasEn)) return null;
 
@@ -442,12 +433,9 @@ async function buildBlogMessage(student, session, blogInfo, opts = {}) {
   return { rendered, lang };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// HOLD — بيرجّع true لو السيشن دي مقفولة.
-//    GET مبيرفضش (بيمنع الرسائل بس). POST (المعاينة) بيرفض بـ 403.
-// ═══════════════════════════════════════════════════════════════════════════
 async function isSessionOnHold(session) {
   const group = session?.groupId;
+  if (group?.isArchived) return true; // ✅ مؤرشف = الرسائل متوقفة (التقييم والمرتب بيكملوا)
   if (!group?.hold?.isHeld) return false;
   return resolveSessionLock(session, group);
 }
@@ -456,13 +444,12 @@ const holdBlockedResponse = () =>
   json(
     {
       success: false,
-      error: 'السيشن دي مقفولة بسبب الـ Hold — التقييم مش متاح',
+      error: 'السيشن دي مقفولة (Hold أو جروب مؤرشف) — التقييم مش متاح',
       code: 'SESSION_ON_HOLD',
     },
     403,
   );
 
-// ─── GET ──────────────────────────────────────────────────────────────────────
 export async function GET(req, { params }) {
   try {
     const user = await getUserFromRequest(req);
@@ -488,7 +475,12 @@ export async function GET(req, { params }) {
 
     const allStudentIds = (session.groupId?.students || []).map((s) => s.studentId || s);
 
-    const students = await Student.find({ _id: { $in: allStudentIds }, isDeleted: false })
+    // ✅ NEW: من غير الطلبة الموقوفين في الجروب
+    const students = await Student.find({
+      _id: { $in: allStudentIds },
+      isDeleted: false,
+      ...notPausedInGroup(session.groupId._id),
+    })
       .select(
         '_id personalInfo guardianInfo communicationPreferences enrollmentNumber creditSystem studentType',
       )
@@ -572,11 +564,13 @@ export async function GET(req, { params }) {
           isOffline,
           isComplimentary: session.isComplimentary === true,
           messagesSuppressed,
+          // allStudentsExcluded بيتحسب على الطلبة النشطين بس
           allStudentsExcluded: studentsForEval.length === 0 && students.length > 0,
           group: {
             _id: session.groupId?._id,
             name: session.groupId?.name,
             code: session.groupId?.code,
+            isArchived: !!session.groupId?.isArchived,
           },
         },
         students: studentsForEval,
@@ -594,7 +588,6 @@ export async function GET(req, { params }) {
   }
 }
 
-// ─── POST: معاينة رسالة ───────────────────────────────────────────────────────
 export async function POST(req, { params }) {
   try {
     const user = await getUserFromRequest(req);
@@ -639,6 +632,15 @@ export async function POST(req, { params }) {
 
     if (!getGroupStudentIdSet(session.groupId).has(String(studentId))) {
       return json({ success: false, error: 'الطالب ده مش في جروب السيشن' }, 403);
+    }
+
+    // ✅ NEW: الطالب الموقوف في الجروب مالوش معاينة تقييم
+    const pausedIds = await getPausedStudentIds(session.groupId._id, [studentId]);
+    if (pausedIds.size > 0) {
+      return json(
+        { success: false, error: 'الطالب ده موقوف في الجروب', code: 'STUDENT_PAUSED' },
+        403,
+      );
     }
 
     if (await isSessionOnHold(session)) return holdBlockedResponse();
@@ -686,7 +688,6 @@ export async function POST(req, { params }) {
   }
 }
 
-// ─── PATCH: احفظ التقييمات + ابعت الرسائل + احسب مرتب المدرس ─────────────────
 export async function PATCH(req, { params }) {
   try {
     const user = await getUserFromRequest(req);
@@ -728,8 +729,9 @@ export async function PATCH(req, { params }) {
       }
     }
 
-    // الـ Hold بيمنع الرسائل بس
+    // الـ Hold / الأرشفة بيمنعوا الرسائل بس
     const messagesSuppressed = await isSessionOnHold(session);
+    const suppressReason = session.groupId?.isArchived ? 'group_archived' : 'session_on_hold';
 
     const wasAlreadyCompleted = session.status === 'completed';
     const isComplimentary = session.isComplimentary === true;
@@ -737,6 +739,9 @@ export async function PATCH(req, { params }) {
 
     const groupId = session.groupId?._id;
     const groupStudentIds = getGroupStudentIdSet(session.groupId);
+
+    // ✅ NEW: الطلبة الموقوفين في الجروب
+    const pausedIds = groupId ? await getPausedStudentIds(groupId) : new Set();
 
     const { moduleTitle, moduleDescription } = groupId
       ? await getModuleData(groupId, session.moduleIndex ?? 0)
@@ -767,6 +772,12 @@ export async function PATCH(req, { params }) {
 
       if (!groupStudentIds.has(String(studentId))) {
         results.push(skippedResult(studentId, decision, null, 'student_not_in_group'));
+        continue;
+      }
+
+      // ✅ NEW: الطالب موقوف → لا تقييم ولا رسائل
+      if (pausedIds.has(String(studentId))) {
+        results.push(skippedResult(studentId, decision, null, 'student_paused'));
         continue;
       }
 
@@ -815,7 +826,7 @@ export async function PATCH(req, { params }) {
         participation: ratings?.participation ?? perfScore,
       };
 
-      // التقييم بيتحفظ دايمًا (حتى مع الـ Hold)
+      // التقييم بيتحفظ دايمًا (حتى مع الـ Hold / الأرشفة)
       await StudentEvaluation.findOneAndUpdate(
         { groupId, studentId, sessionId: session._id },
         {
@@ -834,9 +845,9 @@ export async function PATCH(req, { params }) {
         { upsert: true, returnDocument: 'after' },
       );
 
-      // Hold → مفيش أي رسالة
+      // Hold / أرشفة → مفيش أي رسالة
       if (messagesSuppressed) {
-        results.push(skippedResult(studentId, decision, attendanceStatus, 'session_on_hold'));
+        results.push(skippedResult(studentId, decision, attendanceStatus, suppressReason));
         continue;
       }
 
@@ -924,9 +935,6 @@ export async function PATCH(req, { params }) {
 
         // ═══════════════════════════════════════════════════════════════════════
         // ✅ Recording link — أونلاين فقط، ونفس مستلم التقييم
-        //    (متربط بالتقييم: لو التقييم duplicate مفيش تسجيل)
-        //        kids   → رقم ولي الأمر
-        //        adults → رقم الطالب
         // ═══════════════════════════════════════════════════════════════════════
         if (!duplicate && recordingLink?.trim() && !sessionIsOffline) {
           try {
@@ -937,7 +945,6 @@ export async function PATCH(req, { params }) {
                 studentId,
                 phoneNumber: recipientPhone,
                 messageContent: recBuilt.rendered,
-                // ✅ session_recording للطفل | session_recording_adult للبالغ
                 messageType: recBuilt.templateType,
                 language: lang,
                 metadata: {
@@ -955,10 +962,6 @@ export async function PATCH(req, { params }) {
 
         // ═══════════════════════════════════════════════════════════════════════
         // ✅ Session blog (ملخص الجلسة) — طفل → ولي الأمر | بالغ → الطالب
-        //    - أونلاين وأوفلاين
-        //    - مستقل عن dedupe التقييم: له dedupe خاص بيه (messageType = session_blog)
-        //      فلو التقييم كان duplicate والملخص عمره ما اتبعت، هيتبعت دلوقتي
-        //      ولو اتبعت قبل كده، الـ dedupe هيمنع التكرار
         // ═══════════════════════════════════════════════════════════════════════
         if (!blogInfo) {
           blogSkipReason = 'no_blog_content';

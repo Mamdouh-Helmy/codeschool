@@ -39,15 +39,49 @@ export async function POST(req, { params }) {
       return NextResponse.json({ success: false, error: "Group not found" }, { status: 404 });
     }
 
+    // ✅ الجروب المؤرشف لازم يتسترجع الأول
+    if (group.isArchived) {
+      return NextResponse.json(
+        { success: false, error: "الجروب مؤرشف — استرجعه من الأرشيف الأول" },
+        { status: 400 },
+      );
+    }
+
     const result = await resyncGroupModuleSessions(
       id,
       group,
       moduleSelection,
       adminUser.id,
       selectedLinkIds,
-      linkAssignmentMode, // 🆕
+      linkAssignmentMode,
     );
-    return NextResponse.json(result, { status: result.success ? 200 : 400 });
+
+    // ✅ لو الـ sync ضاف سيشنات جديدة لجروب كان منتهي (أو رسالة الإتمام اتبعتت)،
+    // نفتحه تاني: status → active + تصفير حالة رسالة الإتمام، عشان الرسائل ترجع
+    // والكرون يبعت رسالة الإتمام تاني لما الكورس الجديد يخلص.
+    let reopened = false;
+    if (result?.success) {
+      try {
+        const fresh = await Group.findById(id);
+        if (fresh) {
+          const r = await fresh.reopenAfterNewContent();
+          reopened = !!r.reopened;
+        }
+      } catch (reopenErr) {
+        // مش حرج: الـ sync نفسه نجح — بنسجل الخطأ بس
+        console.error("⚠️ reopenAfterNewContent failed:", reopenErr.message);
+      }
+    }
+
+    const body = reopened
+      ? {
+          ...result,
+          reopened: true,
+          message: `${result.message || "تمت المزامنة"} — الجروب اتفتح تاني وهيرجع يستقبل الرسائل`,
+        }
+      : { ...result, reopened: false };
+
+    return NextResponse.json(body, { status: result?.success ? 200 : 400 });
   } catch (error) {
     console.error("❌ Error syncing modules:", error);
 

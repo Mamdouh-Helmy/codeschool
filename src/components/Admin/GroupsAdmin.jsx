@@ -14,6 +14,10 @@ import {
     PauseCircle,
     Gift,
     MessageSquare,
+    Archive,
+    ArchiveRestore,
+    CheckCheck,
+    MoreVertical,
 } from "lucide-react";
 import Modal from "./Modal";
 import GroupForm from "./GroupForm";
@@ -25,6 +29,7 @@ import GroupDetailsPage from "./GroupDetailsPage";
 import GroupHoldModal from "./GroupHoldModal";
 import MakeupSessionForm from "./MakeupSessionForm";
 import GroupMessageModal from "./GroupMessageModal";
+import { useConfirm } from "./ConfirmDialog";
 import { useI18n } from "@/i18n/I18nProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -46,7 +51,8 @@ const INITIAL_FILTERS = {
     studentsCountMax: "",
     sessionsGenerated: "",
     tags: "",
-    groupType: "", // ✅ NEW
+    groupType: "",
+    archived: "",
     page: 1,
     limit: 10,
 };
@@ -62,6 +68,7 @@ const INITIAL_STATS = {
     makeup: 0,
     kids: 0,
     adults: 0,
+    archived: 0,
 };
 
 const DEFAULT_PENDING_ACTIVATION = {
@@ -86,6 +93,31 @@ const STATUS_DOT = {
     cancelled: "bg-rose-500",
 };
 
+// لون التايم ستامب (زي لون الوقت في الواتس) حسب الحالة
+const STATUS_TIME_COLOR = {
+    active: "text-emerald-600 dark:text-emerald-400",
+    draft: "text-slate-400",
+    completed: "text-sky-600 dark:text-sky-400",
+    cancelled: "text-rose-500 dark:text-rose-400",
+};
+
+// حلقة الأفاتار (زي حلقة الستاتس في الواتس)
+const STATUS_RING = {
+    active: "from-emerald-400 to-emerald-600",
+    draft: "from-slate-300 to-slate-400",
+    completed: "from-sky-400 to-sky-600",
+    cancelled: "from-rose-400 to-rose-600",
+};
+
+const AVATAR_GRADIENTS = [
+    "from-orange-400 to-rose-500",
+    "from-teal-500 to-emerald-600",
+    "from-sky-500 to-indigo-600",
+    "from-violet-500 to-fuchsia-600",
+    "from-amber-400 to-orange-600",
+    "from-cyan-500 to-blue-600",
+];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const buildQueryParams = (filters) => {
@@ -107,7 +139,8 @@ const buildQueryParams = (filters) => {
         studentsCountMin: "studentsMin",
         studentsCountMax: "studentsMax",
         tags: "tags",
-        groupType: "groupType", // ✅ NEW
+        groupType: "groupType",
+        archived: "archived",
     };
 
     Object.entries(simpleKeys).forEach(([filterKey, paramKey]) => {
@@ -131,12 +164,30 @@ const formatDate = (dateString, locale) => {
     }
 };
 
+const getInitials = (name = "") => {
+    const words = String(name).trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    if (words.length === 0) return "?";
+    return words.map((w) => Array.from(w)[0]).join("").toUpperCase();
+};
+
+const avatarGradientFor = (name = "") => {
+    let sum = 0;
+    for (let i = 0; i < name.length; i++) sum += name.charCodeAt(i);
+    return AVATAR_GRADIENTS[sum % AVATAR_GRADIENTS.length];
+};
+
+const selectCls = (isRTL) =>
+    `w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"} py-2.5 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all bg-white dark:bg-dark_input dark:text-white appearance-none`;
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function GroupsAdmin() {
     const { t, language } = useI18n();
     const router = useRouter();
     const isRTL = language === "ar";
+
+    // ✨ Custom confirm dialog (بديل window.confirm)
+    const [confirm, confirmDialog] = useConfirm(isRTL);
 
     // ── State ──────────────────────────────────────────────────────────────────
     const [groups, setGroups] = useState([]);
@@ -176,7 +227,6 @@ export default function GroupsAdmin() {
     const [pendingActivation, setPendingActivation] = useState(DEFAULT_PENDING_ACTIVATION);
     const [messageModal, setMessageModal] = useState({ open: false, groupId: null });
 
-
     const searchTimeoutRef = useRef(null);
 
     // ── Memos ──────────────────────────────────────────────────────────────────
@@ -197,56 +247,10 @@ export default function GroupsAdmin() {
         cancelled: t("groups.status.cancelled") || "Cancelled",
     }), [t]);
 
-    // ✅ NEW: labels نوع الجروب
     const groupTypeLabels = useMemo(() => ({
         kids: t("groups.groupType.kids") || "Kids",
         adults: t("groups.groupType.adults") || "Adults",
     }), [t]);
-
-    const statsConfig = useMemo(() => [
-        {
-            label: t("groups.stats.total") || "Total", value: stats.total,
-            accent: "from-primary/15 via-primary/5 to-transparent", ring: "ring-primary/15",
-            iconWrap: "bg-primary/10 text-primary",
-            icon: <Users className="w-5 h-5 md:w-6 md:h-6" />,
-        },
-        {
-            label: t("groups.stats.active") || "Active", value: stats.active,
-            accent: "from-emerald-500/15 via-emerald-500/5 to-transparent", ring: "ring-emerald-500/15",
-            iconWrap: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-            icon: <CheckCircle className="w-5 h-5 md:w-6 md:h-6" />,
-        },
-        {
-            label: t("groups.stats.onHold") || "On Hold", value: stats.onHold || 0,
-            accent: "from-amber-500/15 via-amber-500/5 to-transparent", ring: "ring-amber-500/15",
-            iconWrap: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-            icon: <PauseCircle className="w-5 h-5 md:w-6 md:h-6" />,
-        },
-        {
-            label: t("groups.stats.draft") || "Draft", value: stats.draft,
-            accent: "from-slate-400/15 via-slate-400/5 to-transparent", ring: "ring-slate-400/15",
-            iconWrap: "bg-slate-400/10 text-slate-500 dark:text-slate-400",
-            icon: <AlertCircle className="w-5 h-5 md:w-6 md:h-6" />,
-        },
-        {
-            label: t("groups.stats.completed") || "Completed", value: stats.completed,
-            accent: "from-sky-500/15 via-sky-500/5 to-transparent", ring: "ring-sky-500/15",
-            iconWrap: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
-            icon: <Target className="w-5 h-5 md:w-6 md:h-6" />,
-        },
-        {
-            label: t("groups.stats.cancelled") || "Cancelled", value: stats.cancelled,
-            accent: "from-rose-500/15 via-rose-500/5 to-transparent", ring: "ring-rose-500/15",
-            iconWrap: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
-            icon: <XCircle className="w-5 h-5 md:w-6 md:h-6" />,
-        },
-        {
-            label: t("groups.stats.makeup") || "Make-up", value: stats.makeup || 0,
-            accent: "from-orange-deep/15 via-orange-deep/5 to-transparent", ring: "ring-orange-deep/15",
-            iconWrap: "bg-orange-deep/10 text-orange-deep dark:text-amber-brand",
-            icon: <Gift className="w-5 h-5 md:w-6 md:h-6" />,
-        },
-    ], [stats, t]);
 
     const activeFiltersCount = useMemo(() => {
         let count = 0;
@@ -261,7 +265,23 @@ export default function GroupsAdmin() {
         if (filters.studentsCountMin || filters.studentsCountMax) count++;
         if (filters.sessionsGenerated) count++;
         if (filters.tags) count++;
-        if (filters.groupType) count++; // ✅ NEW
+        if (filters.groupType) count++;
+        if (filters.archived) count++;
+        return count;
+    }, [filters]);
+
+    // عدد الفلاتر المتقدمة فقط (اللي جوه البانل) — للبادج على زرار الفلاتر
+    const advancedFiltersCount = useMemo(() => {
+        let count = 0;
+        if (filters.courseId) count++;
+        if (filters.instructorId) count++;
+        if (filters.capacity) count++;
+        if (filters.daysOfWeek.length > 0) count++;
+        if (filters.startDateFrom || filters.startDateTo) count++;
+        if (filters.createdAtFrom || filters.createdAtTo) count++;
+        if (filters.studentsCountMin || filters.studentsCountMax) count++;
+        if (filters.sessionsGenerated) count++;
+        if (filters.tags) count++;
         return count;
     }, [filters]);
 
@@ -350,6 +370,12 @@ export default function GroupsAdmin() {
         }, 400);
     }, []);
 
+    const clearSearch = useCallback(() => {
+        setSearchInput("");
+        clearTimeout(searchTimeoutRef.current);
+        setFilters((prev) => ({ ...prev, search: "", page: 1 }));
+    }, []);
+
     const toggleStatus = useCallback((status) => {
         setFilters((prev) => ({
             ...prev,
@@ -358,6 +384,10 @@ export default function GroupsAdmin() {
                 ? prev.status.filter((s) => s !== status)
                 : [...prev.status, status],
         }));
+    }, []);
+
+    const clearStatus = useCallback(() => {
+        setFilters((prev) => ({ ...prev, status: [], page: 1 }));
     }, []);
 
     const toggleDay = useCallback((day) => {
@@ -401,10 +431,18 @@ export default function GroupsAdmin() {
     }, []);
 
     const onDelete = useCallback(async (id, name) => {
-        const confirmed = window.confirm(
-            `${t("groups.delete.confirm")?.replace("{name}", name) || `Delete "${name}"?`}\n\n${t("groups.delete.warning") || "This action cannot be undone."}`
-        );
-        if (!confirmed) return;
+        const ok = await confirm({
+            variant: "danger",
+            title: t("groups.delete.title") || "حذف الجروب",
+            itemName: name,
+            message:
+                t("groups.delete.confirm")?.replace("{name}", name) ||
+                "متأكد إنك عايز تحذف الجروب ده؟",
+            note: t("groups.delete.warning") || "الإجراء ده مش ممكن التراجع عنه.",
+            confirmText: t("groups.actions.delete") || "حذف",
+            cancelText: t("common.cancel") || "إلغاء",
+        });
+        if (!ok) return;
 
         const loadingToast = toast.loading(t("groups.delete.loading"), { position: "top-center" });
         try {
@@ -419,7 +457,7 @@ export default function GroupsAdmin() {
         } catch {
             toast.error(t("groups.delete.failed"), { id: loadingToast, position: "top-center" });
         }
-    }, [loadGroups, t]);
+    }, [loadGroups, t, confirm]);
 
     const onActivateWithNotification = useCallback((groupId) => {
         if (!groupId) {
@@ -543,11 +581,17 @@ export default function GroupsAdmin() {
 
     // ✅ فكّ الـ Hold مباشرة
     const onRelease = useCallback(async (groupId, groupName) => {
-        const confirmed = window.confirm(
-            t("groups.hold.confirmRelease")?.replace("{name}", groupName)
-            || `متأكد إنك عايز تفك الـ Hold عن "${groupName}"؟`
-        );
-        if (!confirmed) return;
+        const ok = await confirm({
+            variant: "success",
+            title: t("groups.actions.release") || "فكّ التعليق",
+            itemName: groupName,
+            message:
+                t("groups.hold.confirmRelease")?.replace("{name}", groupName) ||
+                "متأكد إنك عايز تفك الـ Hold عن الجروب ده؟",
+            confirmText: t("groups.actions.release") || "فكّ الـ Hold",
+            cancelText: t("common.cancel") || "إلغاء",
+        });
+        if (!ok) return;
 
         const loadingToast = toast.loading(
             t("groups.hold.releasing") || "جاري فك الـ Hold...",
@@ -577,7 +621,58 @@ export default function GroupsAdmin() {
                 { id: loadingToast, position: "top-center" }
             );
         }
-    }, [loadGroups, t]);
+    }, [loadGroups, t, confirm]);
+
+    // 🗄️ أرشفة جروب
+    const onArchive = useCallback(async (groupId, groupName) => {
+        const ok = await confirm({
+            variant: "warning",
+            title: "أرشفة الجروب",
+            itemName: groupName,
+            message: "هيتوقف أي رسائل أو أتمتة للجروب ده.",
+            note: "تقدر ترجّعه من الأرشيف في أي وقت.",
+            confirmText: "أرشفة",
+            cancelText: "إلغاء",
+        });
+        if (!ok) return;
+
+        const loadingToast = toast.loading("جاري الأرشفة...", { position: "top-center" });
+        try {
+            const res = await fetch(`/api/groups/${groupId}/archive`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+            });
+            const json = await res.json();
+            if (json.success) {
+                await loadGroups();
+                toast.success(json.message || "تم أرشفة الجروب", { id: loadingToast, position: "top-center" });
+            } else {
+                toast.error(json.error || "فشلت الأرشفة", { id: loadingToast, position: "top-center" });
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("فشل الاتصال", { id: loadingToast, position: "top-center" });
+        }
+    }, [loadGroups, confirm]);
+
+    // ♻️ استرجاع جروب من الأرشيف
+    const onRestore = useCallback(async (groupId) => {
+        const loadingToast = toast.loading("جاري الاسترجاع...", { position: "top-center" });
+        try {
+            const res = await fetch(`/api/groups/${groupId}/archive`, { method: "DELETE" });
+            const json = await res.json();
+            if (json.success) {
+                await loadGroups();
+                toast.success(json.message || "تم استرجاع الجروب", { id: loadingToast, position: "top-center" });
+            } else {
+                toast.error(json.error || "فشل الاسترجاع", { id: loadingToast, position: "top-center" });
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("فشل الاتصال", { id: loadingToast, position: "top-center" });
+        }
+    }, [loadGroups]);
 
     const closeHoldModal = useCallback(() => {
         setHoldModal({ open: false, groupId: null });
@@ -630,7 +725,18 @@ export default function GroupsAdmin() {
     };
 
     const handleDeleteTag = async (id) => {
-        if (!confirm("Are you sure you want to permanently delete this tag? It will be removed from all groups.")) return;
+        const tag = tagsList.find((tg) => tg._id === id);
+        const ok = await confirm({
+            variant: "danger",
+            title: "حذف الوسم",
+            itemName: tag?.name,
+            message: "هيتشال الوسم نهائيًا من كل الجروبات.",
+            note: "الإجراء ده مش ممكن التراجع عنه.",
+            confirmText: "حذف",
+            cancelText: "إلغاء",
+        });
+        if (!ok) return;
+
         try {
             const res = await fetch(`/api/tags/${id}`, { method: "DELETE" });
             if (res.ok) {
@@ -670,6 +776,83 @@ export default function GroupsAdmin() {
         setFixLinksModal({ open: false, groupId: null });
     }, []);
 
+    // ── Stories row config (دواير الستاتس) ─────────────────────────────────────
+    const storiesConfig = useMemo(() => [
+        {
+            key: "total",
+            label: t("groups.stats.total") || "Total",
+            value: stats.total,
+            grad: "from-primary to-orange-deep",
+            badge: "bg-primary",
+            icon: <Users className="w-3 h-3" />,
+            active: filters.status.length === 0,
+            onClick: clearStatus,
+        },
+        {
+            key: "active",
+            label: t("groups.stats.active") || "Active",
+            value: stats.active,
+            grad: "from-emerald-400 to-emerald-600",
+            badge: "bg-emerald-500",
+            icon: <CheckCircle className="w-3 h-3" />,
+            active: filters.status.includes("active"),
+            onClick: () => toggleStatus("active"),
+        },
+        {
+            key: "onHold",
+            label: t("groups.stats.onHold") || "On Hold",
+            value: stats.onHold || 0,
+            grad: "from-amber-400 to-amber-600",
+            badge: "bg-amber-500",
+            icon: <PauseCircle className="w-3 h-3" />,
+        },
+        {
+            key: "draft",
+            label: t("groups.stats.draft") || "Draft",
+            value: stats.draft,
+            grad: "from-slate-300 to-slate-500",
+            badge: "bg-slate-500",
+            icon: <AlertCircle className="w-3 h-3" />,
+            active: filters.status.includes("draft"),
+            onClick: () => toggleStatus("draft"),
+        },
+        {
+            key: "completed",
+            label: t("groups.stats.completed") || "Completed",
+            value: stats.completed,
+            grad: "from-sky-400 to-sky-600",
+            badge: "bg-sky-500",
+            icon: <Target className="w-3 h-3" />,
+            active: filters.status.includes("completed"),
+            onClick: () => toggleStatus("completed"),
+        },
+        {
+            key: "cancelled",
+            label: t("groups.stats.cancelled") || "Cancelled",
+            value: stats.cancelled,
+            grad: "from-rose-400 to-rose-600",
+            badge: "bg-rose-500",
+            icon: <XCircle className="w-3 h-3" />,
+            active: filters.status.includes("cancelled"),
+            onClick: () => toggleStatus("cancelled"),
+        },
+        {
+            key: "makeup",
+            label: t("groups.stats.makeup") || "Make-up",
+            value: stats.makeup || 0,
+            grad: "from-amber-brand to-orange-deep",
+            badge: "bg-orange-deep",
+            icon: <Gift className="w-3 h-3" />,
+        },
+    ], [stats, filters.status, t, clearStatus, toggleStatus]);
+
+    // ── Filter chips (زي شيبس الواتس: الكل / غير مقروء / ...) ───────────────────
+    const noQuickFilter = filters.status.length === 0 && !filters.groupType && !filters.archived;
+
+    const chipBase = "shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-all active:scale-95 whitespace-nowrap";
+    const chipOn = "bg-primary/15 text-primary ring-1 ring-inset ring-primary/30 font-semibold";
+    const chipOff = "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10";
+
     // ── Loading State ──────────────────────────────────────────────────────────
     if (loading && groups.length === 0) {
         return (
@@ -685,386 +868,420 @@ export default function GroupsAdmin() {
         );
     }
 
+    const showingFrom = pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.limit + 1;
+    const showingTo = Math.min(pagination.page * pagination.limit, pagination.total);
+
     // ── Render ─────────────────────────────────────────────────────────────────
     return (
-        <div className={`space-y-4 md:space-y-6 p-2 md:p-0 ${isRTL ? "rtl" : "ltr"}`} dir={isRTL ? "rtl" : "ltr"}>
+        <div
+            className={`relative rounded-3xl p-3 md:p-5 bg-[#efeae2] dark:bg-[#0b141a]/60 ${isRTL ? "rtl" : "ltr"}`}
+            dir={isRTL ? "rtl" : "ltr"}
+            style={{
+                backgroundImage: "radial-gradient(rgba(0,96,109,0.07) 1.2px, transparent 1.2px)",
+                backgroundSize: "20px 20px",
+            }}
+        >
+            <div className="max-w-6xl mx-auto space-y-4 md:space-y-5">
 
-            {/* ── Header ── */}
-            <div className="relative overflow-hidden bg-white dark:bg-darkmode rounded-2xl shadow-sm p-4 md:p-6 border border-PowderBlueBorder dark:border-dark_border">
-                <div className={`pointer-events-none absolute -top-16 ${isRTL ? "-left-16" : "-right-16"} w-56 h-56 rounded-full bg-primary/[0.06] blur-2xl`} />
-                <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div className="flex items-center gap-3 md:gap-4">
-                        <div className="p-2.5 md:p-3 bg-gradient-to-br from-primary/15 to-primary/5 rounded-xl ring-1 ring-primary/10">
-                            <Users className="w-5 h-5 md:w-7 md:h-7 text-primary" />
-                        </div>
-                        <div>
-                            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-MidnightNavyText dark:text-white">
-                                {t("groups.title") || "Groups Management"}
-                            </h1>
-                            <p className="text-xs md:text-sm text-SlateBlueText dark:text-darktext">
-                                {t("groups.subtitle") || "Manage your groups and sessions"}
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <button
-                            onClick={() => setTagsModalOpen(true)}
-                            className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700/60 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-4 py-2.5 rounded-xl font-semibold text-xs md:text-sm transition-all flex items-center gap-2 border border-transparent hover:border-gray-200 dark:hover:border-gray-600"
-                        >
-                            <Tag className="w-4 h-4" />
-                            {t("groups.tags.manage") || "Manage Tags"}
-                        </button>
-
-                        <button
-                            onClick={onMakeup}
-                            className="bg-gradient-to-r from-primary to-orange-deep hover:shadow-lg active:scale-[0.98] text-white px-4 py-2.5 md:px-5 md:py-3 rounded-xl font-semibold text-xs md:text-sm transition-all shadow-md shadow-primary/20 flex items-center gap-2 justify-center"
-                            title={t("groups.makeup.title") || "إنشاء حصة تعويضية"}
-                        >
-                            <Gift className="w-4 h-4" />
-                            <span className="hidden sm:inline">
-                                {t("groups.makeup.button") || "حصة تعويضية"}
-                            </span>
-                        </button>
-
-                        <button
-                            onClick={() => { setEditingGroup(null); setModalOpen(true); }}
-                            className="bg-primary hover:bg-primary/90 active:scale-[0.98] text-white px-4 py-2.5 md:px-6 md:py-3 rounded-xl font-semibold text-xs md:text-sm transition-all shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/25 flex items-center gap-2 w-full md:w-auto justify-center"
-                        >
-                            <Plus className="w-4 h-4" />
-                            {t("groups.create") || "Create Group"}
-                        </button>
+                {/* ── Stories row ── */}
+                <div className="-mx-1 px-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="flex items-start gap-4 md:gap-6 min-w-max md:min-w-0 md:justify-center py-1">
+                        {storiesConfig.map((s) => {
+                            const clickable = typeof s.onClick === "function";
+                            const Wrapper = clickable ? "button" : "div";
+                            return (
+                                <Wrapper
+                                    key={s.key}
+                                    {...(clickable ? { onClick: s.onClick, type: "button" } : {})}
+                                    className={`group/story flex flex-col items-center gap-1.5 ${clickable ? "cursor-pointer active:scale-95" : ""} transition-transform`}
+                                >
+                                    <div className="relative">
+                                        <div className={`p-[3px] rounded-full bg-gradient-to-tr ${s.grad} ${s.active === false ? "opacity-50 grayscale-[40%]" : ""} ${clickable ? "group-hover/story:scale-105" : ""} transition-all`}>
+                                            <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-white dark:bg-darkmode border-[3px] border-white dark:border-darkmode flex items-center justify-center">
+                                                <span className="text-lg md:text-xl font-extrabold text-MidnightNavyText dark:text-white tabular-nums">{s.value}</span>
+                                            </div>
+                                        </div>
+                                        <span className={`absolute -bottom-0.5 -end-0.5 w-5 h-5 rounded-full ${s.badge} text-white flex items-center justify-center ring-2 ring-[#efeae2] dark:ring-[#0b141a]`}>
+                                            {s.icon}
+                                        </span>
+                                    </div>
+                                    <span className={`text-[11px] md:text-xs font-medium max-w-[72px] truncate ${s.active ? "text-MidnightNavyText dark:text-white font-semibold" : "text-SlateBlueText dark:text-darktext"}`}>
+                                        {s.label}
+                                    </span>
+                                </Wrapper>
+                            );
+                        })}
                     </div>
                 </div>
-            </div>
 
-            {/* ── Stats (7 cards) ── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4">
-                {statsConfig.map((stat) => (
-                    <div
-                        key={stat.label}
-                        className={`relative overflow-hidden bg-white dark:bg-darkmode rounded-2xl p-3 md:p-4 border border-PowderBlueBorder dark:border-dark_border shadow-sm hover:shadow-md transition-shadow ring-1 ${stat.ring}`}
-                    >
-                        <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${stat.accent}`} />
-                        <div className="relative flex items-center justify-between gap-2">
+                {/* ── Chat panel ── */}
+                <div className="bg-white dark:bg-darkmode rounded-2xl border border-PowderBlueBorder dark:border-dark_border shadow-[0_6px_24px_rgba(11,20,26,0.08)]">
+
+                    {/* Top bar */}
+                    <div className="flex items-center justify-between gap-3 px-4 py-3 bg-[#f0f2f5] dark:bg-darklight rounded-t-2xl border-b border-PowderBlueBorder/70 dark:border-dark_border">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="relative shrink-0">
+                                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary to-orange-deep flex items-center justify-center text-white shadow-md shadow-primary/25">
+                                    <Users className="w-5 h-5" />
+                                </div>
+                                <span className="absolute bottom-0 end-0 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-[#f0f2f5] dark:ring-darklight" />
+                            </div>
                             <div className="min-w-0">
-                                <p className="text-[10px] md:text-xs font-medium text-SlateBlueText dark:text-darktext uppercase tracking-wide truncate">{stat.label}</p>
-                                <p className="text-lg md:text-2xl font-bold text-MidnightNavyText dark:text-white tabular-nums">{stat.value}</p>
-                            </div>
-                            <div className={`p-2 md:p-2.5 rounded-xl ${stat.iconWrap} flex-shrink-0`}>
-                                {stat.icon}
+                                <h1 className="text-base md:text-lg font-bold tracking-tight text-MidnightNavyText dark:text-white truncate">
+                                    {t("groups.title") || "Groups Management"}
+                                </h1>
+                                <p className="text-xs text-SlateBlueText dark:text-darktext truncate">
+                                    {pagination.total} · {t("groups.subtitle") || "Manage your groups and sessions"}
+                                </p>
                             </div>
                         </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                                onClick={() => setTagsModalOpen(true)}
+                                title={t("groups.tags.manage") || "Manage Tags"}
+                                className="w-10 h-10 rounded-full flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                            >
+                                <Tag className="w-[18px] h-[18px]" />
+                            </button>
+                            <button
+                                onClick={onMakeup}
+                                title={t("groups.makeup.title") || "إنشاء حصة تعويضية"}
+                                className="h-10 px-3 rounded-full flex items-center gap-2 text-primary bg-primary/10 hover:bg-primary/15 font-semibold text-xs transition-colors"
+                            >
+                                <Gift className="w-[18px] h-[18px]" />
+                                <span className="hidden sm:inline">{t("groups.makeup.button") || "حصة تعويضية"}</span>
+                            </button>
+                            <button
+                                onClick={() => { setEditingGroup(null); setModalOpen(true); }}
+                                className="hidden md:flex h-10 px-4 rounded-full items-center gap-2 bg-primary hover:bg-primary/90 active:scale-95 text-white font-semibold text-sm shadow-md shadow-primary/25 transition-all"
+                            >
+                                <Plus className="w-4 h-4" />
+                                {t("groups.create") || "Create Group"}
+                            </button>
+                        </div>
                     </div>
-                ))}
-            </div>
 
-            {/* ── Filters ── */}
-            <div className="bg-white dark:bg-darkmode rounded-2xl p-4 md:p-6 border border-PowderBlueBorder dark:border-dark_border shadow-sm space-y-4">
+                    {/* Search + advanced toggle */}
+                    <div className="px-3 md:px-4 pt-3 flex items-center gap-2">
+                        <div className="relative flex-1 group">
+                            <Search className={`absolute ${isRTL ? "right-3.5" : "left-3.5"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors`} />
+                            <input
+                                type="text"
+                                placeholder={t("groups.filters.search") || "Search by name or code..."}
+                                value={searchInput}
+                                onChange={(e) => handleSearchChange(e.target.value)}
+                                className={`w-full ${isRTL ? "pr-10 pl-10" : "pl-10 pr-10"} py-2.5 text-sm rounded-xl bg-[#f0f2f5] dark:bg-dark_input border border-transparent focus:bg-white dark:focus:bg-dark_input focus:border-primary/40 focus:ring-2 focus:ring-primary/20 outline-none transition-all dark:text-white placeholder:text-gray-400`}
+                            />
+                            {searchInput && (
+                                <button
+                                    onClick={clearSearch}
+                                    className={`absolute ${isRTL ? "left-2.5" : "right-2.5"} top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:bg-black/5 dark:hover:bg-white/10`}
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </div>
 
-                {/* Row 1: Search + Course + Instructor + GroupType + Advanced Toggle */}
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-
-                    <div className="relative group">
-                        <Search className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors`} />
-                        <input
-                            type="text"
-                            placeholder={t("groups.filters.search") || "Search by name or code..."}
-                            value={searchInput}
-                            onChange={(e) => handleSearchChange(e.target.value)}
-                            className={`w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"} py-2.5 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all dark:bg-dark_input dark:text-white`}
-                        />
-                    </div>
-
-                    <div className="relative">
-                        <GraduationCap className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`} />
-                        <select
-                            value={filters.courseId}
-                            onChange={(e) => handleFilterChange("courseId", e.target.value)}
-                            className={`w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"} py-2.5 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all dark:bg-dark_input dark:text-white appearance-none`}
+                        <button
+                            onClick={() => setShowAdvancedFilters((v) => !v)}
+                            title={t("groups.filters.advanced") || "Advanced"}
+                            className={`relative shrink-0 h-10 w-10 rounded-xl flex items-center justify-center transition-all ${showAdvancedFilters
+                                ? "bg-primary text-white shadow-md shadow-primary/25"
+                                : "bg-[#f0f2f5] text-gray-600 hover:bg-gray-200 dark:bg-dark_input dark:text-gray-300 dark:hover:bg-white/10"
+                                }`}
                         >
-                            <option value="">{t("groups.filters.allCourses") || "All Courses"}</option>
-                            {courses.map((course) => (
-                                <option key={course.id || course._id} value={course.id || course._id}>
-                                    {course.title}
-                                </option>
-                            ))}
-                        </select>
-                        <ChevronDown className={`absolute ${isRTL ? "left-3" : "right-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none`} />
+                            <SlidersHorizontal className="w-[18px] h-[18px]" />
+                            {advancedFiltersCount > 0 && (
+                                <span className="absolute -top-1 -end-1 min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white dark:ring-darkmode tabular-nums">
+                                    {advancedFiltersCount}
+                                </span>
+                            )}
+                        </button>
                     </div>
 
-                    <div className="relative">
-                        <UserCheck className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`} />
-                        <select
-                            value={filters.instructorId}
-                            onChange={(e) => handleFilterChange("instructorId", e.target.value)}
-                            className={`w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"} py-2.5 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all dark:bg-dark_input dark:text-white appearance-none`}
-                        >
-                            <option value="">{t("groups.filters.allInstructors") || "All Instructors"}</option>
-                            {instructorsList.map((inst) => (
-                                <option key={inst.id || inst._id} value={inst.id || inst._id}>
-                                    {inst.name}
-                                </option>
-                            ))}
-                        </select>
-                        <ChevronDown className={`absolute ${isRTL ? "left-3" : "right-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none`} />
+                    {/* Filter chips */}
+                    <div className="px-3 md:px-4 py-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        <div className="flex items-center gap-2 min-w-max">
+                            <button
+                                onClick={() => setFilters((p) => ({ ...p, status: [], groupType: "", archived: "", page: 1 }))}
+                                className={`${chipBase} ${noQuickFilter ? chipOn : chipOff}`}
+                            >
+                                {t("groups.filters.all") || "All"}
+                            </button>
+
+                            {["active", "draft", "completed", "cancelled"].map((status) => {
+                                const on = filters.status.includes(status);
+                                return (
+                                    <button
+                                        key={status}
+                                        onClick={() => toggleStatus(status)}
+                                        className={`${chipBase} ${on ? chipOn : chipOff}`}
+                                    >
+                                        <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[status]}`} />
+                                        {statusLabels[status]}
+                                        <span className="opacity-60 tabular-nums text-xs">{stats[status] || 0}</span>
+                                    </button>
+                                );
+                            })}
+
+                            <span className="w-px h-5 bg-gray-200 dark:bg-white/10 mx-1" />
+
+                            {["kids", "adults"].map((type) => {
+                                const on = filters.groupType === type;
+                                return (
+                                    <button
+                                        key={type}
+                                        onClick={() => handleFilterChange("groupType", on ? "" : type)}
+                                        className={`${chipBase} ${on ? chipOn : chipOff}`}
+                                    >
+                                        <span>{type === "kids" ? "🧒" : "🧑"}</span>
+                                        {groupTypeLabels[type]}
+                                        <span className="opacity-60 tabular-nums text-xs">{stats[type] || 0}</span>
+                                    </button>
+                                );
+                            })}
+
+                            <span className="w-px h-5 bg-gray-200 dark:bg-white/10 mx-1" />
+
+                            <button
+                                onClick={() => handleFilterChange("archived", filters.archived === "only" ? "" : "only")}
+                                className={`${chipBase} ${filters.archived === "only" ? chipOn : chipOff}`}
+                            >
+                                <Archive className="w-3.5 h-3.5" />
+                                {t("groups.filters.archivedGroups") || "الأرشيف"}
+                                {stats.archived > 0 && <span className="opacity-60 tabular-nums text-xs">{stats.archived}</span>}
+                            </button>
+                        </div>
                     </div>
 
-                    {/* ✅ NEW: فلتر نوع الجروب */}
-                    <div className="relative">
-                        <Users className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`} />
-                        <select
-                            value={filters.groupType}
-                            onChange={(e) => handleFilterChange("groupType", e.target.value)}
-                            className={`w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"} py-2.5 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all dark:bg-dark_input dark:text-white appearance-none`}
-                        >
-                            <option value="">{t("groups.filters.allGroupTypes") || "All Types"}</option>
-                            <option value="kids">🧒 {groupTypeLabels.kids}</option>
-                            <option value="adults">🧑 {groupTypeLabels.adults}</option>
-                        </select>
-                        <ChevronDown className={`absolute ${isRTL ? "left-3" : "right-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none`} />
-                    </div>
+                    {/* Advanced Filters Panel */}
+                    {showAdvancedFilters && (
+                        <div className="mx-3 md:mx-4 mb-3 space-y-5 p-4 rounded-2xl bg-[#f7f8fa] dark:bg-darklight/60 border border-PowderBlueBorder/70 dark:border-dark_border animate-in fade-in slide-in-from-top-1 duration-200">
 
-                    <button
-                        onClick={() => setShowAdvancedFilters((v) => !v)}
-                        className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${showAdvancedFilters
-                            ? "bg-primary text-white shadow-md shadow-primary/20"
-                            : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-                            }`}
-                    >
-                        <SlidersHorizontal className="w-4 h-4" />
-                        {t("groups.filters.advanced") || "Advanced"}
-                        {activeFiltersCount > 0 && (
-                            <span className="px-1.5 py-0.5 bg-white/20 rounded-full text-xs tabular-nums">
-                                {activeFiltersCount}
-                            </span>
-                        )}
-                        <ChevronDown className={`w-4 h-4 transition-transform ${showAdvancedFilters ? "rotate-180" : ""}`} />
-                    </button>
-                </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="relative">
+                                    <GraduationCap className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`} />
+                                    <select
+                                        value={filters.courseId}
+                                        onChange={(e) => handleFilterChange("courseId", e.target.value)}
+                                        className={selectCls(isRTL)}
+                                    >
+                                        <option value="">{t("groups.filters.allCourses") || "All Courses"}</option>
+                                        {courses.map((course) => (
+                                            <option key={course.id || course._id} value={course.id || course._id}>
+                                                {course.title}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className={`absolute ${isRTL ? "left-3" : "right-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none`} />
+                                </div>
 
-                {/* Advanced Filters Panel */}
-                {showAdvancedFilters && (
-                    <div className="space-y-5 pt-4 border-t border-PowderBlueBorder dark:border-dark_border animate-in fade-in slide-in-from-top-1 duration-200">
+                                <div className="relative">
+                                    <UserCheck className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400`} />
+                                    <select
+                                        value={filters.instructorId}
+                                        onChange={(e) => handleFilterChange("instructorId", e.target.value)}
+                                        className={selectCls(isRTL)}
+                                    >
+                                        <option value="">{t("groups.filters.allInstructors") || "All Instructors"}</option>
+                                        {instructorsList.map((inst) => (
+                                            <option key={inst.id || inst._id} value={inst.id || inst._id}>
+                                                {inst.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className={`absolute ${isRTL ? "left-3" : "right-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none`} />
+                                </div>
+                            </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 block">
+                                        {t("groups.filters.capacity") || "Capacity"}
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {[
+                                            { value: "", label: t("groups.filters.all") || "All" },
+                                            { value: "full", label: t("groups.filters.full") || "Full" },
+                                            { value: "available", label: t("groups.filters.available") || "Available" },
+                                        ].map((opt) => (
+                                            <button
+                                                key={opt.value}
+                                                onClick={() => handleFilterChange("capacity", opt.value)}
+                                                className={`${chipBase} !py-1.5 !text-xs ${filters.capacity === opt.value ? chipOn : chipOff}`}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 block">
+                                        {t("groups.filters.sessions") || "Sessions"}
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {[
+                                            { value: "", label: t("groups.filters.all") || "All" },
+                                            { value: "true", label: t("groups.filters.generated") || "Generated" },
+                                            { value: "false", label: t("groups.filters.notGenerated") || "Not Generated" },
+                                        ].map((opt) => (
+                                            <button
+                                                key={opt.value}
+                                                onClick={() => handleFilterChange("sessionsGenerated", opt.value)}
+                                                className={`${chipBase} !py-1.5 !text-xs ${filters.sessionsGenerated === opt.value ? chipOn : chipOff}`}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
 
                             <div>
-                                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 block">
-                                    {t("groups.filters.status") || "Status"}
+                                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1.5">
+                                    <CalendarDays className="w-3.5 h-3.5" />
+                                    {t("groups.filters.daysOfWeek") || "Days of Week"}
                                 </label>
                                 <div className="flex flex-wrap gap-2">
-                                    {["draft", "active", "completed", "cancelled"].map((status) => (
+                                    {DAYS_OF_WEEK.map((day) => (
                                         <button
-                                            key={status}
-                                            onClick={() => toggleStatus(status)}
-                                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ${filters.status.includes(status)
-                                                ? STATUS_COLORS[status]
-                                                : "bg-gray-50 text-gray-500 ring-1 ring-inset ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700"
-                                                }`}
+                                            key={day}
+                                            onClick={() => toggleDay(day)}
+                                            className={`${chipBase} !py-1.5 !text-xs ${filters.daysOfWeek.includes(day) ? chipOn : chipOff}`}
                                         >
-                                            <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[status]}`} />
-                                            {statusLabels[status]}
+                                            {dayLabels[day]}
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
                             <div>
-                                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 block">
-                                    {t("groups.filters.capacity") || "Capacity"}
+                                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1.5">
+                                    <Tag className="w-3.5 h-3.5" />
+                                    {t("groups.filters.tags") || "Tags"}
                                 </label>
-                                <div className="flex gap-2">
-                                    {[
-                                        { value: "", label: t("groups.filters.all") || "All" },
-                                        { value: "full", label: t("groups.filters.full") || "Full" },
-                                        { value: "available", label: t("groups.filters.available") || "Available" },
-                                    ].map((opt) => (
-                                        <button
-                                            key={opt.value}
-                                            onClick={() => handleFilterChange("capacity", opt.value)}
-                                            className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${filters.capacity === opt.value
-                                                ? "bg-primary text-white shadow-sm"
-                                                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-                                                }`}
-                                        >
-                                            {opt.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 block">
-                                    {t("groups.filters.sessions") || "Sessions"}
-                                </label>
-                                <div className="flex gap-2">
-                                    {[
-                                        { value: "", label: t("groups.filters.all") || "All" },
-                                        { value: "true", label: t("groups.filters.generated") || "Generated" },
-                                        { value: "false", label: t("groups.filters.notGenerated") || "Not Generated" },
-                                    ].map((opt) => (
-                                        <button
-                                            key={opt.value}
-                                            onClick={() => handleFilterChange("sessionsGenerated", opt.value)}
-                                            className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${filters.sessionsGenerated === opt.value
-                                                ? "bg-primary text-white shadow-sm"
-                                                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-                                                }`}
-                                        >
-                                            {opt.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1.5">
-                                <CalendarDays className="w-3.5 h-3.5" />
-                                {t("groups.filters.daysOfWeek") || "Days of Week"}
-                            </label>
-                            <div className="flex flex-wrap gap-2">
-                                {DAYS_OF_WEEK.map((day) => (
-                                    <button
-                                        key={day}
-                                        onClick={() => toggleDay(day)}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filters.daysOfWeek.includes(day)
-                                            ? "bg-primary text-white shadow-sm shadow-primary/20"
-                                            : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-                                            }`}
-                                    >
-                                        {dayLabels[day]}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1.5">
-                                <Tag className="w-3.5 h-3.5" />
-                                {t("groups.filters.tags") || "Tags"}
-                            </label>
-                            <div className="flex flex-wrap gap-2">
-                                {tagsList.map((tag) => {
-                                    const selected = filters.tags ? filters.tags.split(",").includes(tag._id) : false;
-                                    return (
-                                        <button
-                                            key={tag._id}
-                                            onClick={() => toggleTagFilter(tag._id)}
-                                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ring-1 ring-inset ${selected
-                                                ? "text-white ring-transparent shadow-sm"
-                                                : "bg-gray-100 text-gray-600 ring-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:ring-gray-600"
-                                                }`}
-                                            style={selected ? { backgroundColor: tag.color } : {}}
-                                        >
-                                            <span
-                                                className="inline-block w-2 h-2 rounded-full"
-                                                style={{ backgroundColor: selected ? "rgba(255,255,255,0.85)" : tag.color }}
-                                            />
-                                            {tag.name}
-                                        </button>
-                                    );
-                                })}
-                                {tagsList.length === 0 && (
-                                    <span className="text-xs text-gray-400 dark:text-gray-500 italic">
-                                        {t("groups.tags.noTags") || "No tags available"}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DateRangeFilter
-                                label={t("groups.filters.startDate") || "Start Date Range"}
-                                icon={<Calendar className="w-3.5 h-3.5" />}
-                                fromValue={filters.startDateFrom}
-                                toValue={filters.startDateTo}
-                                onFromChange={(v) => handleFilterChange("startDateFrom", v)}
-                                onToChange={(v) => handleFilterChange("startDateTo", v)}
-                            />
-                            <DateRangeFilter
-                                label={t("groups.filters.createdAt") || "Created Date Range"}
-                                icon={<Clock className="w-3.5 h-3.5" />}
-                                fromValue={filters.createdAtFrom}
-                                toValue={filters.createdAtTo}
-                                onFromChange={(v) => handleFilterChange("createdAtFrom", v)}
-                                onToChange={(v) => handleFilterChange("createdAtTo", v)}
-                            />
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-3">
-                            <div className="flex items-center gap-2 bg-gray-50 dark:bg-dark_input rounded-xl p-3 ring-1 ring-inset ring-gray-200 dark:ring-gray-700">
-                                <Users className="w-4 h-4 text-gray-400" />
-                                <span className="text-xs text-gray-500">{t("groups.filters.studentsCount") || "Students:"}</span>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    placeholder="Min"
-                                    value={filters.studentsCountMin}
-                                    onChange={(e) => handleFilterChange("studentsCountMin", e.target.value)}
-                                    className="w-16 px-2 py-1.5 text-xs border rounded-lg dark:bg-dark_input dark:text-white focus:ring-2 focus:ring-primary/30 outline-none"
-                                />
-                                <span className="text-gray-400">–</span>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    placeholder="Max"
-                                    value={filters.studentsCountMax}
-                                    onChange={(e) => handleFilterChange("studentsCountMax", e.target.value)}
-                                    className="w-16 px-2 py-1.5 text-xs border rounded-lg dark:bg-dark_input dark:text-white focus:ring-2 focus:ring-primary/30 outline-none"
-                                />
-                            </div>
-
-                            <div className={`flex items-center gap-2 ${isRTL ? "mr-auto" : "ml-auto"}`}>
-                                {activeFiltersCount > 0 && (
-                                    <>
-                                        <span className="px-3 py-1.5 bg-primary/10 text-primary text-xs rounded-full font-medium flex items-center gap-1">
-                                            <Filter className="w-3 h-3" />
-                                            {activeFiltersCount} {t("groups.filters.active") || "active"}
+                                <div className="flex flex-wrap gap-2">
+                                    {tagsList.map((tag) => {
+                                        const selected = filters.tags ? filters.tags.split(",").includes(tag._id) : false;
+                                        return (
+                                            <button
+                                                key={tag._id}
+                                                onClick={() => toggleTagFilter(tag._id)}
+                                                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ring-1 ring-inset active:scale-95 ${selected
+                                                    ? "text-white ring-transparent shadow-sm"
+                                                    : "bg-white text-gray-600 ring-gray-200 dark:bg-white/5 dark:text-gray-300 dark:ring-white/10"
+                                                    }`}
+                                                style={selected ? { backgroundColor: tag.color } : {}}
+                                            >
+                                                <span
+                                                    className="inline-block w-2 h-2 rounded-full"
+                                                    style={{ backgroundColor: selected ? "rgba(255,255,255,0.85)" : tag.color }}
+                                                />
+                                                {tag.name}
+                                            </button>
+                                        );
+                                    })}
+                                    {tagsList.length === 0 && (
+                                        <span className="text-xs text-gray-400 dark:text-gray-500 italic">
+                                            {t("groups.tags.noTags") || "No tags available"}
                                         </span>
-                                        <button
-                                            onClick={clearAllFilters}
-                                            className="px-3 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors flex items-center gap-1"
-                                        >
-                                            <X className="w-3 h-3" />
-                                            {t("groups.filters.clearAll") || "Clear All"}
-                                        </button>
-                                    </>
-                                )}
-                                <button
-                                    onClick={loadGroups}
-                                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg flex items-center gap-2 text-sm font-medium transition-all shadow-sm shadow-primary/20"
-                                >
-                                    <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-                                    {t("groups.filters.refresh") || "Refresh"}
-                                </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <DateRangeFilter
+                                    label={t("groups.filters.startDate") || "Start Date Range"}
+                                    icon={<Calendar className="w-3.5 h-3.5" />}
+                                    fromValue={filters.startDateFrom}
+                                    toValue={filters.startDateTo}
+                                    onFromChange={(v) => handleFilterChange("startDateFrom", v)}
+                                    onToChange={(v) => handleFilterChange("startDateTo", v)}
+                                />
+                                <DateRangeFilter
+                                    label={t("groups.filters.createdAt") || "Created Date Range"}
+                                    icon={<Clock className="w-3.5 h-3.5" />}
+                                    fromValue={filters.createdAtFrom}
+                                    toValue={filters.createdAtTo}
+                                    onFromChange={(v) => handleFilterChange("createdAtFrom", v)}
+                                    onToChange={(v) => handleFilterChange("createdAtTo", v)}
+                                />
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-3">
+                                <div className="flex items-center gap-2 bg-white dark:bg-dark_input rounded-xl p-3 ring-1 ring-inset ring-gray-200 dark:ring-white/10">
+                                    <Users className="w-4 h-4 text-gray-400" />
+                                    <span className="text-xs text-gray-500">{t("groups.filters.studentsCount") || "Students:"}</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        placeholder="Min"
+                                        value={filters.studentsCountMin}
+                                        onChange={(e) => handleFilterChange("studentsCountMin", e.target.value)}
+                                        className="w-16 px-2 py-1.5 text-xs border rounded-lg dark:bg-dark_input dark:text-white focus:ring-2 focus:ring-primary/30 outline-none"
+                                    />
+                                    <span className="text-gray-400">–</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        placeholder="Max"
+                                        value={filters.studentsCountMax}
+                                        onChange={(e) => handleFilterChange("studentsCountMax", e.target.value)}
+                                        className="w-16 px-2 py-1.5 text-xs border rounded-lg dark:bg-dark_input dark:text-white focus:ring-2 focus:ring-primary/30 outline-none"
+                                    />
+                                </div>
+
+                                <div className={`flex items-center gap-2 ${isRTL ? "mr-auto" : "ml-auto"}`}>
+                                    {activeFiltersCount > 0 && (
+                                        <>
+                                            <span className="px-3 py-1.5 bg-primary/10 text-primary text-xs rounded-full font-medium flex items-center gap-1">
+                                                <Filter className="w-3 h-3" />
+                                                {activeFiltersCount} {t("groups.filters.active") || "active"}
+                                            </span>
+                                            <button
+                                                onClick={clearAllFilters}
+                                                className="px-3 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors flex items-center gap-1"
+                                            >
+                                                <X className="w-3 h-3" />
+                                                {t("groups.filters.clearAll") || "Clear All"}
+                                            </button>
+                                        </>
+                                    )}
+                                    <button
+                                        onClick={loadGroups}
+                                        className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-full flex items-center gap-2 text-sm font-medium transition-all shadow-sm shadow-primary/20 active:scale-95"
+                                    >
+                                        <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+                                        {t("groups.filters.refresh") || "Refresh"}
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
-            </div>
+                    )}
 
-            {/* ── Table ── */}
-            <div className="bg-white dark:bg-darkmode rounded-2xl border border-PowderBlueBorder dark:border-dark_border shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-PowderBlueBorder dark:divide-dark_border">
-                        <thead className="bg-gray-50/80 dark:bg-dark_input backdrop-blur-sm">
-                            <tr>
-                                {[
-                                    t("groups.table.group") || "Group",
-                                    t("groups.table.course") || "Course",
-                                    t("groups.table.status") || "Status",
-                                    t("groups.table.students") || "Students",
-                                    t("groups.table.sessions") || "Sessions",
-                                    t("groups.table.actions") || "Actions",
-                                ].map((h) => (
-                                    <th key={h} className={`py-3.5 px-4 ${isRTL ? "text-right" : "text-left"} text-[11px] font-semibold text-MidnightNavyText dark:text-white uppercase tracking-wider`}>
-                                        {h}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-PowderBlueBorder dark:divide-dark_border">
+                    {/* progress line (أثناء إعادة التحميل) */}
+                    <div className="h-0.5 w-full overflow-hidden">
+                        {loading && groups.length > 0 && <div className="h-full w-full bg-primary/70 animate-pulse" />}
+                    </div>
+
+                    {/* "notice pill" زي رسالة التشفير في الواتس */}
+                    {groups.length > 0 && (
+                        <div className="flex justify-center py-3">
+                            <span className="px-3 py-1 rounded-lg bg-[#ffeecd] text-[#54656f] dark:bg-amber-500/10 dark:text-amber-200 text-[11px] font-medium shadow-sm tabular-nums">
+                                {t("groups.pagination.showing")
+                                    ?.replace("{from}", showingFrom)
+                                    ?.replace("{to}", showingTo)
+                                    ?.replace("{total}", pagination.total)
+                                    || `Showing ${showingFrom}-${showingTo} of ${pagination.total}`}
+                            </span>
+                        </div>
+                    )}
+
+                    {/* ── Chat list ── */}
+                    {groups.length > 0 && (
+                        <ul className="divide-y divide-gray-100 dark:divide-dark_border">
                             {groups.map((group) => (
                                 <GroupRow
                                     key={group.id}
@@ -1073,6 +1290,7 @@ export default function GroupsAdmin() {
                                     statusLabels={statusLabels}
                                     groupTypeLabels={groupTypeLabels}
                                     t={t}
+                                    isRTL={isRTL}
                                     onViewDetails={onViewDetails}
                                     onActivate={onActivateWithNotification}
                                     onAddStudents={onAddStudents}
@@ -1083,40 +1301,51 @@ export default function GroupsAdmin() {
                                     onHold={onHold}
                                     onRelease={onRelease}
                                     onSendMessage={onSendMessage}
+                                    onArchive={onArchive}
+                                    onRestore={onRestore}
                                 />
                             ))}
-                        </tbody>
-                    </table>
-                </div>
+                        </ul>
+                    )}
 
-                {/* Empty State */}
-                {groups.length === 0 && !loading && (
-                    <div className="text-center py-16 px-4">
-                        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-50 dark:bg-gray-800 flex items-center justify-center ring-1 ring-inset ring-gray-200 dark:ring-gray-700">
-                            <FolderOpen className="w-7 h-7 text-gray-300 dark:text-gray-600" />
+                    {/* Empty State */}
+                    {groups.length === 0 && !loading && (
+                        <div className="text-center py-16 px-4">
+                            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-[#f0f2f5] dark:bg-white/5 flex items-center justify-center">
+                                <FolderOpen className="w-9 h-9 text-gray-300 dark:text-gray-500" />
+                            </div>
+                            <h3 className="text-base font-bold mb-1.5 text-MidnightNavyText dark:text-white">{t("groups.empty.title") || "No Groups Found"}</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-sm mx-auto">{t("groups.empty.description") || "Try adjusting your filters or create a new group."}</p>
+                            <button
+                                onClick={() => setModalOpen(true)}
+                                className="bg-primary hover:bg-primary/90 active:scale-95 text-white px-8 py-3 rounded-full font-semibold flex items-center gap-2 mx-auto shadow-md shadow-primary/25 transition-all"
+                            >
+                                <Plus className="w-4 h-4" />
+                                {t("groups.empty.button") || "Create Group"}
+                            </button>
                         </div>
-                        <h3 className="text-base font-bold mb-1.5 text-MidnightNavyText dark:text-white">{t("groups.empty.title") || "No Groups Found"}</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-sm mx-auto">{t("groups.empty.description") || "Try adjusting your filters or create a new group."}</p>
-                        <button
-                            onClick={() => setModalOpen(true)}
-                            className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-semibold flex items-center gap-2 mx-auto shadow-md shadow-primary/20 transition-all"
-                        >
-                            <Plus className="w-4 h-4" />
-                            {t("groups.empty.button") || "Create Group"}
-                        </button>
-                    </div>
-                )}
+                    )}
 
-                {/* Pagination */}
-                {pagination.totalPages > 1 && (
-                    <Pagination
-                        pagination={pagination}
-                        t={t}
-                        isRTL={isRTL}
-                        onPageChange={handlePageChange}
-                    />
-                )}
+                    {/* Pagination */}
+                    {pagination.totalPages > 1 && (
+                        <Pagination
+                            pagination={pagination}
+                            t={t}
+                            isRTL={isRTL}
+                            onPageChange={handlePageChange}
+                        />
+                    )}
+                </div>
             </div>
+
+            {/* ── FAB (موبايل) زي زرار "محادثة جديدة" في الواتس ── */}
+            <button
+                onClick={() => { setEditingGroup(null); setModalOpen(true); }}
+                title={t("groups.create") || "Create Group"}
+                className="md:hidden fixed bottom-5 end-5 z-30 w-14 h-14 rounded-2xl bg-primary text-white shadow-xl shadow-primary/40 flex items-center justify-center active:scale-90 transition-transform"
+            >
+                <Plus className="w-6 h-6" />
+            </button>
 
             <Modal open={modalOpen} onClose={closeGroupModal} size="2xl" noPadding>
                 <GroupForm initial={editingGroup} onClose={closeGroupModal} onSaved={onSaved} />
@@ -1302,6 +1531,9 @@ export default function GroupsAdmin() {
                     </div>
                 </div>
             </Modal>
+
+            {/* ✨ Custom Confirm Dialog */}
+            {confirmDialog}
         </div>
     );
 }
@@ -1310,7 +1542,7 @@ export default function GroupsAdmin() {
 
 function DateRangeFilter({ label, icon, fromValue, toValue, onFromChange, onToChange }) {
     return (
-        <div className="bg-gray-50 dark:bg-dark_input rounded-xl p-3 ring-1 ring-inset ring-gray-200 dark:ring-gray-700">
+        <div className="bg-white dark:bg-dark_input rounded-xl p-3 ring-1 ring-inset ring-gray-200 dark:ring-white/10">
             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1.5">
                 {icon}
                 {label}
@@ -1334,16 +1566,31 @@ function DateRangeFilter({ label, icon, fromValue, toValue, onFromChange, onToCh
     );
 }
 
-// ✅ GroupRow مع حالة until_session + بادج الحصة التعويضية + بادج نوع الجروب
+// ─── Chat-style row ───────────────────────────────────────────────────────────
+
 function GroupRow({
-    group, dayLabels, statusLabels, groupTypeLabels, t,
+    group, dayLabels, statusLabels, groupTypeLabels, t, isRTL,
     onViewDetails, onActivate, onAddStudents, onViewSessions,
     onEdit, onDelete, onFixLinks,
     onHold, onRelease,
     onSendMessage,
+    onArchive, onRestore,
 }) {
+    const [menuOpen, setMenuOpen] = useState(false);
+    const menuRef = useRef(null);
+
+    useEffect(() => {
+        if (!menuOpen) return;
+        const handler = (e) => {
+            if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+        };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, [menuOpen]);
+
     const isOffline = group.deliveryMode === "offline";
-    const hasLinkIssue = !isOffline && !!group.linkHealth?.hasIssue;
+    const isArchived = !!group.isArchived;
+    const hasLinkIssue = !isOffline && !isArchived && !!group.linkHealth?.hasIssue;
     const isOnHold = !!group.isOnHold;
     const isMakeup = !!group.isMakeupGroup;
     const groupType = group.groupType;
@@ -1367,210 +1614,300 @@ function GroupRow({
         return `${t("groups.hold.duration") || "Hold"}: ${group.hold?.holdDays || 0} ${t("groups.hold.days") || "أيام"}`;
     })();
 
+    const ringGrad = isArchived
+        ? "from-slate-300 to-slate-400"
+        : isOnHold
+            ? "from-amber-400 to-amber-600"
+            : STATUS_RING[group.status] || STATUS_RING.draft;
+
+    const bubbleCls = group.isFull
+        ? "bg-rose-500 text-white"
+        : "bg-primary text-white";
+
+    const stop = (e) => e.stopPropagation();
+
     return (
-        <tr className="group hover:bg-gray-50/80 dark:hover:bg-dark_input/60 transition-colors">
+        <li className={`group relative ${menuOpen ? "z-20" : ""} ${isArchived ? "opacity-75" : ""}`}>
+            <div
+                onClick={() => onViewDetails(group.id)}
+                className="flex flex-wrap md:flex-nowrap items-start md:items-center gap-x-4 gap-y-1 px-4 py-3.5 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-white/[0.04] active:bg-[#ebedee] dark:active:bg-white/[0.07] transition-colors"
+            >
+                {/* ── Avatar with status ring ── */}
+                <div className="relative shrink-0">
+                    <div className={`p-[2.5px] rounded-full bg-gradient-to-tr ${ringGrad}`}>
+                        <div className="p-[2px] rounded-full bg-white dark:bg-darkmode">
+                            <div className={`w-[52px] h-[52px] rounded-full bg-gradient-to-br ${avatarGradientFor(group.name)} flex items-center justify-center text-white font-extrabold text-lg shadow-inner`}>
+                                {getInitials(group.name)}
+                            </div>
+                        </div>
+                    </div>
 
-            {/* Group Info */}
-            <td className="py-3.5 px-4">
-                <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-sm text-MidnightNavyText dark:text-white">{group.name}</p>
-
-                    {/* ✅ NEW: بادج نوع الجروب (Kids/Adults فقط، مش Mixed) */}
                     {(groupType === "kids" || groupType === "adults") && (
                         <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${groupType === "kids"
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20"
-                                : "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/20"
-                                }`}
                             title={groupTypeLabels[groupType]}
+                            className="absolute -bottom-0.5 -end-0.5 w-[22px] h-[22px] rounded-full bg-white dark:bg-darklight shadow flex items-center justify-center text-xs ring-1 ring-black/5"
                         >
                             {groupType === "kids" ? "🧒" : "🧑"}
-                            {groupTypeLabels[groupType]}
                         </span>
                     )}
 
                     {isMakeup && (
                         <span
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-primary/15 to-orange-deep/15 text-primary border border-primary/25 dark:border-primary/30"
                             title={t("groups.makeup.badgeTitle") || "حصة تعويضية"}
+                            className="absolute -top-0.5 -end-0.5 w-5 h-5 rounded-full bg-primary text-white shadow flex items-center justify-center ring-2 ring-white dark:ring-darkmode"
                         >
                             <Gift className="w-3 h-3" />
-                            {t("groups.makeup.badge") || "تعويضية"}
                         </span>
                     )}
                 </div>
-                <p className="text-xs text-SlateBlueText dark:text-darktext flex items-center gap-1 mt-0.5">
-                    <Hash className="w-3 h-3" />{group.code}
-                </p>
 
-                {hasLinkIssue && (
-                    <button
-                        type="button"
-                        onClick={() => onFixLinks(group.id)}
-                        title={linkIssueLabel}
-                        className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20 transition-colors"
-                    >
-                        <Link2Off className="w-3 h-3" />
-                        {linkIssueLabel}
-                        {(group.linkHealth.missingCount + group.linkHealth.orphanedCount) > 0 && (
-                            <span className="tabular-nums">
-                                ({group.linkHealth.missingCount + group.linkHealth.orphanedCount})
+                {/* ── Main content ── */}
+                <div className="flex-1 min-w-0 basis-[60%] md:basis-auto">
+                    {/* line 1: name + inline badges */}
+                    <div className="flex items-center gap-2 min-w-0">
+                        <p className="font-semibold text-[15px] text-MidnightNavyText dark:text-white truncate">{group.name}</p>
+
+                        <span className={`hidden sm:inline-flex shrink-0 items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_COLORS[group.status] || STATUS_COLORS.draft}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[group.status] || STATUS_DOT.draft}`} />
+                            {statusLabels[group.status] || group.status}
+                        </span>
+
+                        {isArchived && (
+                            <span
+                                className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-700/40 dark:text-slate-300"
+                                title={group.archive?.reason || ""}
+                            >
+                                <Archive className="w-3 h-3" />
+                                {t("groups.archived") || "مؤرشف"}
                             </span>
                         )}
-                    </button>
-                )}
+                    </div>
 
-                {group.tags && group.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                        {group.tags.map((tag) => (
+                    {/* line 2: ticks + course (زي آخر رسالة) */}
+                    <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                        <CheckCheck
+                            className={`w-4 h-4 shrink-0 ${group.sessionsGenerated ? "text-sky-500" : "text-gray-400"}`}
+                            title={group.sessionsGenerated
+                                ? `${t("groups.sessions.generated") || "Sessions generated"}: ${group.totalSessions}`
+                                : (t("groups.sessions.notGenerated") || "Not generated")}
+                        />
+                        <p className="text-sm text-SlateBlueText dark:text-darktext truncate">
+                            {group.course?.title || "N/A"}
+                            {group.course?.level ? ` · ${group.course.level}` : ""}
+                            {group.sessionsGenerated ? ` · ${group.totalSessions} ${t("groups.table.sessions") || "Sessions"}` : ""}
+                        </p>
+                    </div>
+
+                    {/* line 3: chips */}
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-white/5 text-[10px] font-medium text-gray-500 dark:text-gray-400">
+                            <Hash className="w-3 h-3" />{group.code}
+                        </span>
+
+                        {group.schedule?.daysOfWeek && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-gray-400">
+                                <CalendarDays className="w-3 h-3" />
+                                {group.schedule.daysOfWeek.map((d) => dayLabels[d] || d).join(", ")}
+                            </span>
+                        )}
+
+                        {isOnHold && (
+                            <span
+                                title={group.hold?.holdReason || ""}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20"
+                            >
+                                <PauseCircle className="w-3 h-3" />
+                                {holdLabel}
+                            </span>
+                        )}
+
+                        {hasLinkIssue && (
+                            <button
+                                type="button"
+                                onClick={(e) => { stop(e); onFixLinks(group.id); }}
+                                title={linkIssueLabel}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20 transition-colors"
+                            >
+                                <Link2Off className="w-3 h-3" />
+                                {linkIssueLabel}
+                                {(group.linkHealth.missingCount + group.linkHealth.orphanedCount) > 0 && (
+                                    <span className="tabular-nums">
+                                        ({group.linkHealth.missingCount + group.linkHealth.orphanedCount})
+                                    </span>
+                                )}
+                            </button>
+                        )}
+
+                        {group.tags && group.tags.length > 0 && group.tags.map((tag) => (
                             <span
                                 key={tag._id}
                                 className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium"
-                                style={{ backgroundColor: tag.color + '18', color: tag.color }}
+                                style={{ backgroundColor: tag.color + "18", color: tag.color }}
                             >
-                                <span className="w-1.5 h-1.5 rounded-full mr-1 rtl:mr-0 rtl:ml-1" style={{ backgroundColor: tag.color }} />
+                                <span className="w-1.5 h-1.5 rounded-full me-1" style={{ backgroundColor: tag.color }} />
                                 {tag.name}
                             </span>
                         ))}
                     </div>
-                )}
-                {group.schedule?.daysOfWeek && (
-                    <p className="text-[10px] text-gray-400 mt-1.5 flex items-center gap-1">
-                        <CalendarDays className="w-3 h-3" />
-                        {group.schedule.daysOfWeek.map((d) => dayLabels[d] || d).join(", ")}
-                        {" · "}{group.schedule.timeFrom}-{group.schedule.timeTo}
-                    </p>
-                )}
-            </td>
-
-            {/* Course */}
-            <td className="py-3.5 px-4">
-                <p className="text-sm text-MidnightNavyText dark:text-white">{group.course?.title || "N/A"}</p>
-                <p className="text-xs text-SlateBlueText dark:text-darktext">{group.course?.level || ""}</p>
-            </td>
-
-            {/* Status + Hold Badge */}
-            <td className="py-3.5 px-4">
-                <div className="space-y-1.5">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[group.status] || STATUS_COLORS.draft}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[group.status] || STATUS_DOT.draft}`} />
-                        {statusLabels[group.status] || group.status}
-                    </span>
-
-                    {isOnHold && (
-                        <div className="flex flex-col gap-1">
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20 w-fit">
-                                <PauseCircle className="w-3 h-3" />
-                                {holdLabel}
-                            </span>
-                            {group.hold?.holdReason && (
-                                <span
-                                    className="text-[10px] text-amber-600 dark:text-amber-400 truncate max-w-[180px]"
-                                    title={group.hold.holdReason}
-                                >
-                                    {group.hold.holdReason}
-                                </span>
-                            )}
-                        </div>
-                    )}
                 </div>
-            </td>
 
-            {/* Students */}
-            <td className="py-3.5 px-4">
-                <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm font-medium tabular-nums">{group.studentsCount}/{group.maxStudents}</span>
+                {/* ── End column: time + students bubble ── */}
+                <div className="shrink-0 flex flex-col items-end gap-1.5 md:min-w-[84px]">
+                    <span className={`text-xs font-semibold tabular-nums ${STATUS_TIME_COLOR[group.status] || STATUS_TIME_COLOR.draft}`}>
+                        {group.schedule?.timeFrom || "—"}
+                    </span>
+                    <span
+                        title={`${group.studentsCount}/${group.maxStudents}`}
+                        className={`inline-flex items-center gap-1 min-w-[26px] h-[22px] px-2 rounded-full text-[11px] font-bold tabular-nums justify-center ${bubbleCls}`}
+                    >
+                        <Users className="w-3 h-3" />
+                        {group.studentsCount}/{group.maxStudents}
+                    </span>
                     {group.isFull && (
-                        <span className="px-1.5 py-0.5 bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 text-[10px] rounded font-semibold">
+                        <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wide">
                             {t("groups.status.full") || "FULL"}
                         </span>
                     )}
                 </div>
-            </td>
 
-            {/* Sessions */}
-            <td className="py-3.5 px-4">
-                {group.sessionsGenerated ? (
-                    <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 text-sm font-medium">
-                        <CheckCircle className="w-3.5 h-3.5" />{group.totalSessions}
-                    </span>
-                ) : (
-                    <span className="text-gray-400 text-sm flex items-center gap-1">
-                        <Layers className="w-3.5 h-3.5" />
-                        {t("groups.sessions.notGenerated") || "Not generated"}
-                    </span>
-                )}
-            </td>
-
-            {/* Actions */}
-            <td className="py-3.5 px-4">
-                <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                {/* ── Actions (تظهر عند الـ hover على الديسكتوب) ── */}
+                <div
+                    onClick={stop}
+                    className={`basis-full md:basis-auto order-last md:order-none ps-[68px] md:ps-0 pt-1 md:pt-0 flex items-center gap-0.5 transition-opacity ${menuOpen ? "md:opacity-100" : "md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"}`}
+                >
                     <ActionButton onClick={() => onViewDetails(group.id)} hoverColor="blue" title={t("groups.actions.viewDetails") || "View Details"}>
-                        <Info className="w-4 h-4 text-blue-600" />
+                        <Info className="w-[18px] h-[18px] text-blue-600" />
                     </ActionButton>
 
-                    {group.status === "active" && !isOnHold && (
+                    {isArchived ? (
                         <ActionButton
-                            onClick={() => onHold(group.id)}
-                            hoverColor="amber"
-                            title={t("groups.actions.hold") || "تعليق الجروب"}
-                        >
-                            <PauseCircle className="w-4 h-4 text-amber-600" />
-                        </ActionButton>
-                    )}
-
-                    {isOnHold && (
-                        <ActionButton
-                            onClick={() => onRelease(group.id, group.name)}
+                            onClick={() => onRestore(group.id)}
                             hoverColor="green"
-                            title={t("groups.actions.release") || "فكّ التعليق"}
+                            title={t("groups.actions.restore") || "استرجاع من الأرشيف"}
                         >
-                            <PlayCircle className="w-4 h-4 text-emerald-600" />
+                            <ArchiveRestore className="w-[18px] h-[18px] text-emerald-600" />
                         </ActionButton>
+                    ) : (
+                        <>
+                            {group.status === "draft" && (
+                                <ActionButton onClick={() => onActivate(group.id)} hoverColor="green" title={t("groups.actions.activate") || "Activate"}>
+                                    <PlayCircle className="w-[18px] h-[18px] text-emerald-600" />
+                                </ActionButton>
+                            )}
+
+                            {group.status === "active" && !isOnHold && (
+                                <ActionButton
+                                    onClick={() => onHold(group.id)}
+                                    hoverColor="amber"
+                                    title={t("groups.actions.hold") || "تعليق الجروب"}
+                                >
+                                    <PauseCircle className="w-[18px] h-[18px] text-amber-600" />
+                                </ActionButton>
+                            )}
+
+                            {isOnHold && (
+                                <ActionButton
+                                    onClick={() => onRelease(group.id, group.name)}
+                                    hoverColor="green"
+                                    title={t("groups.actions.release") || "فكّ التعليق"}
+                                >
+                                    <PlayCircle className="w-[18px] h-[18px] text-emerald-600" />
+                                </ActionButton>
+                            )}
+
+                            {(group.status === "active" || isOnHold) && (
+                                <ActionButton onClick={() => onSendMessage(group.id)} hoverColor="blue" title="إرسال رسالة">
+                                    <MessageSquare className="w-[18px] h-[18px] text-blue-600" />
+                                </ActionButton>
+                            )}
+
+                            {group.status === "active" && !group.isFull && !isOnHold && (
+                                <ActionButton onClick={() => onAddStudents(group.id)} hoverColor="blue" title={t("groups.actions.addStudents") || "Add Students"}>
+                                    <UserPlus className="w-[18px] h-[18px] text-blue-600" />
+                                </ActionButton>
+                            )}
+                        </>
                     )}
 
-                    {group.status === "draft" && (
-                        <ActionButton onClick={() => onActivate(group.id)} hoverColor="green" title={t("groups.actions.activate") || "Activate"}>
-                            <PlayCircle className="w-4 h-4 text-emerald-600" />
+                    {/* ⋮ القايمة (زي سهم الشات في الواتس) */}
+                    <div className="relative" ref={menuRef}>
+                        <ActionButton
+                            onClick={() => setMenuOpen((v) => !v)}
+                            hoverColor="gray"
+                            title={t("groups.actions.more") || "More"}
+                        >
+                            <MoreVertical className="w-[18px] h-[18px] text-gray-500 dark:text-gray-300" />
                         </ActionButton>
-                    )}
 
-                    {(group.status === "active" || isOnHold) && (
-                        <ActionButton onClick={() => onSendMessage(group.id)} hoverColor="blue" title="إرسال رسالة">
-                            <MessageSquare className="w-4 h-4 text-blue-600" />
-                        </ActionButton>
-                    )}
+                        {menuOpen && (
+                            <div
+                                className={`absolute ${isRTL ? "left-0" : "right-0"} top-full mt-1 w-56 py-1.5 rounded-2xl bg-white dark:bg-darklight border border-gray-100 dark:border-dark_border shadow-[0_10px_40px_rgba(11,20,26,0.18)] animate-in fade-in zoom-in-95 duration-100 z-30`}
+                            >
+                                {group.sessionsGenerated && (
+                                    <MenuItem
+                                        icon={<Calendar className="w-4 h-4 text-purple-600" />}
+                                        label={t("groups.actions.viewSessions") || "View Sessions"}
+                                        onClick={() => { setMenuOpen(false); onViewSessions(group.id); }}
+                                    />
+                                )}
 
+                                {!isArchived && hasLinkIssue && (
+                                    <MenuItem
+                                        icon={<Link2Off className="w-4 h-4 text-amber-600" />}
+                                        label={t("groups.actions.fixLinks") || "إصلاح لينكات الاجتماعات"}
+                                        onClick={() => { setMenuOpen(false); onFixLinks(group.id); }}
+                                    />
+                                )}
 
-                    {group.status === "active" && !group.isFull && !isOnHold && (
-                        <ActionButton onClick={() => onAddStudents(group.id)} hoverColor="blue" title={t("groups.actions.addStudents") || "Add Students"}>
-                            <UserPlus className="w-4 h-4 text-blue-600" />
-                        </ActionButton>
-                    )}
+                                {!isArchived && (
+                                    <>
+                                        <MenuItem
+                                            icon={<Edit className="w-4 h-4 text-primary" />}
+                                            label={t("groups.actions.edit") || "Edit"}
+                                            onClick={() => { setMenuOpen(false); onEdit(group); }}
+                                        />
+                                        <MenuItem
+                                            icon={<Archive className="w-4 h-4 text-slate-600 dark:text-slate-300" />}
+                                            label={t("groups.actions.archive") || "أرشفة"}
+                                            onClick={() => { setMenuOpen(false); onArchive(group.id, group.name); }}
+                                        />
+                                        <div className="my-1 h-px bg-gray-100 dark:bg-dark_border" />
+                                        <MenuItem
+                                            danger
+                                            icon={<Trash2 className="w-4 h-4" />}
+                                            label={t("groups.actions.delete") || "Delete"}
+                                            onClick={() => { setMenuOpen(false); onDelete(group.id, group.name); }}
+                                        />
+                                    </>
+                                )}
 
-                    {hasLinkIssue && !isOffline && (
-                        <ActionButton onClick={() => onFixLinks(group.id)} hoverColor="red" title={t("groups.actions.fixLinks") || "إصلاح لينكات الاجتماعات"}>
-                            <Link2Off className="w-4 h-4 text-amber-600" />
-                        </ActionButton>
-                    )}
-
-                    {group.sessionsGenerated && (
-                        <ActionButton onClick={() => onViewSessions(group.id)} hoverColor="purple" title={t("groups.actions.viewSessions") || "View Sessions"}>
-                            <Calendar className="w-4 h-4 text-purple-600" />
-                        </ActionButton>
-                    )}
-
-                    <ActionButton onClick={() => onEdit(group)} hoverColor="gray" title={t("groups.actions.edit") || "Edit"}>
-                        <Edit className="w-4 h-4 text-primary" />
-                    </ActionButton>
-
-                    <ActionButton onClick={() => onDelete(group.id, group.name)} hoverColor="red" title={t("groups.actions.delete") || "Delete"}>
-                        <Trash2 className="w-4 h-4 text-red-600" />
-                    </ActionButton>
+                                {isArchived && !group.sessionsGenerated && (
+                                    <p className="px-4 py-2 text-xs text-gray-400">
+                                        {t("groups.archived") || "مؤرشف"}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
-            </td>
-        </tr>
+            </div>
+        </li>
+    );
+}
+
+function MenuItem({ icon, label, onClick, danger = false }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-start transition-colors ${danger
+                ? "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                : "text-MidnightNavyText dark:text-white hover:bg-gray-50 dark:hover:bg-white/5"
+                }`}
+        >
+            <span className="shrink-0">{icon}</span>
+            <span className="truncate">{label}</span>
+        </button>
     );
 }
 
@@ -1580,11 +1917,16 @@ function ActionButton({ onClick, hoverColor, title, children }) {
         green: "hover:bg-emerald-50 dark:hover:bg-emerald-900/30",
         purple: "hover:bg-purple-50 dark:hover:bg-purple-900/30",
         red: "hover:bg-red-50 dark:hover:bg-red-900/30",
-        gray: "hover:bg-gray-100 dark:hover:bg-gray-700",
+        gray: "hover:bg-gray-100 dark:hover:bg-white/10",
         amber: "hover:bg-amber-50 dark:hover:bg-amber-900/30",
     };
     return (
-        <button onClick={onClick} title={title} className={`p-1.5 rounded-lg transition-all hover:scale-110 active:scale-95 ${hoverClasses[hoverColor]}`}>
+        <button
+            type="button"
+            onClick={onClick}
+            title={title}
+            className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${hoverClasses[hoverColor]}`}
+        >
             {children}
         </button>
     );
@@ -1629,7 +1971,7 @@ function Pagination({ pagination, t, isRTL, onPageChange }) {
     const LastIcon = isRTL ? ChevronsLeft : ChevronsRight;
 
     return (
-        <div className="px-4 py-3.5 border-t border-PowderBlueBorder dark:border-dark_border bg-gray-50/50 dark:bg-dark_input/30">
+        <div className="px-4 py-3.5 border-t border-gray-100 dark:border-dark_border bg-[#f0f2f5]/70 dark:bg-darklight/60 rounded-b-2xl">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                 <p className="text-xs text-SlateBlueText dark:text-darktext order-2 sm:order-1 tabular-nums">
                     {t("groups.pagination.showing")
@@ -1664,9 +2006,9 @@ function Pagination({ pagination, t, isRTL, onPageChange }) {
                                     key={p}
                                     onClick={() => onPageChange(p)}
                                     aria-current={p === page ? "page" : undefined}
-                                    className={`w-8 h-8 rounded-lg text-xs font-semibold transition-all tabular-nums ${p === page
+                                    className={`w-8 h-8 rounded-full text-xs font-semibold transition-all tabular-nums active:scale-90 ${p === page
                                         ? "bg-primary text-white shadow-sm shadow-primary/30"
-                                        : "text-MidnightNavyText dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
+                                        : "text-MidnightNavyText dark:text-white hover:bg-black/5 dark:hover:bg-white/10"
                                         }`}
                                 >
                                     {p}
@@ -1702,7 +2044,7 @@ function PaginationButton({ onClick, disabled, title, children }) {
             onClick={onClick}
             disabled={disabled}
             title={title}
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-PowderBlueBorder dark:border-dark_border text-MidnightNavyText dark:text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all"
+            className="w-8 h-8 flex items-center justify-center rounded-full text-MidnightNavyText dark:text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/10 hover:text-primary transition-all active:scale-90"
         >
             {children}
         </button>

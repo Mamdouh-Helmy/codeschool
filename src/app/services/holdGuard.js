@@ -4,6 +4,7 @@
 // الـ Hold بيمنع الرسائل/الحضور بس — مش حساب مستحقات المدرس.
 // ═══════════════════════════════════════════════════════════════════════════
 import Session from "../models/Session";
+import Student from "../models/Student";
 
 export function sortSessionsForHold(sessions) {
   return [...sessions].sort((a, b) => {
@@ -67,4 +68,41 @@ export async function resolveSessionLock(session, group) {
     group,
     allGroupSessions,
   );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ Hold على مستوى الطالب جوه الجروب
+// بيمنع الرسائل/الحضور/التقييم بس — مش حساب مستحقات المدرس.
+// الإيقاف خاص بالجروب ده بس، والطالب لو في جروبات تانية بيفضل شغال فيها.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** فلتر جاهز للـ Student.find: يستبعد الطلبة الموقوفين في الجروب ده */
+export const notPausedInGroup = (groupId) => ({
+  "academicInfo.pausedGroups.groupId": { $ne: groupId },
+});
+
+/** للفحص على Student document / lean object موجود في الميموري */
+export function isStudentPausedInGroup(student, groupId) {
+  if (!student || !groupId) return false;
+  return (student.academicInfo?.pausedGroups || []).some(
+    (p) => String(p.groupId) === String(groupId),
+  );
+}
+
+/** Set بأيدي الطلبة الموقوفين في الجروب ده (لو studentIds اتبعتت بيقصر البحث عليهم) */
+export async function getPausedStudentIds(groupId, studentIds = null) {
+  const q = { "academicInfo.pausedGroups.groupId": groupId };
+  if (studentIds) q._id = { $in: studentIds };
+  const docs = await Student.find(q).select("_id").lean();
+  return new Set(docs.map((d) => String(d._id)));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ الأرشفة — الجروب المؤرشف مفيش أي رسالة أو كرون بيلمسه
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const notArchived = () => ({ isArchived: { $ne: true } });
+
+export function isGroupArchived(group) {
+  return !!group?.isArchived;
 }

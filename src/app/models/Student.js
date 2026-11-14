@@ -376,6 +376,15 @@ const StudentSchema = new mongoose.Schema(
       },
       groupIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Group" }],
       currentCourses: [currentCourseSchema],
+      pausedGroups: [
+  {
+    _id: false,
+    groupId: { type: mongoose.Schema.Types.ObjectId, ref: "Group", required: true },
+    reason: { type: String, default: "" },
+    pausedAt: { type: Date, default: Date.now },
+    pausedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  },
+],
     },
 
     // ✅ الوسوم الخاصة بالطالب
