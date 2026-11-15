@@ -426,6 +426,24 @@ SessionSchema.pre("save", async function () {
   this.metadata.updatedAt = new Date();
 });
 
+// ── Auto-reset reminder flags when the schedule changes ─────────────────────
+// يغطي holdGroup / approveRescheduleBatch / أي save() بيحرّك السيشن
+SessionSchema.pre("save", async function () {
+  if (this.isNew || this.status === "completed") return;
+  if (!this.isModified("scheduledDate") && !this.isModified("startTime")) return;
+
+  const ae = this.automationEvents;
+  if (!ae) return;
+
+  ae.reminderSent = false;
+  ae.reminder24hSent = false;
+  ae.reminder1hSent = false;
+  ae.reminder15minSent = false;
+  ae.reminder24hOfflineSent = false;
+  ae.reminder30minOfflineSent = false;
+  ae.preAttendancePingSent = false;
+});
+
 // ── Prevent deletion queries from returning deleted sessions ────────────────
 SessionSchema.pre("find", function () {
   this.where({ isDeleted: false });

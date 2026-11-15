@@ -28,6 +28,17 @@ const dayMapReverse = {
   6: "Saturday",
 };
 
+// ✅ علامات التذكير اللي لازم تتصفّر لما معاد الحصة يتغير
+export const RESET_REMINDER_FLAGS = {
+  "automationEvents.reminderSent": false,
+  "automationEvents.reminder24hSent": false,
+  "automationEvents.reminder1hSent": false,
+  "automationEvents.reminder15minSent": false,
+  "automationEvents.reminder24hOfflineSent": false,
+  "automationEvents.reminder30minOfflineSent": false,
+  "automationEvents.preAttendancePingSent": false,
+};
+
 /**
  * ✅ Calculate total sessions from course curriculum based on module selection
  * (ديناميك: بيحسب من الدروس الفعلية لكل موديول)
@@ -1403,8 +1414,8 @@ export async function rescheduleGroupSessions(
   console.log(
     `📅 Generated ${newDates.length} new dates starting ${effectiveFrom}`,
   );
-
   // ── 3. Update كل سيشن بتاريخها الجديد + الوقت الجديد ──────────────────────
+  // ✅ + تصفير علامات التذكير (المعاد اتغيّر)
   const bulkOps = toReschedule.map((session, i) => ({
     updateOne: {
       filter: { _id: session._id },
@@ -1413,6 +1424,7 @@ export async function rescheduleGroupSessions(
           scheduledDate: newDates[i],
           startTime: timeFrom,
           endTime: timeTo,
+          ...RESET_REMINDER_FLAGS,
           "metadata.updatedAt": new Date(),
           "metadata.lastModifiedBy": userId,
           ...(session.status !== "scheduled" ? { status: "scheduled" } : {}),
@@ -1690,9 +1702,10 @@ export async function resyncGroupModuleSessions(
     const title = `Session ${slot.sessionNumber}: ${lessonTitle}`;
     const description = firstLesson?.description || "";
 
-    if (slot.existing) {
+       if (slot.existing) {
       // ✅ سيشن موجودة بالفعل لنفس (module, sessionNumber) — نحدّث بس تاريخها/
       // وقتها/عنوانها/دروسها، ومنلمسش اللينك ولا الـ _id بتاعها خالص
+      // ✅ التاريخ ممكن يكون اتحرك → نصفّر علامات التذكير عشان تتبعت على المعاد الجديد
       bulkUpdateExisting.push({
         updateOne: {
           filter: { _id: slot.existing._id },
@@ -1705,6 +1718,7 @@ export async function resyncGroupModuleSessions(
               description,
               lessonIndexes: slot.lessonIndexes,
               status: "scheduled",
+              ...RESET_REMINDER_FLAGS,
               "metadata.updatedAt": new Date(),
               "metadata.lastModifiedBy": userId,
             },

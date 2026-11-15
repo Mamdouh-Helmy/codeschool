@@ -47,12 +47,13 @@ export async function POST(req, { params }) {
     const { id: groupId } = await params;
     const body = await req.json();
 
-    const data = await sendDirectMessage({
+        const data = await sendDirectMessage({
       groupId,
       recipientKey: String(body.recipientKey || ""),
       content: String(body.content ?? ""),
       language: body.language || "auto",
       raw: body.raw === true,
+      instance: body.instance === "eval" ? "eval" : "main",
     });
 
     return NextResponse.json({ success: true, data });

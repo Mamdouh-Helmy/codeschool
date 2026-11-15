@@ -399,8 +399,10 @@ export async function getGroupRecipients(groupId) {
     recipients: recipients.map(({ phone, ...rest }) => ({ ...rest, hasPhone: !!phone })),
     // متغيرات التحية اللي مش متسجلة في الداتابيز (بيتستخدم بدالها النص الافتراضي)
     fallbackKeys: [...res.fallbackKeys],
-    // ✅ NEW: عدد الطلبة الموقوفين (مخفيين من القايمة)
+    // عدد الطلبة الموقوفين (مخفيين من القايمة)
     pausedCount,
+    // ✅ NEW: حالة الـ instances (متضبط ولا لأ)
+    instances: wapilotService.getInstancesInfo(),
   };
 }
 
@@ -435,9 +437,32 @@ function validateAgainstGroup(templates, groupInfo) {
   }
 }
 
-// ─── Delivery ────────────────────────────────────────────────────────────────
+// ─── Instances (main / eval) ─────────────────────────────────────────────────
 
-function dispatch(recipient, { text, language }, groupInfo, extra = {}) {
+const normalizeInstance = (v) => (v === "eval" ? "eval" : "main");
+
+function normalizeInstanceByType(raw) {
+  const out = {};
+  for (const type of Object.values(RECIPIENT_TYPE)) {
+    if (raw && (raw[type] === "main" || raw[type] === "eval")) {
+      out[type] = raw[type];
+    }
+  }
+  return out;
+}
+
+function assertInstancesAvailable(keys) {
+  const info = wapilotService.getInstancesInfo();
+  for (const key of keys) {
+    if (!info.find((i) => i.key === key)?.configured) {
+      const label = key === "eval" ? "التقييم" : "الرئيسي";
+      throw new GroupMessageError(`إنستانس "${label}" مش متضبط في الـ env`, 400);
+    }
+  }
+}
+
+// ─── Delivery ────────────────────────────────────────────────────────────────
+function dispatch(recipient, { text, language }, groupInfo, extra = {}, instance = "main") {
   const groupMeta = {
     groupId: groupInfo.id,
     groupName: groupInfo.name,
@@ -452,6 +477,7 @@ function dispatch(recipient, { text, language }, groupInfo, extra = {}) {
       messageType: "group_custom_message",
       language,
       metadata: groupMeta,
+      instance,
     });
   }
 
@@ -462,6 +488,7 @@ function dispatch(recipient, { text, language }, groupInfo, extra = {}) {
     messageContent: text,
     messageType: "custom",
     language,
+    instance,
     metadata: {
       ...groupMeta,
       isCustomMessage: true,
@@ -472,8 +499,13 @@ function dispatch(recipient, { text, language }, groupInfo, extra = {}) {
   });
 }
 
-async function deliver(recipient, groupInfo, templates, seen) {
-  const base = { key: recipient.key, type: recipient.type, name: recipient.names[recipient.language] };
+async function deliver(recipient, groupInfo, templates, seen, instance = "main") {
+  const base = {
+    key: recipient.key,
+    type: recipient.type,
+    name: recipient.names[recipient.language],
+    instance,
+  };
 
   if (!recipient.phone) return { ...base, status: "skipped", reason: "no_phone" };
 
@@ -486,7 +518,7 @@ async function deliver(recipient, groupInfo, templates, seen) {
   seen.add(fingerprint);
 
   try {
-    const result = await dispatch(recipient, message, groupInfo);
+    const result = await dispatch(recipient, message, groupInfo, {}, instance);
     return result?.success
       ? { ...base, status: "sent", language: message.language }
       : { ...base, status: "failed", error: result?.error || "Unknown error" };
@@ -494,10 +526,7 @@ async function deliver(recipient, groupInfo, templates, seen) {
     return { ...base, status: "failed", error: error.message };
   }
 }
-
 const countBy = (results, status) => results.filter((r) => r.status === status).length;
-
-// ─── Public: send ────────────────────────────────────────────────────────────
 
 export async function sendGroupMessage({
   groupId,
@@ -506,12 +535,14 @@ export async function sendGroupMessage({
   contentAr = "",
   contentEn = "",
   overrides = {},
+  instance = "main", // الافتراضي لكل المستلمين
+  instanceByType = {}, // تخصيص لكل فئة { student|guardian|instructor: "main"|"eval" }
 }) {
   const templates = { contentAr, contentEn, overrides: normalizeOverrides(overrides) };
   validateRequest({ audience, selectedKeys, templates });
 
   const ctx = await loadContext(groupId);
-  assertNotArchived(ctx.group); // ✅ NEW
+  assertNotArchived(ctx.group);
 
   const groupInfo = buildGroupInfo(ctx.group, ctx);
   validateAgainstGroup(templates, groupInfo);
@@ -522,19 +553,30 @@ export async function sendGroupMessage({
 
   if (!targets.length) throw new GroupMessageError("مفيش مستلمين مطابقين للاختيار");
 
+  const defaultInstance = normalizeInstance(instance);
+  const byType = normalizeInstanceByType(instanceByType);
+  const pick = (r) => byType[r.type] || defaultInstance;
+
+  // نتأكد إن كل instance هيتستخدم متضبط فعلاً قبل ما نبدأ نبعت
+  assertInstancesAvailable([...new Set(targets.map(pick))]);
+
   const seen = new Set();
   const results = [];
 
   for (const [index, recipient] of targets.entries()) {
-    results.push(await deliver(recipient, groupInfo, templates, seen));
+    results.push(await deliver(recipient, groupInfo, templates, seen, pick(recipient)));
     if (index < targets.length - 1) await sleep(SEND_DELAY_MS);
   }
+
+  const sentBy = (key) =>
+    results.filter((r) => r.status === "sent" && r.instance === key).length;
 
   return {
     total: results.length,
     sent: countBy(results, "sent"),
     failed: countBy(results, "failed"),
     skipped: countBy(results, "skipped"),
+    byInstance: { main: sentBy("main"), eval: sentBy("eval") },
     results,
   };
 }
@@ -543,6 +585,12 @@ export async function sendGroupMessage({
 // ═════════════════════════════════════════════════════════════════════════════
 // ✅ رسائل عضو واحد (طالب + ولي أمر / مدرس): السجل + الإرسال المباشر
 // ═════════════════════════════════════════════════════════════════════════════
+
+// ✅ بيحدد الـ instance: الأول instanceKey، وبعدين مقارنة الـ id الفعلي
+const resolveInstance = (md = {}) =>
+  ["main", "eval"].includes(md?.instanceKey)
+    ? md.instanceKey
+    : wapilotService.instanceKeyFromId(md?.sentFromInstance);
 
 const maskPhone = (n) => (n ? `••••${String(n).slice(-4)}` : "");
 
@@ -574,6 +622,7 @@ function studentHistory(student, groupId, sessionIds, scope) {
       sessionTitle: m.metadata?.sessionTitle || "",
       groupName: m.metadata?.groupName || "",
       isCustom: !!m.metadata?.isCustomMessage,
+      instance: resolveInstance(m.metadata), // ✅ مع fallback
     }));
 }
 
@@ -593,6 +642,7 @@ function instructorHistory(user, groupId, scope) {
       sessionTitle: "",
       groupName: m.groupName || "",
       isCustom: true,
+      instance: m.instanceKey || "", // ✅ NEW
     }));
 }
 
@@ -633,16 +683,17 @@ export async function getMemberMessages(groupId, { kind, id, scope = "group" } =
 
   messages.sort((a, b) => new Date(b.sentAt || 0) - new Date(a.sentAt || 0));
 
-  return {
+    return {
     group: buildGroupInfo(ctx.group, ctx),
     recipients: recipients.map(({ phone, ...rest }) => ({
-      ...rest, // فيه paused: true للموقوف
+      ...rest,
       hasPhone: !!phone,
       phoneHint: maskPhone(phone),
     })),
     messages: messages.slice(0, 150),
     totalMessages: messages.length,
     scope: effectiveScope,
+    instances: wapilotService.getInstancesInfo(), // ✅ NEW
   };
 }
 
@@ -652,6 +703,7 @@ export async function sendDirectMessage({
   content = "",
   language = "auto",
   raw = false,
+  instance = "main", // ✅ NEW
 }) {
   const text = String(content || "").trim();
   if (!text) throw new GroupMessageError("اكتب نص الرسالة");
@@ -659,9 +711,10 @@ export async function sendDirectMessage({
     throw new GroupMessageError(`الرسالة أطول من ${MAX_MESSAGE_LENGTH} حرف`);
   }
   const forced = ["ar", "en"].includes(language) ? language : "auto";
+  const chosenInstance = normalizeInstance(instance);
 
   const ctx = await loadContext(groupId);
-  assertNotArchived(ctx.group); // ✅ NEW
+  assertNotArchived(ctx.group);
 
   const groupInfo = buildGroupInfo(ctx.group, ctx);
   const res = createResolvers(ctx.docs);
@@ -675,6 +728,8 @@ export async function sendDirectMessage({
     throw new GroupMessageError("الطالب ده موقوف في الجروب — شغّله الأول عشان تبعتله", 403);
   }
   if (!base.phone) throw new GroupMessageError("المستلم ده معندوش رقم واتساب");
+
+  assertInstancesAvailable([chosenInstance]); // ✅ NEW
 
   const recipient = forced === "auto" ? base : { ...base, language: forced };
 
@@ -695,9 +750,13 @@ export async function sendDirectMessage({
 
   let result;
   try {
-    result = await dispatch(recipient, message, groupInfo, {
-      automationType: raw ? "member_message_resend" : "member_direct_message",
-    });
+    result = await dispatch(
+      recipient,
+      message,
+      groupInfo,
+      { automationType: raw ? "member_message_resend" : "member_direct_message" },
+      chosenInstance,
+    );
   } catch (error) {
     throw new GroupMessageError(error.message || "فشل الإرسال", 502);
   }
@@ -708,6 +767,163 @@ export async function sendDirectMessage({
     key: recipient.key,
     name: recipient.names[recipient.language],
     language: message.language,
+    instance: chosenInstance,
     text: message.text,
+  };
+}
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ✅ سجل الجروب حسب الـ Instance
+// ═════════════════════════════════════════════════════════════════════════════
+
+export async function getGroupInstanceLog(groupId, { instance = "all", limit = 300 } = {}) {
+  const group = await loadGroup(groupId);
+  const gid = new mongoose.Types.ObjectId(String(groupId));
+  const cap = Math.min(Math.max(parseInt(limit) || 300, 1), 500);
+
+  const studentIds = (group.students || []).filter((s) => s && !s.isDeleted).map((s) => s._id);
+  const instructorIds = (group.instructors || []).map((i) => i.userId?._id).filter(Boolean);
+
+  const sessions = await Session.find({ groupId, isDeleted: false }).select("_id").lean();
+  const sessionIds = sessions.map((s) => s._id);
+
+  const KNOWN = ["main", "eval"];
+
+  // ✅ ids الفعلية للـ instances (للـ fallback لو instanceKey مش متسجل)
+  const mainId = String(wapilotService.instanceId || "__none_main__");
+  const evalId =
+    wapilotService.evalInstanceId && wapilotService.evalInstanceId !== wapilotService.instanceId
+      ? String(wapilotService.evalInstanceId)
+      : "__none_eval__";
+
+  const instanceMatch =
+    instance === "all" ? null : { "msg.resolvedInstance": instance };
+
+  // ── الطلبة وأولياء الأمور (Student.whatsappMessages) ──
+  const [facet] = studentIds.length
+    ? await Student.aggregate([
+        { $match: { _id: { $in: studentIds } } },
+        { $project: { fullName: "$personalInfo.fullName", msg: "$whatsappMessages" } },
+        { $unwind: "$msg" },
+        {
+          $match: {
+            $or: [
+              { "msg.metadata.groupId": gid },
+              { "msg.metadata.sessionId": { $in: sessionIds } },
+            ],
+          },
+        },
+        {
+          $addFields: {
+            "msg.resolvedInstance": {
+              $switch: {
+                branches: [
+                  {
+                    case: { $in: ["$msg.metadata.instanceKey", KNOWN] },
+                    then: "$msg.metadata.instanceKey",
+                  },
+                  {
+                    case: { $eq: ["$msg.metadata.sentFromInstance", evalId] },
+                    then: "eval",
+                  },
+                  {
+                    case: { $eq: ["$msg.metadata.sentFromInstance", mainId] },
+                    then: "main",
+                  },
+                ],
+                default: "unknown",
+              },
+            },
+          },
+        },
+        {
+          $facet: {
+            counts: [
+              {
+                $group: {
+                  _id: "$msg.resolvedInstance",
+                  total: { $sum: 1 },
+                  failed: { $sum: { $cond: [{ $eq: ["$msg.status", "failed"] }, 1, 0] } },
+                },
+              },
+            ],
+            items: [
+              ...(instanceMatch ? [{ $match: instanceMatch }] : []),
+              { $sort: { "msg.sentAt": -1 } },
+              { $limit: cap },
+            ],
+          },
+        },
+      ])
+    : [{ counts: [], items: [] }];
+
+  const counts = {
+    main: { total: 0, failed: 0 },
+    eval: { total: 0, failed: 0 },
+    unknown: { total: 0, failed: 0 },
+  };
+  (facet?.counts || []).forEach((c) => {
+    counts[c._id] = { total: c.total, failed: c.failed };
+  });
+
+  const messages = (facet?.items || []).map(({ _id, fullName, msg: m }) => {
+    const role = m.metadata?.recipientType === "guardian" ? "guardian" : "student";
+    return {
+      id: String(m._id),
+      type: m.messageType,
+      content: m.messageContent || "",
+      language: m.language || "ar",
+      status: m.status || "sent",
+      error: m.error || "",
+      sentAt: m.sentAt || null,
+      role,
+      recipientName: role === "guardian" ? `ولي أمر ${fullName || ""}`.trim() : fullName || "",
+      number: maskPhone(m.recipientNumber),
+      instance: m.resolvedInstance || "unknown",
+      isCustom: !!m.metadata?.isCustomMessage,
+    };
+  });
+
+  // ── المدرسين (User.notificationHistory) ──
+  if (instructorIds.length) {
+    const users = await User.find({ _id: { $in: instructorIds } })
+      .select("name notificationHistory")
+      .lean();
+
+    for (const u of users) {
+      for (const m of u.notificationHistory || []) {
+        if (!m.groupId || String(m.groupId) !== String(groupId)) continue;
+
+        const key = KNOWN.includes(m.instanceKey) ? m.instanceKey : "unknown";
+        counts[key].total += 1;
+        if (m.status === "failed") counts[key].failed += 1;
+
+        if (instance !== "all" && instance !== key) continue;
+
+        messages.push({
+          id: String(m._id || `${u._id}-${new Date(m.sentAt).getTime()}`),
+          type: m.messageType || "group_custom_message",
+          content: m.messageContent || "",
+          language: m.language || "ar",
+          status: m.status || "sent",
+          error: m.failureReason || "",
+          sentAt: m.sentAt || null,
+          role: "instructor",
+          recipientName: u.name || "",
+          number: "",
+          instance: key,
+          isCustom: true,
+        });
+      }
+    }
+  }
+
+  messages.sort((a, b) => new Date(b.sentAt || 0) - new Date(a.sentAt || 0));
+
+  return {
+    instances: wapilotService.getInstancesInfo(),
+    counts,
+    messages: messages.slice(0, cap),
   };
 }

@@ -18,7 +18,7 @@ function errorResponse(error) {
   return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
 }
 
-// GET → قائمة المستلمين المحتملين (للمعاينة والاختيار اليدوي)
+// GET → قائمة المستلمين المحتملين + حالة الـ instances
 export async function GET(req, { params }) {
   const auth = await requireAdmin(req);
   if (!auth.authorized) return auth.response;
@@ -33,6 +33,8 @@ export async function GET(req, { params }) {
 
 // POST → إرسال الرسالة
 // overrides (اختياري): نص مخصص لكل فئة { student|guardian|instructor: { ar, en } }
+// instance (اختياري): "main" | "eval" — الافتراضي لكل المستلمين
+// instanceByType (اختياري): { student|guardian|instructor: "main" | "eval" }
 export async function POST(req, { params }) {
   const auth = await requireAdmin(req);
   if (!auth.authorized) return auth.response;
@@ -48,6 +50,9 @@ export async function POST(req, { params }) {
       contentAr: String(body.contentAr ?? ""),
       contentEn: String(body.contentEn ?? ""),
       overrides: body.overrides && typeof body.overrides === "object" ? body.overrides : {},
+      instance: body.instance === "eval" ? "eval" : "main",
+      instanceByType:
+        body.instanceByType && typeof body.instanceByType === "object" ? body.instanceByType : {},
     });
 
     return NextResponse.json({ success: true, data });

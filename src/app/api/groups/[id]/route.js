@@ -14,6 +14,17 @@ import {
 } from "@/utils/groupValidation";
 import mongoose from "mongoose";
 
+// ✅ الـ flags اللي لازم تتصفّر لما معاد السيشن يتغير (عشان التذكيرات تتبعت تاني)
+const RESET_REMINDER_FLAGS = {
+  "automationEvents.reminderSent": false,
+  "automationEvents.reminder24hSent": false,
+  "automationEvents.reminder1hSent": false,
+  "automationEvents.reminder15minSent": false,
+  "automationEvents.reminder24hOfflineSent": false,
+  "automationEvents.reminder30minOfflineSent": false,
+  "automationEvents.preAttendancePingSent": false,
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function getInstructorsData(instructorsArray) {
@@ -329,6 +340,61 @@ export async function PUT(req, { params }) {
       );
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ NEW: لو الوقت اتغيّر → حدّث startTime/endTime للسيشنات غير المكتملة
+    //         وصفّر الـ flags عشان التذكيرات تتبعت على المعاد الجديد
+    // ═══════════════════════════════════════════════════════════════
+    const timeChanged =
+      !!updateData.schedule &&
+      ((updateData.schedule.timeFrom !== undefined &&
+        updateData.schedule.timeFrom !== existingGroup.schedule?.timeFrom) ||
+        (updateData.schedule.timeTo !== undefined &&
+          updateData.schedule.timeTo !== existingGroup.schedule?.timeTo));
+
+    const daysChanged =
+      Array.isArray(updateData.schedule?.daysOfWeek) &&
+      [...updateData.schedule.daysOfWeek].sort().join(",") !==
+        [...(existingGroup.schedule?.daysOfWeek || [])].sort().join(",");
+
+    let sessionsTimeSynced = 0;
+    if (timeChanged && existingGroup.sessionsGenerated) {
+      const timeSet = {};
+      if (updateData.schedule.timeFrom)
+        timeSet.startTime = updateData.schedule.timeFrom;
+      if (updateData.schedule.timeTo)
+        timeSet.endTime = updateData.schedule.timeTo;
+
+      const r = await Session.updateMany(
+        {
+          groupId: id,
+          isDeleted: false,
+          status: { $in: ["scheduled", "postponed"] },
+        },
+        { $set: { ...timeSet, ...RESET_REMINDER_FLAGS } },
+      );
+      sessionsTimeSynced = r.modifiedCount || 0;
+      console.log(
+        `🕐 [Sync] Group ${updatedGroup.code} time changed → updated ${sessionsTimeSynced} session(s)`,
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ NEW: افتح الجروب لو كان completed وعنده سيشنات قادمة
+    // ═══════════════════════════════════════════════════════════════
+    let reopened = false;
+    try {
+      const fresh = await Group.findById(id);
+      if (fresh) {
+        const r = await fresh.reopenAfterNewContent();
+        reopened = !!r.reopened;
+        if (reopened) {
+          console.log(`🔓 [PUT] Group ${updatedGroup.code} reopened`);
+        }
+      }
+    } catch (e) {
+      console.error("⚠️ reopenAfterNewContent (PUT) failed:", e.message);
+    }
+
     const responseData = {
       ...updatedGroup,
       groupType: VALID_GROUP_TYPES.includes(updatedGroup.groupType)
@@ -350,6 +416,13 @@ export async function PUT(req, { params }) {
       message: "Group updated successfully",
       deliveryModeSynced: deliveryModeChanged || sessionsSynced > 0,
       sessionsSynced,
+      sessionsTimeSynced,
+      reopened,
+      // ⚠️ تغيير الأيام من هنا مش بيحرّك scheduledDate
+      warning:
+        daysChanged && existingGroup.sessionsGenerated
+          ? "تم تغيير الأيام في إعدادات الجروب فقط — لتحريك السيشنات استخدم زر إعادة الجدولة"
+          : undefined,
       data: responseData,
     });
   } catch (error) {

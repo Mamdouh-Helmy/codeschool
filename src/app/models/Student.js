@@ -151,6 +151,7 @@ const whatsappMessageSchema = new mongoose.Schema(
       sessionId: { type: mongoose.Schema.Types.ObjectId, ref: "Session" },
       interviewId: { type: mongoose.Schema.Types.ObjectId, ref: "Interview" },
       sessionTitle: String,
+         scheduleKey: String,
       attendanceStatus: String,
       isCustomMessage: { type: Boolean, default: false },
       recipientType: {
@@ -176,6 +177,8 @@ const whatsappMessageSchema = new mongoose.Schema(
       relationship: String,
       remainingHours: Number,
       alertType: String,
+      sentFromInstance: String, 
+      instanceKey: String,
     },
     error: { type: String },
     errorDetails: { stack: String, code: String, message: String },

@@ -41,6 +41,8 @@ import {
   isVariableApplicable,
   selectRecipients,
 } from "@/utils/groupMessageShared";
+import InstancePicker, { INSTANCE_META } from "./InstancePicker";
+import InstanceLogPanel from "./InstanceLogPanel";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -151,7 +153,7 @@ const nowLabel = () => new Date().toLocaleTimeString("ar-EG-u-nu-latn", { hour: 
 // ─── Data hook ────────────────────────────────────────────────────────────────
 
 function useGroupRecipients(groupId) {
-  const [state, setState] = useState({ loading: true, error: null, group: null, recipients: [], fallbackKeys: [] });
+  const [state, setState] = useState({ loading: true, error: null, group: null, recipients: [], fallbackKeys: [], instances: [] });
 
   useEffect(() => {
     let cancelled = false;
@@ -160,9 +162,9 @@ function useGroupRecipients(groupId) {
         const res = await fetch(`/api/groups/${groupId}/send-message`, { cache: "no-store" });
         const json = await res.json();
         if (!json.success) throw new Error(json.error || "فشل تحميل المستلمين");
-        if (!cancelled) setState({ loading: false, error: null, fallbackKeys: [], ...json.data });
+       if (!cancelled) setState({ loading: false, error: null, fallbackKeys: [], instances: [], ...json.data });
       } catch (err) {
-        if (!cancelled) setState({ loading: false, error: err.message, group: null, recipients: [], fallbackKeys: [] });
+     if (!cancelled) setState({ loading: false, error: err.message, group: null, recipients: [], fallbackKeys: [], instances: [] });
       }
     })();
     return () => { cancelled = true; };
@@ -832,7 +834,7 @@ const makeDrafts = () => ({
 });
 
 export default function GroupMessageModal({ groupId, onClose }) {
-  const { loading, error, group, recipients, fallbackKeys } = useGroupRecipients(groupId);
+const { loading, error, group, recipients, fallbackKeys, instances } = useGroupRecipients(groupId);
 
   const [audience, setAudience] = useState(AUDIENCE.ALL);
   const [selected, setSelected] = useState(() => new Set());
@@ -845,6 +847,9 @@ export default function GroupMessageModal({ groupId, onClose }) {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState(null);
   const textareaRef = useRef(null);
+  const [view, setView] = useState("send"); // "send" | "log"
+const [instance, setInstance] = useState("main");
+const [instanceByType, setInstanceByType] = useState({});
 
   const templates = useMemo(
     () => ({
@@ -927,7 +932,16 @@ export default function GroupMessageModal({ groupId, onClose }) {
   const current = drafts[scope][lang];
   const hasContent = allTexts.length > 0;
   const varsOk = unknownVars.length === 0 && inapplicableVars.length === 0;
-  const canSend = hasContent && sendable.length > 0 && varsOk && !sending;
+
+const usedInstances = useMemo(
+  () => [...new Set(sendable.map((r) => instanceByType[r.type] || instance))],
+  [sendable, instanceByType, instance],
+);
+const instanceOk = usedInstances.every(
+  (k) => instances.find((i) => i.key === k)?.configured !== false,
+);
+
+const canSend = hasContent && sendable.length > 0 && varsOk && instanceOk && !sending;
   const etaSec = Math.max(1, Math.round(sendable.length * SEND_DELAY_SEC));
   const paletteTypes = scope === "all" ? activeTypes : [scope];
   const scopeLabel = scope === "all" ? null : TYPE_META[scope].label;
@@ -1000,6 +1014,8 @@ export default function GroupMessageModal({ groupId, onClose }) {
           contentAr: drafts.all.ar,
           contentEn: drafts.all.en,
           overrides: { student: drafts.student, guardian: drafts.guardian, instructor: drafts.instructor },
+          instance,
+  instanceByType,
         }),
       });
       const json = await res.json();
@@ -1036,7 +1052,33 @@ export default function GroupMessageModal({ groupId, onClose }) {
         </Alert>
       )}
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="inline-flex rounded-xl bg-gray-100 p-0.5 dark:bg-dark_input">
+        {[
+          { id: "send", label: "✉️ إرسال" },
+          { id: "log", label: "📜 سجل الـ Instances" },
+        ].map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setView(t.id)}
+            className={`rounded-[10px] px-4 py-1.5 text-xs font-bold transition ${FOCUS} ${
+              view === t.id
+                ? "bg-white text-MidnightNavyText shadow-sm dark:bg-gray-600 dark:text-white"
+                : "text-gray-500"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {view === "log" && <InstanceLogPanel groupId={groupId} />}
+
+      <div
+        className={`items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px] ${
+          view === "send" ? "grid" : "hidden"
+        }`}
+      >
         {/* ── Left ── */}
         <div className="min-w-0 space-y-6">
           <section>
@@ -1183,7 +1225,16 @@ export default function GroupMessageModal({ groupId, onClose }) {
 
           <PhonePreview recipient={previewRecipient} preview={preview} />
 
-          <div className={`${CARD} space-y-3 p-4`}>
+                  <div className={`${CARD} space-y-3 p-4`}>
+            <InstancePicker
+              instances={instances}
+              value={instance}
+              onChange={setInstance}
+              byType={instanceByType}
+              onByTypeChange={setInstanceByType}
+              activeTypes={activeTypes}
+            />
+
             <div className="grid grid-cols-2 gap-2 text-center">
               <div className="rounded-xl bg-primary/5 py-2.5">
                 <p className="text-xl font-bold tabular-nums text-primary">{sendable.length}</p>
@@ -1201,6 +1252,7 @@ export default function GroupMessageModal({ groupId, onClose }) {
                 { ok: hasContent, text: "نص الرسالة مكتوب" },
                 { ok: hasContent && noTextCount === 0, text: "كل مستلم ليه نص مناسب" },
                 { ok: varsOk, text: "المتغيرات سليمة ومناسبة للجروب" },
+                 { ok: instanceOk, text: "الـ Instance المختار متضبط" },
               ]}
             />
 
@@ -1219,6 +1271,9 @@ export default function GroupMessageModal({ groupId, onClose }) {
                   هتبعت لـ {sendable.length - noTextCount} مستلم
                 </p>
                 <p className="text-xs text-gray-500">الإرسال بياخد تقريبًا {etaSec} ثانية — متقفلش النافذة.</p>
+                                <p className="text-xs text-gray-500">
+                  من: {usedInstances.map((k) => INSTANCE_META[k].label).join(" + ")}
+                </p>
                 <div className="flex gap-2">
                   <button
                     type="button"

@@ -72,12 +72,18 @@ export async function canSessionSendMessages(sessionId) {
     if (!group) return { ok: false, reason: "group_not_found" };
     if (group.isDeleted) return { ok: false, reason: "group_deleted" };
     if (group.isArchived) return { ok: false, reason: "group_archived", group };
-    if (group.status !== "active") {
+
+    // ✅ جروب completed لكن السيشن دي لسه قادمة → مسموح
+    const sessionPending = ["scheduled", "postponed"].includes(session.status);
+    const statusOk =
+      group.status === "active" ||
+      (group.status === "completed" && sessionPending);
+    if (!statusOk) {
       return { ok: false, reason: `group_status_${group.status}`, group };
     }
+
     if (!group.hold?.isHeld) return { ok: true, group };
 
-    // duration / indefinite → كل حاجة في الجروب مقفولة، زي الأول بالظبط
     if (
       group.hold.holdType === "duration" ||
       group.hold.holdType === "indefinite"
@@ -85,7 +91,6 @@ export async function canSessionSendMessages(sessionId) {
       return { ok: false, reason: "group_on_hold", group };
     }
 
-    // sessions / until_session → نفحص السيشن دي بالذات بس
     const allGroupSessions = await Session.find({
       groupId: group._id,
       isDeleted: false,
@@ -2096,12 +2101,20 @@ export async function sendInstructorSessionReminder(
           wapilotService.preparePhoneNumber(instructorPhone);
         if (!preparedPhone) throw new Error("Invalid phone number");
 
-        const sendResult = await wapilotService.sendTextMessage(
-          preparedPhone,
-          finalMessage,
-        );
+        // ✅ بيبعت + بيسجّل في notificationHistory مع الـ instance
+        const sendResult = await wapilotService.sendAndLogUserMessage({
+          userId: instructor._id,
+          phoneNumber: preparedPhone,
+          messageContent: finalMessage,
+          messageType: is24h
+            ? "reminder_24h_instructor"
+            : "reminder_15min_instructor",
+          language,
+          metadata: { groupId: group._id, groupName: group.name },
+          instance: "main",
+        });
 
-        if (sendResult) {
+        if (sendResult?.success) {
           successCount++;
           results.push({
             instructorId: instructor._id,
@@ -2110,7 +2123,7 @@ export async function sendInstructorSessionReminder(
             language,
           });
         } else {
-          throw new Error("Send failed");
+          throw new Error(sendResult?.error || "Send failed");
         }
       } catch (err) {
         failCount++;
@@ -2653,7 +2666,7 @@ export async function sendInstructorWelcomeMessages(
 
     if (!group) throw new Error("Group not found");
 
-     if (group.isArchived) {
+    if (group.isArchived) {
       return {
         success: false,
         message: "Group is archived",
@@ -2785,7 +2798,12 @@ export async function sendInstructorWelcomeMessages(
         const sendResult = await wapilotService.sendTextMessage(
           preparedPhone,
           messageContent,
+          "main",
         );
+
+        if (!sendResult?.success) {
+          throw new Error(sendResult?.error || "Send failed");
+        }
 
         successCount++;
         notificationResults.push({
@@ -2812,6 +2830,7 @@ export async function sendInstructorWelcomeMessages(
                 sentAt: new Date(),
                 status: "sent",
                 failureReason: "",
+                instanceKey: "main", // ✅ NEW
               },
             },
           });
@@ -3679,6 +3698,12 @@ export async function onSessionStatusChanged(
   }
 }
 
+// ✅ NEW: مفتاح معاد الحصة (تاريخ|وقت) — بيدخل في الـ dedupe
+function scheduleKeyOf(session) {
+  const d = new Date(session.scheduledDate).toISOString().slice(0, 10);
+  return `${d}|${session.startTime || ""}`;
+}
+
 export async function sendManualSessionReminder(
   sessionId,
   reminderType,
@@ -3734,9 +3759,6 @@ export async function sendManualSessionReminder(
     }
 
     // ✅ لو الجروب Offline ومحاولين نبعت تذكير أونلاين عادي (24h / 15min) → نرفض
-    //    (الأوفلاين ليه دوال مخصوصة: sendOfflineLocationReminder / sendOfflineDropoffAlert)
-    //    ملحوظة: الاستدعاء اللي بيجي من الواجهة بـ isOffline:true بيعدّي لأنه
-    //    صريح إنه بيستخدم المسار ده للأوفلاين، والجروب فعلاً أوفلاين.
     if (isOfflineMode && metadata?.isOffline !== true && !isPrePing) {
       console.warn(
         `⏭️ [GUARD] sendManualSessionReminder skipped — group is OFFLINE (${sessionId}). Use offline reminder instead.`,
@@ -3770,10 +3792,10 @@ export async function sendManualSessionReminder(
       };
     }
 
-        const students = await Student.find({
+    const students = await Student.find({
       "academicInfo.groupIds": group._id,
       isDeleted: false,
-      ...notPausedInGroup(group._id), // ✅ NEW
+      ...notPausedInGroup(group._id),
     }).lean();
 
     if (students.length === 0)
@@ -3784,6 +3806,9 @@ export async function sendManualSessionReminder(
     const notificationResults = [];
 
     const is24h = reminderType === "24hours";
+
+    // ✅ NEW: معاد الحصة وقت الإرسال (للـ dedupe)
+    const scheduleKey = scheduleKeyOf(session);
 
     for (const student of students) {
       try {
@@ -3929,6 +3954,7 @@ export async function sendManualSessionReminder(
           metadata: {
             sessionId,
             sessionTitle: session.title,
+            scheduleKey, // ✅ NEW
             groupId: group._id,
             reminderType,
             isAdult,
@@ -5511,15 +5537,17 @@ export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
       };
     }
 
-       const students = await Student.find({
+    const students = await Student.find({
       "academicInfo.groupIds": group._id,
       isDeleted: false,
-      ...notPausedInGroup(group._id), // ✅ NEW
+      ...notPausedInGroup(group._id),
     }).lean();
 
     let sentCount = 0;
     let failCount = 0;
     const results = [];
+
+    const scheduleKey = scheduleKeyOf(session); // ✅ NEW
 
     for (const student of students) {
       try {
@@ -5529,7 +5557,6 @@ export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
           continue;
         }
 
-        // ✅ هل الطالب بالغ؟
         const isAdult = student.studentType === "adults";
 
         const { variables, language } = await prepareStudentVariables(
@@ -5544,7 +5571,6 @@ export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
         );
         Object.assign(variables, locVars);
 
-        // ✅ تحديد student template حسب النوع
         const studentTemplateType = isAdult
           ? "reminder_24h_offline_adult"
           : "reminder_24h_offline_student";
@@ -5558,7 +5584,6 @@ export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
           variables,
         );
 
-        // ✅ للـ adults → مش هنبعت رسالة لولي أمر خالص
         let finalGuardianMessage = null;
         if (!isAdult) {
           const guardianTemplateType = "reminder_24h_offline_guardian";
@@ -5582,6 +5607,7 @@ export async function sendOfflineLocationReminder(sessionId, metadata = {}) {
           metadata: {
             sessionId,
             sessionTitle: session.title,
+            scheduleKey, // ✅ NEW
             groupId: group._id,
             reminderType: "24hours_offline",
             mapsLink: locVars.mapsLink,
@@ -5648,15 +5674,17 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
       return { success: false, reason: "not_offline" };
     }
 
-      const students = await Student.find({
+    const students = await Student.find({
       "academicInfo.groupIds": group._id,
       isDeleted: false,
-      ...notPausedInGroup(group._id), // ✅ NEW
+      ...notPausedInGroup(group._id),
     }).lean();
 
     let sentCount = 0;
     let failCount = 0;
     const results = [];
+
+    const scheduleKey = scheduleKeyOf(session); // ✅ NEW
 
     for (const student of students) {
       try {
@@ -5666,7 +5694,6 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
           continue;
         }
 
-        // ✅ هل الطالب بالغ؟
         const isAdult = student.studentType === "adults";
 
         const { variables, language } = await prepareStudentVariables(
@@ -5681,7 +5708,6 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
         );
         Object.assign(variables, locVars);
 
-        // ✅ تحديد student template حسب النوع
         const studentTemplateType = isAdult
           ? "reminder_30min_offline_adult"
           : "reminder_30min_offline_student";
@@ -5695,7 +5721,6 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
           variables,
         );
 
-        // ✅ للـ adults → مش هنبعت رسالة لولي أمر خالص
         let finalGuardianMessage = null;
         if (!isAdult) {
           const guardianTemplateType = "reminder_30min_offline_guardian";
@@ -5719,6 +5744,7 @@ export async function sendOfflineDropoffAlert(sessionId, metadata = {}) {
           metadata: {
             sessionId,
             sessionTitle: session.title,
+            scheduleKey, // ✅ NEW
             groupId: group._id,
             reminderType: "30min_offline",
             mapsLink: locVars.mapsLink,
@@ -5779,15 +5805,17 @@ export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
       return { success: false, reason: "not_offline" };
     }
 
-        const students = await Student.find({
+    const students = await Student.find({
       "academicInfo.groupIds": group._id,
       isDeleted: false,
-      ...notPausedInGroup(group._id), // ✅ NEW
+      ...notPausedInGroup(group._id),
     }).lean();
 
     let sentCount = 0;
     let failCount = 0;
     const results = [];
+
+    const scheduleKey = scheduleKeyOf(session); // ✅ NEW
 
     for (const student of students) {
       try {
@@ -5832,6 +5860,7 @@ export async function sendOfflinePreAttendancePing(sessionId, metadata = {}) {
           metadata: {
             sessionId,
             sessionTitle: session.title,
+            scheduleKey, // ✅ NEW
             groupId: group._id,
             reminderType: "pre_attendance_ping",
             dedupe: metadata?.automatedCron === true,
@@ -5980,10 +6009,16 @@ export async function sendInstructorOfflineReminder(
           wapilotService.preparePhoneNumber(instructorPhone);
         if (!preparedPhone) throw new Error("Invalid phone number");
 
-        const sendResult = await wapilotService.sendTextMessage(
-          preparedPhone,
-          finalMessage,
-        );
+        // ✅ بيبعت + بيسجّل في notificationHistory مع الـ instance
+        const sendResult = await wapilotService.sendAndLogUserMessage({
+          userId: instructor._id,
+          phoneNumber: preparedPhone,
+          messageContent: finalMessage,
+          messageType: `${dbTemplateType}_instructor`,
+          language,
+          metadata: { groupId: group._id, groupName: group.name },
+          instance: "main",
+        });
 
         if (sendResult?.success) {
           successCount++;

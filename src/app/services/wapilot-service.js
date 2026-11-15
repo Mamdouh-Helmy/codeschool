@@ -76,6 +76,48 @@ class WapilotService {
     return lang === "ar" ? v.valueAr : v.valueEn;
   }
 
+    // ============================================================
+  // ✅ اختيار الـ Instance (main / eval)
+  // ============================================================
+  resolveInstance(instance = "main") {
+    const key = instance === "eval" ? "eval" : "main";
+    return {
+      key,
+      id: key === "eval" ? this.evalInstanceId : this.instanceId,
+    };
+  }
+
+  getInstancesInfo() {
+    const hint = (id) => (id ? `…${String(id).slice(-4)}` : "");
+    // eval "متضبط" بس لو متحدد في الـ env ومختلف عن الرئيسي
+    const evalConfigured =
+      !!process.env.WHATSAPP_EVAL_INSTANCE_ID &&
+      this.evalInstanceId !== this.instanceId;
+    return [
+      {
+        key: "main",
+        label: "الرئيسي",
+        configured: !!this.apiToken && !!this.instanceId,
+        idHint: hint(this.instanceId),
+      },
+      {
+        key: "eval",
+        label: "التقييم",
+        configured: !!this.apiToken && evalConfigured,
+        idHint: hint(this.evalInstanceId),
+      },
+    ];
+  }
+
+    // ✅ يحوّل الـ id الفعلي للـ instance إلى key (main / eval)
+  instanceKeyFromId(id) {
+    if (!id) return "";
+    const sid = String(id);
+    if (this.evalInstanceId !== this.instanceId && sid === String(this.evalInstanceId)) return "eval";
+    if (sid === String(this.instanceId)) return "main";
+    return "";
+  }
+
   // ============================================================
   // ✅ دوال بناء التحية
   // ============================================================
@@ -181,22 +223,26 @@ class WapilotService {
     }
   }
 
+    // ============================================================
+  // ✅ إرسال رسالة نصية — بأي Instance (main | eval)
   // ============================================================
-  // ✅ إرسال رسالة نصية — Instance الرئيسي
-  // ============================================================
+  async sendTextMessage(phoneNumber, messageText, instance = "main") {
+    const { key, id: instanceId } = this.resolveInstance(instance);
+    const sentVia = key === "eval" ? "wapilot-eval" : "wapilot";
 
-  async sendTextMessage(phoneNumber, messageText) {
     try {
-      if (!this.apiToken || !this.instanceId) {
+      if (!this.apiToken || !instanceId) {
         throw new Error("WhatsApp API Token or Instance ID not configured");
       }
 
-      const apiUrl = `${this.baseURL}/${this.instanceId}/send-message`;
+      const apiUrl = `${this.baseURL}/${instanceId}/send-message`;
       const messagePayload = {
         chat_id: phoneNumber.replace("+", ""),
         text: messageText,
         priority: 0,
       };
+
+      console.log(`📤 Sending via [${key}] ${instanceId}`);
 
       const response = await fetch(apiUrl, {
         method: "POST",
@@ -216,89 +262,41 @@ class WapilotService {
           result.message_id || result.id || result.messageId || result.data?.id,
         chatId: messagePayload.chat_id,
         data: result,
-        sentVia: "wapilot",
-        instanceId: this.instanceId,
+        sentVia,
+        instanceId,
+        instanceKey: key,
         simulated: false,
         timestamp: new Date(),
       };
     } catch (error) {
-      console.error("❌ wapilot API error:", error.message);
+      console.error(`❌ wapilot [${key}] API error:`, error.message);
       return {
         success: false,
         error: error.message,
-        sentVia: "wapilot",
-        instanceId: this.instanceId,
+        sentVia,
+        instanceId,
+        instanceKey: key,
         simulated: false,
         timestamp: new Date(),
       };
     }
   }
 
-  // ============================================================
-  // ✅ إرسال رسالة نصية — Instance التقييم (instance3806)
-  // ============================================================
-
+  // ✅ متوافق مع الكود القديم
   async sendEvalTextMessage(phoneNumber, messageText) {
-    try {
-      if (!this.apiToken || !this.evalInstanceId) {
-        console.warn(
-          "⚠️ No eval instance configured, falling back to main instance",
-        );
-        return await this.sendTextMessage(phoneNumber, messageText);
-      }
-
-      const apiUrl = `${this.baseURL}/${this.evalInstanceId}/send-message`;
-      const messagePayload = {
-        chat_id: phoneNumber.replace("+", ""),
-        text: messageText,
-        priority: 0,
-      };
-
-      console.log(`📤 [EVAL] Sending via ${this.evalInstanceId}`);
-
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          token: this.apiToken,
-        },
-        body: JSON.stringify(messagePayload),
-      });
-
-      const result = await response.json();
-      if (!response.ok)
-        throw new Error(`WhatsApp Eval API error: ${JSON.stringify(result)}`);
-
-      console.log("📦 Full wapilot response:", JSON.stringify(result, null, 2));
-
-      return {
-        success: true,
-        messageId:
-          result.message_id || result.id || result.messageId || result.data?.id,
-        chatId: messagePayload.chat_id,
-        data: result,
-        sentVia: "wapilot-eval",
-        instanceId: this.evalInstanceId,
-        simulated: false,
-        timestamp: new Date(),
-      };
-    } catch (error) {
-      console.error("❌ wapilot eval API error:", error.message);
-      return {
-        success: false,
-        error: error.message,
-        sentVia: "wapilot-eval",
-        instanceId: this.evalInstanceId,
-        simulated: false,
-        timestamp: new Date(),
-      };
-    }
+    return this.sendTextMessage(phoneNumber, messageText, "eval");
   }
 
-  // ✅ NEW: تحديد "نطاق" الـ dedupe (سيشن أو مقابلة)
+  
+
+    // ✅ NEW: تحديد "نطاق" الـ dedupe (سيشن أو مقابلة) + scheduleKey للسيشن
   resolveDedupeScope(metadata = {}) {
     if (metadata.sessionId)
-      return { field: "metadata.sessionId", value: metadata.sessionId };
+      return {
+        field: "metadata.sessionId",
+        value: metadata.sessionId,
+        scheduleKey: metadata.scheduleKey || null,
+      };
     if (metadata.interviewId)
       return { field: "metadata.interviewId", value: metadata.interviewId };
     return null;
@@ -310,6 +308,7 @@ class WapilotService {
     messageTypes,
     scopeValue,
     scopeField = "metadata.sessionId",
+    scheduleKey = null,
   ) {
     await connectDB();
     const types = Array.isArray(messageTypes) ? messageTypes : [messageTypes];
@@ -321,6 +320,8 @@ class WapilotService {
           recipientNumber: phoneNumber,
           status: "sent",
           [scopeField]: scopeValue,
+          // رسايل قديمة من غير scheduleKey مش هتتحسب duplicate لو الحصة اتحركت
+          ...(scheduleKey ? { "metadata.scheduleKey": scheduleKey } : {}),
         },
       },
     }));
@@ -333,10 +334,13 @@ class WapilotService {
     messageType,
     language = "ar",
     metadata = {},
+    instance = "main",
   }) {
     try {
       const preparedNumber = this.preparePhoneNumber(phoneNumber);
       if (!preparedNumber) throw new Error("Invalid phone number format");
+
+      const resolved = this.resolveInstance(instance);
 
       const scope =
         metadata.dedupe && studentId ? this.resolveDedupeScope(metadata) : null;
@@ -348,6 +352,7 @@ class WapilotService {
           metadata.dedupeTypes || messageType,
           scope.value,
           scope.field,
+          scope.scheduleKey,
         ))
       ) {
         return { success: false, duplicate: true };
@@ -355,7 +360,11 @@ class WapilotService {
 
       let sendResult;
       if (this.mode === "production") {
-        sendResult = await this.sendTextMessage(preparedNumber, messageContent);
+        sendResult = await this.sendTextMessage(
+          preparedNumber,
+          messageContent,
+          resolved.key,
+        );
       } else {
         sendResult = await this.simulateSendMessage(
           preparedNumber,
@@ -375,7 +384,8 @@ class WapilotService {
           metadata: {
             ...metadata,
             recipientType: metadata.recipientType || "student",
-            sentFromInstance: this.instanceId,
+            sentFromInstance: resolved.id,
+            instanceKey: resolved.key,
           },
           error: sendResult.success
             ? null
@@ -383,7 +393,7 @@ class WapilotService {
         });
       }
 
-      return sendResult;
+      return { ...sendResult, instanceKey: resolved.key };
     } catch (error) {
       console.error(`❌ Error in sendAndLogMessage:`, error.message);
       throw error;
@@ -412,6 +422,7 @@ class WapilotService {
           metadata.dedupeTypes || messageType,
           scope.value,
           scope.field,
+          scope.scheduleKey,
         ))
       ) {
         return { success: false, duplicate: true };
@@ -443,6 +454,7 @@ class WapilotService {
             ...metadata,
             recipientType: metadata.recipientType || "guardian",
             sentFromInstance: this.evalInstanceId,
+            instanceKey: "eval",
           },
           error: sendResult.success
             ? null
@@ -461,13 +473,24 @@ class WapilotService {
   // ✅ logToStudentSchema
   // ============================================================
 
-  async logToStudentSchema(studentId, messageData) {
+    async logToStudentSchema(studentId, messageData) {
     try {
       await connectDB();
+
+      // ✅ نضمن إن الـ instanceKey و sentFromInstance متسجلين مع بعض دايمًا
+      const md = { ...(messageData.metadata || {}) };
+      if (!md.instanceKey) {
+        md.instanceKey = this.instanceKeyFromId(md.sentFromInstance);
+      }
+      if (md.instanceKey && !md.sentFromInstance) {
+        md.sentFromInstance = this.resolveInstance(md.instanceKey).id;
+      }
+      const payload = { ...messageData, metadata: md };
+
       const result = await Student.findByIdAndUpdate(
         studentId,
         {
-          $push: { whatsappMessages: messageData },
+          $push: { whatsappMessages: payload },
           $inc: { "metadata.whatsappTotalMessages": 1 },
           $set: { "metadata.whatsappLastInteraction": new Date() },
         },
@@ -971,9 +994,10 @@ The Code School Team 💻`;
                 studentNicknameAr: studentNickname?.ar || null,
                 studentNicknameEn: studentNickname?.en || null,
                 isBilingual: true,
-                languages: ["ar", "en"],
+              languages: ["ar", "en"],
                 isAdult,
                 sentFromInstance: this.instanceId,
+                instanceKey: "main",
               },
             });
 
@@ -1096,10 +1120,11 @@ The Code School Team 💻`;
               metadata: {
                 automationType: "student_creation",
                 recipientType: "guardian",
-                guardianName,
+                    guardianName,
                 isBilingual: true,
                 languages: ["ar", "en"],
                 sentFromInstance: this.instanceId,
+                instanceKey: "main",
               },
             });
           }
@@ -1271,10 +1296,7 @@ The Code School Team 💻`;
     };
   }
 
-  // ============================================================
-  // ✅ Logging على User schema (للـ portfolio owners)
-  // ============================================================
-  async logToUserSchema(userId, messageData) {
+    async logToUserSchema(userId, messageData) {
     try {
       await connectDB();
       const result = await User.findByIdAndUpdate(
@@ -1288,6 +1310,7 @@ The Code School Team 💻`;
               status: messageData.status,
               failureReason: messageData.error || "",
               sentAt: new Date(),
+              instanceKey: messageData.instanceKey || "", // ✅ NEW
               ...(messageData.groupId
                 ? {
                     groupId: messageData.groupId,
@@ -1312,9 +1335,6 @@ The Code School Team 💻`;
     }
   }
 
-  // ============================================================
-  // ✅ إرسال + تسجيل لصاحب بورتفوليو (User)
-  // ============================================================
   async sendAndLogUserMessage({
     userId,
     phoneNumber,
@@ -1322,14 +1342,21 @@ The Code School Team 💻`;
     messageType,
     language = "ar",
     metadata = {},
+    instance = "main", // ✅ NEW
   }) {
     try {
       const preparedNumber = this.preparePhoneNumber(phoneNumber);
       if (!preparedNumber) throw new Error("Invalid phone number format");
 
+      const resolved = this.resolveInstance(instance);
+
       const sendResult =
         this.mode === "production"
-          ? await this.sendTextMessage(preparedNumber, messageContent)
+          ? await this.sendTextMessage(
+              preparedNumber,
+              messageContent,
+              resolved.key,
+            )
           : await this.simulateSendMessage(preparedNumber, messageContent);
 
       if (userId) {
@@ -1343,10 +1370,11 @@ The Code School Team 💻`;
             : sendResult.error || "Unknown error",
           groupId: metadata.groupId || null,
           groupName: metadata.groupName || "",
+          instanceKey: resolved.key,
         });
       }
 
-      return sendResult;
+      return { ...sendResult, instanceKey: resolved.key };
     } catch (error) {
       console.error("❌ Error in sendAndLogUserMessage:", error.message);
       throw error;

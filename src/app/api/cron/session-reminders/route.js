@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Session from "../../../models/Session";
+import Group from "../../../models/Group"; // ✅ NEW (للـ self-heal)
 import Interview from "../../../models/Interview";
 import { resolveDeliveryMode } from "../../../services/deliveryMode";
 import {
@@ -180,8 +181,14 @@ export async function GET(req) {
       // 🛠️ عدد السيشنات اللي اتصلح deliveryMode بتاعها تلقائيًا
       autoFixedDeliveryMode: 0,
 
+      // 🩹 عدد الحصص اللي علامات التذكير القديمة بتاعتها اتصفّرت
+      staleFlagsHealed: 0,
+
       // 🗄️ عدد السيشنات اللي اتخطت لأن جروبها مؤرشف
       archivedGroupsSkipped: 0,
+
+      // 🔓 عدد الجروبات اللي اتفتحت تاني تلقائيًا (completed + سيشنات قادمة)
+      groupsReopened: 0,
 
       // 🌐 ONLINE
       reminder24h: {
@@ -255,6 +262,75 @@ export async function GET(req) {
     };
 
     // ============================================================
+    // 🔓 SELF-HEAL (أول حاجة): أي جروب completed وعنده سيشنات قادمة
+    //    يتفتح تاني تلقائيًا (status → active + تصفير حالة رسالة الإتمام)
+    //    لازم يحصل قبل التذكيرات وقبل GROUP COMPLETION
+    // ============================================================
+    try {
+      const staleGroups = await Group.find({
+        isDeleted: false,
+        isArchived: { $ne: true },
+        isMakeupGroup: { $ne: true },
+        status: "completed",
+      });
+
+      let reopenedCount = 0;
+      for (const g of staleGroups) {
+        try {
+          const r = await g.reopenAfterNewContent();
+          if (r.reopened) {
+            reopenedCount++;
+            console.log(`🔓 Reopened group ${g.code} (${g.name})`);
+          }
+        } catch (e) {
+          console.error(`⚠️ reopen failed for ${g.code}:`, e.message);
+        }
+      }
+      results.groupsReopened = reopenedCount;
+    } catch (e) {
+      console.error("⚠️ reopen self-heal failed:", e.message);
+    }
+
+    // ============================================================
+    // 🩹 SELF-HEAL: علامات تذكير قديمة على حصص لسه بعيدة
+    //    حصة باقي عليها > 26 ساعة مستحيل يكون اتبعتلها تذكير للميعاد الحالي
+    //    (شبكة أمان لأي updateMany / generator بيحرّك تواريخ من غير hook)
+    // ============================================================
+    try {
+      const healCutoff = new Date(now.getTime() + 26 * 60 * 60 * 1000);
+      const REMINDER_FLAGS = [
+        "automationEvents.reminderSent",
+        "automationEvents.reminder24hSent",
+        "automationEvents.reminder1hSent",
+        "automationEvents.reminder15minSent",
+        "automationEvents.reminder24hOfflineSent",
+        "automationEvents.reminder30minOfflineSent",
+        "automationEvents.preAttendancePingSent",
+      ];
+
+      const healed = await Session.updateMany(
+        {
+          isDeleted: false,
+          status: { $in: ["scheduled", "postponed"] },
+          scheduledDate: { $gt: healCutoff },
+          $or: REMINDER_FLAGS.map((f) => ({ [f]: true })),
+        },
+        {
+          $set: Object.fromEntries(REMINDER_FLAGS.map((f) => [f, false])),
+        },
+      );
+
+      results.staleFlagsHealed = healed.modifiedCount || 0;
+      if (results.staleFlagsHealed > 0) {
+        console.warn(
+          `🩹 Healed stale reminder flags on ${results.staleFlagsHealed} session(s)`,
+        );
+      }
+    } catch (e) {
+      console.error("⚠️ stale flags self-heal failed:", e.message);
+    }
+
+    // ============================================================
     // ✅ نافذة 3 أيام — نجيب كل المرشحين مرة واحدة
     // ============================================================
     const dayStart = new Date(now);
@@ -281,8 +357,7 @@ export async function GET(req) {
       )
       .lean();
 
-    // ✅ NEW: الجروبات المؤرشفة تتشال من الكرون بالكامل
-    // (من غير ده الكرون كان هيقفل الفلاج ويفتحه كل دقيقة على سيشنات مش هتتبعت)
+    // ✅ الجروبات المؤرشفة تتشال من الكرون بالكامل
     const allCandidates = rawCandidates.filter((s) => !s.groupId?.isArchived);
     results.archivedGroupsSkipped = rawCandidates.length - allCandidates.length;
 

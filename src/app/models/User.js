@@ -150,6 +150,11 @@ const UserSchema = new mongoose.Schema(
           type: String,
           default: "",
         },
+        instanceKey: {
+          type: String,
+          enum: ["main", "eval", ""],
+          default: "",
+        },
       },
     ],
 

@@ -10,6 +10,8 @@
 //   2. تعارض مع اللينكات المستخدمة حاليًا في سيشنات الجروب (لو محجوزة لجروب
 //      تاني على نفس الأيام/الوقت الجديد) → 409 مع linkConflicts
 //   - لو تمام → بيعمل update على التواريخ فقط (اللينكات بتفضل زي ما هي)
+//
+// ✅ بعد النجاح: بيصفّر flags التذكيرات + بيفتح الجروب لو كان completed
 
 import { NextResponse } from "next/server";
 import { connectDB }    from "@/lib/mongodb";
@@ -19,6 +21,17 @@ import { requireAdmin } from "@/utils/authMiddleware";
 import { rescheduleGroupSessions } from "@/utils/sessionGenerator";
 import { checkInstructorConflicts } from "@/utils/groupValidation";
 import mongoose         from "mongoose";
+
+// ✅ الـ flags اللي لازم تتصفّر لما المعاد يتغير
+const RESET_REMINDER_FLAGS = {
+  "automationEvents.reminderSent": false,
+  "automationEvents.reminder24hSent": false,
+  "automationEvents.reminder1hSent": false,
+  "automationEvents.reminder15minSent": false,
+  "automationEvents.reminder24hOfflineSent": false,
+  "automationEvents.reminder30minOfflineSent": false,
+  "automationEvents.preAttendancePingSent": false,
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET: Preview impact of a reschedule before applying it
@@ -154,7 +167,24 @@ export async function PUT(req, { params }) {
       );
     }
 
-    if (group.status !== "active") {
+    if (group.isArchived) {
+      return NextResponse.json(
+        { success: false, error: "الجروب مؤرشف — استرجعه من الأرشيف الأول" },
+        { status: 400 },
+      );
+    }
+
+    // ✅ نسمح بـ completed لو عنده سيشنات قادمة (جروب اتضاف له محتوى جديد)
+    const pendingCount = await Session.countDocuments({
+      groupId: id,
+      isDeleted: false,
+      status: { $in: ["scheduled", "postponed"] },
+    });
+
+    if (
+      group.status !== "active" &&
+      !(group.status === "completed" && pendingCount > 0)
+    ) {
       return NextResponse.json(
         {
           success: false,
@@ -252,6 +282,35 @@ export async function PUT(req, { params }) {
     const newTotal = await Session.countDocuments({ groupId: id, isDeleted: false });
     await Group.findByIdAndUpdate(id, { $set: { totalSessionsCount: newTotal } });
 
+    // ✅ NEW: صفّر الـ flags للسيشنات غير المكتملة (المعاد اتغيّر)
+    //    + اتأكد إن startTime/endTime بالوقت الجديد
+    const flagsReset = await Session.updateMany(
+      {
+        groupId: id,
+        isDeleted: false,
+        status: { $in: ["scheduled", "postponed"] },
+      },
+      {
+        $set: {
+          startTime: timeFrom,
+          endTime: timeTo,
+          ...RESET_REMINDER_FLAGS,
+        },
+      },
+    );
+
+    // ✅ NEW: افتح الجروب لو كان completed وعنده سيشنات قادمة
+    let reopened = false;
+    try {
+      const fresh = await Group.findById(id);
+      if (fresh) {
+        const r = await fresh.reopenAfterNewContent();
+        reopened = !!r.reopened;
+      }
+    } catch (e) {
+      console.error("⚠️ reopenAfterNewContent (reschedule) failed:", e.message);
+    }
+
     return NextResponse.json({
       success: true,
       message: result.message,
@@ -262,6 +321,8 @@ export async function PUT(req, { params }) {
         linksReleased:    0,
         newStartDate:     result.startDate,
         newEndDate:       result.endDate,
+        remindersReset:   flagsReset.modifiedCount || 0,
+        reopened,
         note:             "Meeting links were preserved on all sessions.",
       },
     });
