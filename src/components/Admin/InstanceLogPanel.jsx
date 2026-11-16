@@ -3,24 +3,24 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import {
-  AlertTriangle,
-  CheckCheck,
-  ChevronDown,
+  ArrowsClockwise,
+  CaretDown,
+  ChalkboardTeacher,
+  ChatCircleDots,
+  Checks,
+  CircleNotch,
   Clock,
   Copy,
+  DeviceMobile,
   GraduationCap,
-  Inbox,
-  Layers,
-  Loader2,
-  MessageSquare,
-  RefreshCw,
-  Search,
-  Smartphone,
-  UserCheck,
-  Users,
+  MagnifyingGlass,
+  Stack,
+  Tray,
+  UsersThree,
+  Warning,
   X,
   XCircle,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { INSTANCE_META } from "./InstancePicker";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -29,29 +29,34 @@ const TZ = "Africa/Cairo";
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50";
 
 const WALLPAPER = {
-  backgroundImage: "radial-gradient(rgba(0,77,89,0.07) 1.2px, transparent 1.2px)",
-  backgroundSize: "22px 22px",
+  backgroundImage: "radial-gradient(rgba(0,77,89,0.06) 1.1px, transparent 1.1px)",
+  backgroundSize: "20px 20px",
 };
 
 const ROLE_META = {
   student: { label: "طالب", Icon: GraduationCap, grad: "from-secondary to-teal-500" },
-  guardian: { label: "ولي أمر", Icon: Users, grad: "from-primary to-amber-brand" },
-  instructor: { label: "مدرس", Icon: UserCheck, grad: "from-teal-dark to-brand-coral" },
+  guardian: { label: "ولي أمر", Icon: UsersThree, grad: "from-primary to-amber-brand" },
+  instructor: { label: "مدرس", Icon: ChalkboardTeacher, grad: "from-teal-dark to-brand-coral" },
 };
 
 const ROLE_FILTERS = [
-  { id: "all", label: "الكل" },
-  { id: "student", label: "الطلبة" },
-  { id: "guardian", label: "أولياء الأمور" },
-  { id: "instructor", label: "المدرسين" },
+  { id: "student", label: "الطلبة", Icon: GraduationCap },
+  { id: "guardian", label: "أولياء الأمور", Icon: UsersThree },
+  { id: "instructor", label: "المدرسين", Icon: ChalkboardTeacher },
 ];
 
-// كروت الـ Instances (الكل + الرئيسي + التقييم + القديمة)
+const INSTANCE_DOT = {
+  main: "bg-sky-500",
+  eval: "bg-violet-500",
+  unknown: "bg-gray-400",
+};
+
+// تابات الرقم (الكل + الرئيسي + التقييم + القديمة)
 const INSTANCE_TABS = [
-  { id: "all", label: "الكل", Icon: Layers, grad: "from-primary to-orange-deep" },
-  { id: "main", label: INSTANCE_META.main.label, Icon: Smartphone, grad: INSTANCE_META.main.grad },
-  { id: "eval", label: INSTANCE_META.eval.label, Icon: Smartphone, grad: INSTANCE_META.eval.grad },
-  { id: "unknown", label: "قديمة", Icon: Clock, grad: INSTANCE_META.unknown.grad },
+  { id: "all", label: "الكل" },
+  { id: "main", label: INSTANCE_META.main.label },
+  { id: "eval", label: INSTANCE_META.eval.label },
+  { id: "unknown", label: "قديمة" },
 ];
 
 const TYPE_RULES = [
@@ -129,8 +134,8 @@ const langChip = (l) => (l === "en" ? "EN" : l === "bilingual" ? "عربي + EN"
 
 function DatePill({ children }) {
   return (
-    <div className="sticky top-1 z-[1] flex justify-center py-2">
-      <span className="rounded-lg bg-white/90 px-3 py-1 text-[11.5px] font-medium text-secondary/80 shadow-sm backdrop-blur dark:bg-darklight/90 dark:text-darkmuted">
+    <div className="sticky top-1 z-[1] flex justify-center py-2.5">
+      <span className="rounded-lg bg-white/95 px-3 py-1 text-[11.5px] font-medium text-secondary/80 shadow-[0_1px_1px_rgba(0,42,51,0.1)] dark:bg-darklight/95 dark:text-darkmuted">
         {children}
       </span>
     </div>
@@ -138,77 +143,44 @@ function DatePill({ children }) {
 }
 
 function StatusTicks({ status }) {
-  if (status === "failed") return <XCircle className="h-4 w-4 text-rose-500" />;
-  if (status === "pending") return <Clock className="h-3.5 w-3.5 text-secondary/50 dark:text-darkmuted" />;
-  return <CheckCheck className="h-4 w-4 text-sky-500" />;
+  if (status === "failed") return <XCircle size={15} weight="fill" className="text-rose-500" />;
+  if (status === "pending") return <Clock size={13} weight="bold" className="text-secondary/40 dark:text-darkmuted" />;
+  return <Checks size={17} weight="bold" className="text-sky-500" />;
 }
 
-// دايرة الـ Instance (زي ستوريز الواتس)
-function InstanceStory({ tab, count, failed, active, onClick }) {
-  const { Icon } = tab;
+function Chip({ active, onClick, children, count, failed }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`group/story flex shrink-0 flex-col items-center gap-1.5 transition-transform active:scale-95 ${FOCUS} rounded-2xl`}
-    >
-      <div className="relative">
-        <div
-          className={`rounded-full bg-gradient-to-tr p-[3px] transition-all group-hover/story:scale-105 ${tab.grad} ${
-            active ? "" : "opacity-50 grayscale-[40%]"
-          }`}
-        >
-          <div className="flex h-[60px] w-[60px] items-center justify-center rounded-full border-[3px] border-white bg-white dark:border-darkmode dark:bg-darkmode md:h-16 md:w-16">
-            <span className="text-xl font-extrabold tabular-nums text-brand-deep dark:text-white">
-              {count ?? "—"}
-            </span>
-          </div>
-        </div>
-        <span
-          className={`absolute -bottom-0.5 -end-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br text-white shadow ring-2 ring-PaleSkyBlu dark:ring-darklight ${tab.grad}`}
-        >
-          <Icon className="h-3.5 w-3.5" />
-        </span>
-        {failed > 0 && (
-          <span className="absolute -top-1 -start-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-PaleSkyBlu dark:ring-darklight">
-            {failed}
-          </span>
-        )}
-      </div>
-      <span
-        className={`max-w-[76px] truncate text-xs ${
-          active ? "font-bold text-brand-deep dark:text-white" : "font-medium text-secondary/70 dark:text-darkmuted"
-        }`}
-      >
-        {tab.label}
-      </span>
-    </button>
-  );
-}
-
-function FilterChip({ active, onClick, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-medium transition active:scale-95 ${FOCUS} ${
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-[12.5px] font-semibold transition active:scale-95 ${FOCUS} ${
         active
-          ? "bg-primary/15 text-orange-deep ring-1 ring-inset ring-primary/40 dark:bg-primary/20 dark:text-amber-brand"
+          ? "bg-secondary text-white dark:bg-primary"
           : "bg-white text-secondary/80 hover:bg-PaleCyan dark:bg-dark_input dark:text-darkmuted dark:hover:bg-darkhover"
       }`}
     >
       {children}
+      {count !== undefined && count !== null && (
+        <span className="text-[10.5px] tabular-nums opacity-70">{count}</span>
+      )}
+      {failed > 0 && (
+        <span className="inline-flex min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9.5px] font-bold text-white">
+          {failed}
+        </span>
+      )}
     </button>
   );
 }
+
+const Divider = () => <span className="mx-0.5 h-4 w-px shrink-0 bg-secondary/15 dark:bg-dark_border" />;
 
 // ─── Row (شكل ليستة الشات) + فقاعة الرسالة عند الفتح ─────────────────────────────
 
 function LogRow({ m, expanded, onToggle }) {
   const role = ROLE_META[m.role] || ROLE_META.student;
   const inst = INSTANCE_META[m.instance] || INSTANCE_META.unknown;
+  const ik = m.instance === "main" || m.instance === "eval" ? m.instance : "unknown";
   const failed = m.status === "failed";
   const RoleIcon = role.Icon;
   const isRtl = m.language !== "en";
@@ -224,24 +196,23 @@ function LogRow({ m, expanded, onToggle }) {
   };
 
   return (
-    <li className={`transition-colors ${expanded ? "bg-white dark:bg-white/[0.04]" : "hover:bg-[#f5f6f6] dark:hover:bg-white/[0.04]"}`}>
+    <li className={`transition-colors ${expanded ? "bg-white dark:bg-white/[0.04]" : "hover:bg-PaleSkyBlu/70 dark:hover:bg-white/[0.04]"}`}>
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
         className={`flex w-full items-start gap-3 px-4 py-3 text-start ${FOCUS}`}
       >
-        {/* avatar + instance ring */}
+        {/* avatar + نقطة لون الرقم */}
         <div className="relative shrink-0">
-          <div className={`rounded-full bg-gradient-to-tr p-[2.5px] ${inst.grad}`}>
-            <div className="rounded-full bg-white p-[2px] dark:bg-darkmode">
-              <span
-                className={`flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br text-white shadow-inner ${role.grad}`}
-              >
-                <RoleIcon className="h-5 w-5" />
-              </span>
-            </div>
-          </div>
+          <span
+            className={`flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br text-white ${role.grad}`}
+          >
+            <RoleIcon size={22} weight="duotone" />
+          </span>
+          <span
+            className={`absolute -bottom-0.5 -end-0.5 h-3.5 w-3.5 rounded-full ring-2 ring-white dark:ring-darkmode ${INSTANCE_DOT[ik]}`}
+          />
         </div>
 
         {/* content */}
@@ -257,30 +228,21 @@ function LogRow({ m, expanded, onToggle }) {
 
           <div className="mt-0.5 flex items-center gap-1.5">
             <StatusTicks status={m.status} />
-            <p
-              className={`min-w-0 flex-1 text-sm text-secondary/70 dark:text-darkmuted ${
-                expanded ? "hidden" : "truncate"
-              }`}
-            >
-              {m.content || "—"}
+            <p className="min-w-0 flex-1 truncate text-sm text-secondary/70 dark:text-darkmuted">
+              {expanded ? typeLabel(m.type) : m.content || "—"}
             </p>
-            {expanded && (
-              <p className="min-w-0 flex-1 truncate text-sm text-secondary/70 dark:text-darkmuted">
-                {typeLabel(m.type)}
-              </p>
-            )}
-            <ChevronDown
-              className={`h-4 w-4 shrink-0 text-secondary/40 transition-transform dark:text-darkmuted ${
+            <CaretDown
+              size={14}
+              weight="bold"
+              className={`shrink-0 text-secondary/40 transition-transform dark:text-darkmuted ${
                 expanded ? "rotate-180" : ""
               }`}
             />
           </div>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <span
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${inst.soft}`}
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-current" />
+            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${inst.soft}`}>
+              <DeviceMobile size={11} weight="fill" />
               {m.instance && m.instance !== "unknown" ? inst.label : "قديمة"}
             </span>
             <span className="rounded-full bg-secondary/10 px-2 py-0.5 text-[10px] font-semibold text-secondary dark:bg-white/10 dark:text-darkmuted">
@@ -296,7 +258,7 @@ function LogRow({ m, expanded, onToggle }) {
             )}
             {failed && (
               <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-600 dark:text-rose-300">
-                <AlertTriangle className="h-3 w-3" /> فشلت
+                <Warning size={11} weight="fill" /> فشلت
               </span>
             )}
           </div>
@@ -306,51 +268,48 @@ function LogRow({ m, expanded, onToggle }) {
       {/* الفقاعة */}
       {expanded && (
         <div className="px-4 pb-4 ps-[76px]">
-          <div
-            className={`relative ms-auto max-w-full rounded-2xl rounded-tl-none px-3.5 pb-1.5 pt-2.5 shadow-[0_1px_0.5px_rgba(0,42,51,0.15)] ${
-              failed
-                ? "bg-rose-50 ring-1 ring-rose-300 dark:bg-rose-950/40 dark:ring-rose-500/40"
-                : "bg-PaleCyan dark:bg-teal-brand"
-            }`}
-          >
-            <span
-              className={`absolute top-0 -left-[7px] h-3 w-2 ${
-                failed ? "bg-rose-50 dark:bg-rose-950/40" : "bg-PaleCyan dark:bg-teal-brand"
+          <div className="flex">
+            <div
+              className={`relative ms-auto max-w-full rounded-2xl rounded-tl-none px-3 pb-1.5 pt-2 shadow-[0_1px_1px_rgba(0,42,51,0.12)] ${
+                failed
+                  ? "bg-rose-50 ring-1 ring-rose-300 dark:bg-rose-950/50 dark:ring-rose-500/40"
+                  : "bg-PaleCyan dark:bg-teal-brand"
               }`}
-              style={{ clipPath: "polygon(100% 0, 0 0, 100% 100%)" }}
-            />
-
-            <p
-              dir={isRtl ? "rtl" : "ltr"}
-              className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-brand-deep dark:text-white"
             >
-              {m.content || "—"}
-            </p>
+              <span className="absolute -left-[7px] top-0 h-3 w-2 bg-inherit [clip-path:polygon(100%_0,0_0,100%_100%)]" />
 
-            {failed && m.error && (
-              <p dir="ltr" className="mt-2 rounded-lg bg-rose-500/10 px-2 py-1 text-[11px] text-rose-700 dark:text-rose-300">
-                {m.error}
-              </p>
-            )}
-
-            <div className="mt-1 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={copy}
-                title="نسخ"
-                className={`rounded-full p-1.5 text-secondary/70 hover:bg-secondary/10 dark:text-darkmuted dark:hover:bg-white/10 ${FOCUS}`}
+              <p
+                dir={isRtl ? "rtl" : "ltr"}
+                className="whitespace-pre-wrap break-words text-[14.5px] leading-relaxed text-brand-deep dark:text-white"
               >
-                <Copy className="h-3.5 w-3.5" />
-              </button>
-              <div className="flex items-center gap-1.5 text-[11px] text-secondary/60 dark:text-darkmuted">
-                {m.number && (
-                  <span dir="ltr" className="tabular-nums">
-                    {m.number}
-                  </span>
-                )}
-                <span className="rounded bg-secondary/10 px-1 font-semibold dark:bg-white/10">{langChip(m.language)}</span>
-                <span className="tabular-nums">{fmtTime(m.sentAt)}</span>
-                <StatusTicks status={m.status} />
+                {m.content || "—"}
+              </p>
+
+              {failed && m.error && (
+                <p dir="ltr" className="mt-2 rounded-lg bg-rose-500/10 px-2 py-1 text-[11px] text-rose-700 dark:text-rose-300">
+                  {m.error}
+                </p>
+              )}
+
+              <div className="mt-0.5 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={copy}
+                  title="نسخ"
+                  className={`rounded-full p-1.5 text-secondary/70 hover:bg-secondary/10 dark:text-darkmuted dark:hover:bg-white/10 ${FOCUS}`}
+                >
+                  <Copy size={14} weight="bold" />
+                </button>
+                <div className="flex items-center gap-1.5 text-[11px] text-secondary/55 dark:text-darkmuted">
+                  {m.number && (
+                    <span dir="ltr" className="tabular-nums">
+                      {m.number}
+                    </span>
+                  )}
+                  <span className="font-semibold">{langChip(m.language)}</span>
+                  <span className="tabular-nums">{fmtTime(m.sentAt)}</span>
+                  <StatusTicks status={m.status} />
+                </div>
               </div>
             </div>
           </div>
@@ -404,7 +363,9 @@ export default function InstanceLogPanel({ groupId }) {
   const failedFor = (id) => (id === "all" ? failedAll : counts?.[id]?.failed ?? 0);
 
   // "قديمة" تظهر بس لو فيه رسائل قديمة أو هي المختارة
-  const visibleTabs = INSTANCE_TABS.filter((t) => t.id !== "unknown" || (counts?.unknown?.total || 0) > 0 || filter === "unknown");
+  const visibleTabs = INSTANCE_TABS.filter(
+    (t) => t.id !== "unknown" || (counts?.unknown?.total || 0) > 0 || filter === "unknown",
+  );
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -436,15 +397,18 @@ export default function InstanceLogPanel({ groupId }) {
   const activeTab = INSTANCE_TABS.find((t) => t.id === filter);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-PowderBlueBorder bg-white shadow-[0_6px_24px_rgba(11,20,26,0.08)] dark:border-dark_border dark:bg-darkmode">
+    <div
+      dir="rtl"
+      className="overflow-hidden rounded-2xl border border-PowderBlueBorder bg-white shadow-[0_6px_24px_rgba(0,42,51,0.08)] dark:border-dark_border dark:bg-darkmode"
+    >
       {/* ── Header ── */}
-      <div className="flex items-center gap-3 border-b-2 border-primary bg-secondary px-4 py-3 text-white dark:bg-darklight">
+      <div className="flex items-center gap-3 bg-secondary px-4 py-3 text-white dark:bg-darklight">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/15">
-          <Smartphone className="h-5 w-5" />
+          <DeviceMobile size={22} weight="duotone" />
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-base font-bold leading-tight">سجل الرسائل حسب الرقم</h3>
-          <p className="truncate text-xs text-white/75">
+          <p className="truncate text-xs text-white/70">
             {activeTab?.label}
             {counts && <span> · {countFor(filter)} رسالة</span>}
           </p>
@@ -456,52 +420,64 @@ export default function InstanceLogPanel({ groupId }) {
           title="تحديث"
           className={`rounded-full p-2.5 text-white/85 transition hover:bg-white/10 ${FOCUS}`}
         >
-          <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
+          <ArrowsClockwise size={20} weight="bold" className={loading ? "animate-spin" : ""} />
         </button>
       </div>
 
-      {/* ── Instance stories ── */}
-      <div className="bg-PaleSkyBlu px-4 py-3 dark:bg-darklight">
-        <div className="flex items-start justify-center gap-5 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:gap-8">
-          {visibleTabs.map((tab) => (
-            <InstanceStory
-              key={tab.id}
-              tab={tab}
-              count={countFor(tab.id)}
-              failed={failedFor(tab.id)}
-              active={filter === tab.id}
-              onClick={() => setFilter(tab.id)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* ── Search + role chips ── */}
-      <div className="space-y-2.5 border-b border-PowderBlueBorder/70 px-3 py-3 dark:border-dark_border md:px-4">
+      {/* ── Search + filters ── */}
+      <div className="space-y-2 bg-PaleSkyBlu px-3 py-2.5 dark:bg-darklight md:px-4">
         <div className="relative">
-          <Search className="pointer-events-none absolute end-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-secondary/40 dark:text-darkmuted" />
+          <MagnifyingGlass
+            size={16}
+            weight="bold"
+            className="pointer-events-none absolute end-3.5 top-1/2 -translate-y-1/2 text-secondary/40 dark:text-darkmuted"
+          />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="ابحث بالاسم أو نص الرسالة…"
-            className="w-full rounded-xl border border-transparent bg-[#f0f2f5] py-2.5 pe-10 ps-9 text-sm text-brand-deep outline-none transition placeholder:text-secondary/40 focus:border-primary/40 focus:bg-white focus:ring-2 focus:ring-primary/20 dark:bg-dark_input dark:text-white dark:placeholder:text-darkmuted"
+            className="w-full rounded-full bg-white py-2.5 pe-10 ps-10 text-sm text-brand-deep outline-none transition placeholder:text-secondary/40 focus:ring-2 focus:ring-primary/30 dark:bg-dark_input dark:text-white dark:placeholder:text-darkmuted"
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch("")}
-              className={`absolute start-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-secondary/50 hover:bg-black/5 dark:hover:bg-white/10 ${FOCUS}`}
+              title="مسح"
+              className={`absolute start-2.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-secondary/50 hover:bg-black/5 dark:hover:bg-white/10 ${FOCUS}`}
             >
-              <X className="h-3.5 w-3.5" />
+              <X size={14} weight="bold" />
             </button>
           )}
         </div>
 
-        <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {ROLE_FILTERS.map((r) => (
-            <FilterChip key={r.id} active={roleFilter === r.id} onClick={() => setRoleFilter(r.id)}>
-              {r.label}
-            </FilterChip>
+        <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {visibleTabs.map((tab) => (
+            <Chip
+              key={tab.id}
+              active={filter === tab.id}
+              onClick={() => setFilter(tab.id)}
+              count={countFor(tab.id)}
+              failed={failedFor(tab.id)}
+            >
+              {tab.id === "all" ? (
+                <Stack size={14} weight="duotone" />
+              ) : (
+                <span className={`h-2 w-2 rounded-full ${INSTANCE_DOT[tab.id]}`} />
+              )}
+              {tab.label}
+            </Chip>
+          ))}
+
+          <Divider />
+          {ROLE_FILTERS.map(({ id, label, Icon }) => (
+            <Chip
+              key={id}
+              active={roleFilter === id}
+              onClick={() => setRoleFilter((r) => (r === id ? "all" : id))}
+            >
+              <Icon size={14} weight="duotone" />
+              {label}
+            </Chip>
           ))}
         </div>
       </div>
@@ -516,7 +492,7 @@ export default function InstanceLogPanel({ groupId }) {
         {error ? (
           <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500/10">
-              <AlertTriangle className="h-7 w-7 text-rose-500" />
+              <Warning size={30} weight="duotone" className="text-rose-500" />
             </span>
             <p className="text-sm text-rose-600">{error}</p>
             <button
@@ -529,22 +505,22 @@ export default function InstanceLogPanel({ groupId }) {
           </div>
         ) : loading && messages.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <CircleNotch size={32} weight="bold" className="animate-spin text-primary" />
             <p className="text-xs text-secondary/70 dark:text-darkmuted">جاري تحميل السجل…</p>
           </div>
         ) : timeline.length === 0 ? (
           <div className="flex flex-col items-center gap-3 px-6 py-20 text-center">
-            <span className="flex h-24 w-24 items-center justify-center rounded-full bg-white/80 shadow-sm dark:bg-white/5">
+            <span className="flex h-20 w-20 items-center justify-center rounded-full bg-white/90 dark:bg-white/5">
               {search || roleFilter !== "all" ? (
-                <Inbox className="h-10 w-10 text-primary/60" />
+                <Tray size={38} weight="duotone" className="text-primary/70" />
               ) : (
-                <MessageSquare className="h-10 w-10 text-primary/60" />
+                <ChatCircleDots size={38} weight="duotone" className="text-primary/70" />
               )}
             </span>
-            <p className="rounded-lg bg-white/80 px-4 py-1.5 text-sm text-secondary/80 shadow-sm dark:bg-darklight dark:text-darkmuted">
+            <p className="rounded-lg bg-white/90 px-4 py-1.5 text-sm text-secondary/80 dark:bg-darklight dark:text-darkmuted">
               مفيش رسائل في الفلتر ده
             </p>
-            {filter !== "all" && (
+            {(filter !== "all" || roleFilter !== "all" || search) && (
               <button
                 type="button"
                 onClick={() => {
@@ -559,7 +535,7 @@ export default function InstanceLogPanel({ groupId }) {
             )}
           </div>
         ) : (
-          <ul className="divide-y divide-gray-100 bg-white/60 dark:divide-dark_border dark:bg-transparent">
+          <ul className="divide-y divide-secondary/5 bg-white/70 dark:divide-dark_border dark:bg-transparent">
             {timeline.map((row) =>
               row.type === "day" ? (
                 <li key={row.key} className="bg-transparent">
@@ -580,7 +556,7 @@ export default function InstanceLogPanel({ groupId }) {
 
       {/* ── Footer ── */}
       {counts && (counts.unknown?.total || 0) > 0 && (
-        <p className="border-t border-PowderBlueBorder/70 bg-[#f0f2f5]/70 px-4 py-2.5 text-center text-[11px] text-secondary/60 dark:border-dark_border dark:bg-darklight/60 dark:text-darkmuted">
+        <p className="bg-PaleSkyBlu px-4 py-2.5 text-center text-[11px] text-secondary/60 dark:bg-darklight/60 dark:text-darkmuted">
           الرسائل "القديمة" اتبعتت قبل ما النظام يبدأ يسجّل الرقم اللي بعت.
         </p>
       )}

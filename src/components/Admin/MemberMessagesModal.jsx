@@ -5,22 +5,36 @@ import toast from "react-hot-toast";
 import {
   ArrowCounterClockwise,
   ArrowsClockwise,
+  BookOpen,
+  CalendarBlank,
   ChalkboardTeacher,
   ChatCircleDots,
-  Check,
+  CheckCircle,
   Checks,
   CircleNotch,
   Clock,
   Copy,
   DeviceMobile,
+  Envelope,
+  GenderIntersex,
   GraduationCap,
+  HandWaving,
   Info,
   Lightning,
+  LinkSimple,
   MagnifyingGlass,
+  MapPin,
   PaperPlaneRight,
+  PencilSimple,
+  Phone,
+  Presentation,
   SlidersHorizontal,
   Sparkle,
+  Star,
+  Tag,
+  User,
   UsersThree,
+  Wallet,
   Warning,
   X,
   XCircle,
@@ -72,7 +86,7 @@ const INSTANCE_TEXT = {
   unknown: "text-gray-500 dark:text-gray-400",
 };
 
-const INSTANCE_BAR = {
+const INSTANCE_DOT = {
   main: "bg-sky-500",
   eval: "bg-violet-500",
   unknown: "bg-gray-400",
@@ -86,16 +100,69 @@ const EMPTY_OVERRIDES = {
 
 const LANG_OPTIONS = [
   { id: "auto", label: "تلقائي" },
-  { id: "ar", label: "🇸🇦 عربي" },
-  { id: "en", label: "🇬🇧 English" },
+  { id: "ar", label: "عربي" },
+  { id: "en", label: "English" },
 ];
 
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50";
 
+// خلفية الشات: نقط خفيفة بألوان البراند (زي وولبيبر واتساب)
 const WALLPAPER = {
-  backgroundImage: "radial-gradient(rgba(0,77,89,0.07) 1.2px, transparent 1.2px)",
-  backgroundSize: "22px 22px",
+  backgroundImage: "radial-gradient(rgba(0,77,89,0.06) 1.1px, transparent 1.1px)",
+  backgroundSize: "20px 20px",
 };
+
+// ─── Phosphor icon resolver (للمتغيرات وتصنيفاتها) ─────────────────────────────
+// الأيقونات بتتحدد من الـ key/id، فمفيش اعتماد على إيموجي جوه VARIABLES.
+
+const VAR_ICON_RULES = [
+  [/gender|جنس/i, GenderIntersex],
+  [/greet|salut|honorific|title|تحية/i, HandWaving],
+  [/guardian|parent|ولي/i, UsersThree],
+  [/instructor|teacher|مدرس/i, ChalkboardTeacher],
+  [/student|طالب/i, GraduationCap],
+  [/link|url|zoom|meet|join|رابط/i, LinkSimple],
+  [/phone|mobile|whatsapp|number/i, Phone],
+  [/mail/i, Envelope],
+  [/credit|balance|price|fee|amount|paid|رصيد/i, Wallet],
+  [/date|day|month|weekday|تاريخ/i, CalendarBlank],
+  [/time|hour|duration|minute|start|end/i, Clock],
+  [/session|lesson|class|makeup|حصة/i, Presentation],
+  [/course|module|level|program|track|كورس/i, BookOpen],
+  [/grade|score|eval|rating|star|تقييم/i, Star],
+  [/attend|absen|present|حضور|غياب/i, CheckCircle],
+  [/location|address|place|room|مكان/i, MapPin],
+  [/name|اسم/i, User],
+];
+
+const CAT_ICON_RULES = [
+  [/person|people|user|member|name|identity|recipient/i, User],
+  [/group/i, UsersThree],
+  [/session|lesson|class|schedule/i, Presentation],
+  [/course|module|program/i, BookOpen],
+  [/date|time|calendar/i, CalendarBlank],
+  [/link|contact|url/i, LinkSimple],
+  [/credit|money|payment|fee|finance/i, Wallet],
+  [/eval|grade|report/i, Star],
+  [/attend/i, CheckCircle],
+  [/gender|greet/i, HandWaving],
+];
+
+const pickIcon = (str, rules) => {
+  const s = String(str || "");
+  const hit = rules.find(([re]) => re.test(s));
+  return hit ? hit[1] : Tag;
+};
+
+function VarIcon({ item, size = 18 }) {
+  const Icon = pickIcon(`${item.key} ${item.category || ""}`, VAR_ICON_RULES);
+  return <Icon size={size} weight="duotone" />;
+}
+
+function CatIcon({ cat, size = 14 }) {
+  const Icon = pickIcon(`${cat.id}`, CAT_ICON_RULES);
+  return <Icon size={size} weight="duotone" />;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -180,7 +247,7 @@ function Avatar({ role, name, size = "h-9 w-9", text = "text-sm" }) {
   const meta = ROLE_META[role] || ROLE_META.student;
   return (
     <span
-      className={`flex ${size} ${text} shrink-0 items-center justify-center rounded-full bg-gradient-to-br font-bold text-white shadow-sm ${meta.grad}`}
+      className={`flex ${size} ${text} shrink-0 items-center justify-center rounded-full bg-gradient-to-br font-bold text-white ${meta.grad}`}
     >
       {(name || "?").charAt(0)}
     </span>
@@ -189,14 +256,14 @@ function Avatar({ role, name, size = "h-9 w-9", text = "text-sm" }) {
 
 function Ticks({ status }) {
   if (status === "failed") return <XCircle size={15} weight="fill" className="text-rose-500" />;
-  if (status === "pending") return <Clock size={13} weight="bold" className="text-secondary/50 dark:text-darkmuted" />;
+  if (status === "pending") return <Clock size={13} weight="bold" className="text-secondary/40 dark:text-darkmuted" />;
   return <Checks size={17} weight="bold" className="text-sky-500" />;
 }
 
 function DatePill({ children }) {
   return (
-    <div className="sticky top-1 z-[1] flex justify-center py-2">
-      <span className="rounded-lg bg-white/90 px-3 py-1 text-[11.5px] font-medium text-secondary/80 shadow-sm backdrop-blur dark:bg-darklight/90 dark:text-darkmuted">
+    <div className="sticky top-1 z-[1] flex justify-center py-2.5">
+      <span className="rounded-lg bg-white/95 px-3 py-1 text-[11.5px] font-medium text-secondary/80 shadow-[0_1px_1px_rgba(0,42,51,0.1)] dark:bg-darklight/95 dark:text-darkmuted">
         {children}
       </span>
     </div>
@@ -206,7 +273,6 @@ function DatePill({ children }) {
 function ChatBubble({ item, onResend, showRole }) {
   const [open, setOpen] = useState(false);
   const meta = ROLE_META[item.role] || ROLE_META.student;
-  const RoleIcon = meta.Icon;
   const ik = instKey(item.instance);
   const inst = instanceMeta(ik);
   const long = item.content.length > 320 || item.content.split("\n").length > 8;
@@ -225,42 +291,41 @@ function ChatBubble({ item, onResend, showRole }) {
   return (
     <div className="group/msg flex">
       <div
-        className={`relative ms-auto max-w-[90%] overflow-hidden rounded-2xl rounded-tl-none pb-1.5 pe-3.5 ps-4 pt-2 shadow-[0_1px_0.5px_rgba(0,42,51,0.15)] sm:max-w-[80%] ${
+        className={`relative ms-auto max-w-[88%] rounded-2xl rounded-tl-none px-3 pb-1.5 pt-2 shadow-[0_1px_1px_rgba(0,42,51,0.12)] sm:max-w-[72%] ${
           failed
-            ? "bg-rose-50 ring-1 ring-rose-300 dark:bg-rose-950/40 dark:ring-rose-500/40"
+            ? "bg-rose-50 ring-1 ring-rose-300 dark:bg-rose-950/50 dark:ring-rose-500/40"
             : "bg-PaleCyan dark:bg-teal-brand"
         }`}
       >
-        {/* شريط جانبي بلون الرقم */}
-        <span className={`absolute inset-y-0 start-0 w-1 ${INSTANCE_BAR[ik]}`} />
+        {/* ذيل الفقاعة */}
+        <span className="absolute -left-[7px] top-0 h-3 w-2 bg-inherit [clip-path:polygon(100%_0,0_0,100%_100%)]" />
 
-        {/* سطر المرسل: الرقم + النوع */}
-        <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] font-bold">
-          <span className={`inline-flex items-center gap-1 ${INSTANCE_TEXT[ik]}`}>
+        {/* سطر المرسل (زي اسم المرسل في جروب واتساب) */}
+        <div className="mb-0.5 flex items-center justify-between gap-4 text-[12px]">
+          <span className={`inline-flex items-center gap-1 font-bold ${INSTANCE_TEXT[ik]}`}>
             <DeviceMobile size={13} weight="fill" />
             {item.instance ? inst.label : "قديمة"}
+            {showRole && (
+              <span className={`ms-1 font-semibold ${meta.text}`}>· {meta.label}</span>
+            )}
           </span>
-          {showRole && (
-            <span className={`inline-flex items-center gap-1 ${meta.text}`}>
-              <RoleIcon size={13} weight="duotone" />
-              {meta.label}
-            </span>
-          )}
-          <span className="font-semibold text-orange-deep/80 dark:text-amber-brand/90">{typeLabel(item.type)}</span>
+          <span className="truncate text-[11px] font-medium text-secondary/55 dark:text-darkmuted">
+            {typeLabel(item.type)}
+          </span>
         </div>
 
         {/* content */}
         <div
           dir={isRtl ? "rtl" : "ltr"}
-          className={`relative text-[15px] leading-relaxed text-brand-deep dark:text-white ${
-            !open && long ? "max-h-52 overflow-hidden" : ""
+          className={`relative text-[14.5px] leading-relaxed text-brand-deep dark:text-white ${
+            !open && long ? "max-h-48 overflow-hidden" : ""
           }`}
         >
           <p className="whitespace-pre-wrap break-words">{item.content || "—"}</p>
           {!open && long && (
             <span
               className={`pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t ${
-                failed ? "from-rose-50 dark:from-rose-950/40" : "from-PaleCyan dark:from-teal-brand"
+                failed ? "from-rose-50 dark:from-rose-950/50" : "from-PaleCyan dark:from-teal-brand"
               } to-transparent`}
             />
           )}
@@ -270,7 +335,7 @@ function ChatBubble({ item, onResend, showRole }) {
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className={`mt-0.5 rounded text-[12.5px] font-semibold text-secondary underline-offset-2 hover:underline dark:text-amber-brand ${FOCUS}`}
+            className={`mt-0.5 rounded text-[12.5px] font-semibold text-secondary hover:underline dark:text-amber-brand ${FOCUS}`}
           >
             {open ? "إخفاء" : "اقرأ المزيد"}
           </button>
@@ -284,15 +349,15 @@ function ChatBubble({ item, onResend, showRole }) {
         )}
 
         {/* footer */}
-        <div className="mt-1 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-0.5 opacity-50 transition-opacity group-hover/msg:opacity-100">
+        <div className="mt-0.5 flex items-center justify-between gap-3">
+          <div className="flex items-center opacity-70 transition-opacity focus-within:opacity-100 sm:opacity-0 sm:group-hover/msg:opacity-100">
             <button
               type="button"
               onClick={copy}
               title="نسخ"
               className={`rounded-full p-1.5 text-secondary/70 hover:bg-secondary/10 dark:text-darkmuted dark:hover:bg-white/10 ${FOCUS}`}
             >
-              <Copy size={15} weight="bold" />
+              <Copy size={14} weight="bold" />
             </button>
             <button
               type="button"
@@ -301,17 +366,17 @@ function ChatBubble({ item, onResend, showRole }) {
               title="إعادة إرسال"
               className={`rounded-full p-1.5 text-secondary/70 hover:bg-secondary/10 disabled:opacity-40 dark:text-darkmuted dark:hover:bg-white/10 ${FOCUS}`}
             >
-              <ArrowCounterClockwise size={15} weight="bold" />
+              <ArrowCounterClockwise size={14} weight="bold" />
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 text-[11px] text-secondary/60 dark:text-darkmuted">
+          <div className="flex items-center gap-1.5 text-[11px] text-secondary/55 dark:text-darkmuted">
             {item.number && (
               <span dir="ltr" className="hidden sm:inline">
                 {item.number}
               </span>
             )}
-            <span className="rounded bg-secondary/10 px-1 font-semibold dark:bg-white/10">{langChip(item.language)}</span>
+            <span className="font-semibold">{langChip(item.language)}</span>
             <span className="tabular-nums">{fmtTime(item.sentAt)}</span>
             <Ticks status={item.status} />
           </div>
@@ -323,13 +388,13 @@ function ChatBubble({ item, onResend, showRole }) {
 
 function Notice({ tone = "amber", children }) {
   const tones = {
-    amber: "border-amber-brand/30 bg-amber-brand/10 text-orange-deep dark:text-amber-brand",
-    rose: "border-rose-500/25 bg-rose-500/10 text-rose-800 dark:text-rose-200",
-    sky: "border-secondary/25 bg-secondary/10 text-secondary dark:border-teal-400/25 dark:bg-teal-400/10 dark:text-teal-200",
+    amber: "bg-amber-brand/10 text-orange-deep dark:text-amber-brand",
+    rose: "bg-rose-500/10 text-rose-800 dark:text-rose-200",
+    sky: "bg-secondary/10 text-secondary dark:bg-teal-400/10 dark:text-teal-200",
   };
   const Icon = tone === "sky" ? Info : Warning;
   return (
-    <div className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs leading-relaxed ${tones[tone]}`}>
+    <div className={`flex items-start gap-2 rounded-xl px-3 py-2 text-xs leading-relaxed ${tones[tone]}`}>
       <Icon size={15} weight="fill" className="mt-0.5 shrink-0" />
       <div className="min-w-0">{children}</div>
     </div>
@@ -342,17 +407,19 @@ function FilterChip({ active, onClick, children, count }) {
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-medium transition active:scale-95 ${FOCUS} ${
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-[12.5px] font-semibold transition active:scale-95 ${FOCUS} ${
         active
-          ? "bg-primary/15 text-orange-deep ring-1 ring-inset ring-primary/40 dark:bg-primary/20 dark:text-amber-brand dark:ring-primary/40"
+          ? "bg-secondary text-white dark:bg-primary"
           : "bg-white text-secondary/80 hover:bg-PaleCyan dark:bg-dark_input dark:text-darkmuted dark:hover:bg-darkhover"
       }`}
     >
       {children}
-      {count !== undefined && <span className="text-[11px] tabular-nums opacity-60">{count}</span>}
+      {count !== undefined && <span className="text-[10.5px] tabular-nums opacity-70">{count}</span>}
     </button>
   );
 }
+
+const Divider = () => <span className="mx-0.5 h-4 w-px shrink-0 bg-secondary/15 dark:bg-dark_border" />;
 
 // ─── Variables side panel ─────────────────────────────────────────────────────
 
@@ -398,7 +465,8 @@ function VariablesPanel({
 
   return (
     <>
-      <div className="flex items-center gap-2 border-b border-secondary/10 bg-white px-4 py-3 dark:border-dark_border dark:bg-darklight">
+      {/* header */}
+      <div className="flex items-center gap-2.5 bg-white px-4 py-3 dark:bg-darklight">
         <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
           <Sparkle size={19} weight="duotone" />
         </span>
@@ -409,15 +477,17 @@ function VariablesPanel({
         <button
           type="button"
           onClick={onClose}
+          title="إغلاق"
           className={`rounded-full p-2 text-secondary/70 hover:bg-secondary/10 dark:text-darkmuted dark:hover:bg-white/10 lg:hidden ${FOCUS}`}
         >
           <X size={20} weight="bold" />
         </button>
       </div>
 
+      {/* recipient card */}
       {recipient && meta && (
-        <div className="mx-3 mt-3 flex items-center gap-3 rounded-2xl border border-secondary/5 bg-white p-3 shadow-sm dark:border-dark_border dark:bg-darklight">
-          <Avatar role={recipient.type} name={recipientName(recipient)} size="h-11 w-11" text="text-base" />
+        <div className="flex items-center gap-3 border-t border-secondary/5 bg-white px-4 py-3 dark:border-dark_border dark:bg-darklight">
+          <Avatar role={recipient.type} name={recipientName(recipient)} size="h-10 w-10" text="text-base" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-bold text-brand-deep dark:text-white">{recipientName(recipient)}</p>
             <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-secondary/60 dark:text-darkmuted">
@@ -437,7 +507,7 @@ function VariablesPanel({
       )}
 
       {raw ? (
-        <div className="m-3 space-y-3 rounded-2xl border border-secondary/25 bg-secondary/10 p-4 text-center dark:border-teal-400/25 dark:bg-teal-400/10">
+        <div className="m-3 space-y-3 rounded-2xl bg-secondary/10 p-4 text-center dark:bg-teal-400/10">
           <Info size={26} weight="duotone" className="mx-auto text-secondary dark:text-teal-300" />
           <p className="text-xs leading-relaxed text-secondary dark:text-teal-200">
             وضع "إرسال النص كما هو" شغال — المتغيرات متوقفة.
@@ -452,6 +522,7 @@ function VariablesPanel({
         </div>
       ) : (
         <>
+          {/* search */}
           <div className="relative mx-3 mt-3">
             <MagnifyingGlass
               size={16}
@@ -462,73 +533,61 @@ function VariablesPanel({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="ابحث عن متغير…"
-              className="w-full rounded-xl border border-transparent bg-white py-2.5 pe-9 ps-3 text-sm text-brand-deep outline-none transition placeholder:text-secondary/40 focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:bg-dark_input dark:text-white dark:placeholder:text-darksubtle"
+              className="w-full rounded-full bg-white py-2.5 pe-10 ps-4 text-sm text-brand-deep outline-none transition placeholder:text-secondary/40 focus:ring-2 focus:ring-primary/30 dark:bg-dark_input dark:text-white dark:placeholder:text-darksubtle"
             />
           </div>
 
+          {/* categories */}
           <div className="mt-2.5 flex gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <button
-              type="button"
-              onClick={() => setCat("all")}
-              className={`shrink-0 rounded-full px-3 py-1 text-[11.5px] font-semibold transition ${FOCUS} ${
-                cat === "all"
-                  ? "bg-primary text-white shadow-sm"
-                  : "bg-white text-secondary/80 hover:bg-PaleCyan dark:bg-dark_input dark:text-darkmuted dark:hover:bg-darkhover"
-              }`}
-            >
+            <FilterChip active={cat === "all"} onClick={() => setCat("all")}>
               الكل
-            </button>
+            </FilterChip>
             {sections.map(({ cat: c }) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setCat(c.id)}
-                className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[11.5px] font-semibold transition ${FOCUS} ${
-                  cat === c.id
-                    ? "bg-primary text-white shadow-sm"
-                    : "bg-white text-secondary/80 hover:bg-PaleCyan dark:bg-dark_input dark:text-darkmuted dark:hover:bg-darkhover"
-                }`}
-              >
-                {c.icon} {c.label}
-              </button>
+              <FilterChip key={c.id} active={cat === c.id} onClick={() => setCat(c.id)}>
+                <CatIcon cat={c} />
+                {c.label}
+              </FilterChip>
             ))}
           </div>
 
+          {/* list */}
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 pb-3 pt-2">
             {filtered.length === 0 ? (
               <p className="py-10 text-center text-xs text-secondary/50 dark:text-darksubtle">مفيش متغيرات مطابقة</p>
             ) : (
               filtered.map(({ cat: c, items }) => (
                 <div key={c.id}>
-                  <p className="mb-1.5 px-1 text-[11px] font-black tracking-wide text-secondary/60 dark:text-darkmuted">
-                    {c.icon} {c.label}
+                  <p className="mb-1.5 flex items-center gap-1.5 px-1 text-[11px] font-bold text-secondary/60 dark:text-darkmuted">
+                    <CatIcon cat={c} size={13} />
+                    {c.label}
                   </p>
-                  <div className="space-y-1.5">
-                    {items.map((v) => {
+                  <div className="overflow-hidden rounded-2xl bg-white dark:bg-dark_input">
+                    {items.map((v, i) => {
                       const val = values[v.key];
-                      const empty = !val;
                       return (
                         <button
                           key={v.key}
                           type="button"
                           onClick={() => onInsert(`{${v.key}}`)}
                           title={`{${v.key}}`}
-                          className={`group/var flex w-full items-center gap-2.5 rounded-xl border border-transparent bg-white p-2.5 text-start shadow-[0_1px_0_rgba(0,42,51,0.06)] transition hover:-translate-y-px hover:border-primary/30 hover:shadow-md active:scale-[0.98] dark:bg-dark_input dark:hover:border-primary/40 ${FOCUS}`}
+                          className={`group/var flex w-full items-center gap-3 px-3 py-2.5 text-start transition hover:bg-PaleSkyBlu active:bg-PaleCyan dark:hover:bg-darkhover ${
+                            i > 0 ? "border-t border-secondary/5 dark:border-dark_border" : ""
+                          } ${FOCUS}`}
                         >
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-PaleSkyBlu text-base dark:bg-darkmode">
-                            {v.icon}
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <VarIcon item={v} />
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-[13px] font-bold text-brand-deep dark:text-white">
                               {v.label}
                             </span>
-                            {empty ? (
-                              <span className="block text-[11px] font-medium text-amber-600 dark:text-amber-brand">
-                                مفيش بيانات للمستلم ده
+                            {val ? (
+                              <span dir="auto" className="block truncate text-[11.5px] text-secondary/70 dark:text-darkmuted">
+                                {val}
                               </span>
                             ) : (
-                              <span dir="auto" className="block truncate text-[11.5px] text-orange-deep dark:text-amber-brand">
-                                {val}
+                              <span className="block text-[11px] font-medium text-amber-600 dark:text-amber-brand">
+                                مفيش بيانات للمستلم ده
                               </span>
                             )}
                           </span>
@@ -546,13 +605,16 @@ function VariablesPanel({
               ))
             )}
 
+            {/* gender inline */}
             <button
               type="button"
               onClick={onInsertGender}
               title="بيختار الكلمة حسب جنس المستلم"
-              className={`flex w-full items-center gap-2.5 rounded-xl border border-dashed border-primary/50 bg-primary/5 p-2.5 text-start transition hover:bg-primary/10 ${FOCUS}`}
+              className={`flex w-full items-center gap-3 rounded-2xl border border-dashed border-primary/50 bg-primary/5 px-3 py-2.5 text-start transition hover:bg-primary/10 ${FOCUS}`}
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-base">⚧</span>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <GenderIntersex size={18} weight="duotone" />
+              </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[13px] font-bold text-orange-deep dark:text-amber-brand">كلمة حسب الجنس</span>
                 <span dir="ltr" className="block truncate font-mono text-[10.5px] text-secondary/60 dark:text-darkmuted">
@@ -785,7 +847,9 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
       setInstance(item.instance);
     }
     setConfirming(false);
-    toast("اتحطت الرسالة في المحرر — راجعها وابعتها", { icon: "✏️" });
+    toast("اتحطت الرسالة في المحرر — راجعها وابعتها", {
+      icon: <PencilSimple size={18} weight="bold" />,
+    });
     requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
@@ -844,6 +908,8 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
     ...(instCounts.unknown > 0 ? [{ id: "unknown", label: "قديمة" }] : []),
   ];
 
+  const currentInstance = instanceMeta(instance);
+
   return (
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-teal-deeper/70 p-0 backdrop-blur-sm sm:p-5"
@@ -851,17 +917,17 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
     >
       <div
         dir="rtl"
-        className="relative flex h-full w-full max-w-[1280px] flex-col overflow-hidden bg-brand-soft shadow-[0_32px_90px_rgba(0,26,31,0.55)] dark:bg-darkmode sm:h-[96vh] sm:rounded-3xl sm:border sm:border-secondary/15 dark:sm:border-dark_border"
+        className="relative flex h-full w-full max-w-[1200px] flex-col overflow-hidden bg-brand-soft shadow-[0_32px_90px_rgba(0,26,31,0.55)] dark:bg-darkmode sm:h-[94vh] sm:rounded-3xl"
       >
-        {/* ── Header ── */}
-        <div className="flex items-center gap-3.5 border-b-2 border-primary bg-secondary px-5 py-3 text-white dark:bg-darklight">
+        {/* ── Header (زي هيدر واتساب) ── */}
+        <div className="flex items-center gap-3 bg-secondary px-4 py-2.5 text-white dark:bg-darklight">
           <div className="relative">
-            <Avatar role={kindRole} name={memberName} size="h-12 w-12" text="text-lg" />
-            <span className="absolute -bottom-0.5 -left-0.5 h-3.5 w-3.5 rounded-full bg-emerald-400 ring-2 ring-secondary dark:ring-darklight" />
+            <Avatar role={kindRole} name={memberName} size="h-11 w-11" text="text-base" />
+            <span className="absolute -bottom-0.5 -left-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-secondary dark:ring-darklight" />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-base font-bold leading-tight sm:text-[17px]">{memberName}</h3>
-            <p className="truncate text-xs text-white/75">
+            <h3 className="truncate text-[16px] font-bold leading-tight">{memberName}</h3>
+            <p className="truncate text-xs text-white/70">
               {kindMeta.label}
               {group && <span> · {group.name}</span>}
               {!state.loading && <span> · {state.total} رسالة</span>}
@@ -874,7 +940,7 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
             title="تحديث"
             className={`rounded-full p-2.5 text-white/85 transition hover:bg-white/10 ${FOCUS}`}
           >
-            <ArrowsClockwise size={21} weight="bold" className={refreshing ? "animate-spin" : ""} />
+            <ArrowsClockwise size={20} weight="bold" className={refreshing ? "animate-spin" : ""} />
           </button>
           <button
             type="button"
@@ -883,14 +949,14 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
             title="إغلاق (Esc)"
             className={`rounded-full p-2.5 text-white/85 transition hover:bg-white/10 ${FOCUS}`}
           >
-            <X size={21} weight="bold" />
+            <X size={20} weight="bold" />
           </button>
         </div>
 
         {/* ── Body ── */}
         {state.loading ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3" style={WALLPAPER}>
-            <CircleNotch size={34} weight="bold" className="animate-spin text-primary" />
+            <CircleNotch size={32} weight="bold" className="animate-spin text-primary" />
             <p className="text-xs text-secondary/70 dark:text-darkmuted">جاري تحميل الرسائل…</p>
           </div>
         ) : state.error ? (
@@ -908,67 +974,61 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
             </button>
           </div>
         ) : (
-          <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_360px]">
             {/* ═══ Chat column ═══ */}
             <div className="flex min-h-0 min-w-0 flex-col">
-              {/* filters */}
-              <div className="space-y-2 bg-PaleSkyBlu px-4 py-2.5 dark:bg-darklight">
-                <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  <FilterChip active={scope === "group"} onClick={() => setScope("group")}>
-                    الجروب ده
-                  </FilterChip>
-                  <FilterChip active={scope === "all"} onClick={() => setScope("all")}>
-                    كل الرسائل
-                  </FilterChip>
-                  {kind === "student" && hasGuardian && (
-                    <>
-                      <span className="mx-0.5 h-5 w-px shrink-0 bg-secondary/20 dark:bg-dark_border" />
-                      <FilterChip active={roleFilter === "all"} onClick={() => setRoleFilter("all")}>
-                        الكل
-                      </FilterChip>
-                      <FilterChip
-                        active={roleFilter === RECIPIENT_TYPE.STUDENT}
-                        onClick={() => setRoleFilter(RECIPIENT_TYPE.STUDENT)}
-                      >
-                        الطالب
-                      </FilterChip>
-                      <FilterChip
-                        active={roleFilter === RECIPIENT_TYPE.GUARDIAN}
-                        onClick={() => setRoleFilter(RECIPIENT_TYPE.GUARDIAN)}
-                      >
-                        ولي الأمر
-                      </FilterChip>
-                    </>
-                  )}
-                </div>
+              {/* filters — صف واحد بس */}
+              <div className="flex items-center gap-1.5 overflow-x-auto bg-PaleSkyBlu px-4 py-2 [scrollbar-width:none] dark:bg-darklight [&::-webkit-scrollbar]:hidden">
+                <FilterChip active={scope === "group"} onClick={() => setScope("group")}>
+                  الجروب ده
+                </FilterChip>
+                <FilterChip active={scope === "all"} onClick={() => setScope("all")}>
+                  كل الرسائل
+                </FilterChip>
 
-                {/* ✅ فلتر الرقم اللي بعت */}
-                <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  <span className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-secondary/60 dark:text-darkmuted">
-                    <DeviceMobile size={15} weight="duotone" />
-                    المُرسِل
-                  </span>
-                  {instTabs.map((t) => (
+                {kind === "student" && hasGuardian && (
+                  <>
+                    <Divider />
                     <FilterChip
-                      key={t.id}
-                      active={instFilter === t.id}
-                      onClick={() => setInstFilter(t.id)}
-                      count={instCounts[t.id]}
+                      active={roleFilter === RECIPIENT_TYPE.STUDENT}
+                      onClick={() =>
+                        setRoleFilter((r) => (r === RECIPIENT_TYPE.STUDENT ? "all" : RECIPIENT_TYPE.STUDENT))
+                      }
                     >
-                      {t.id !== "all" && (
-                        <span className={`h-2 w-2 rounded-full ${INSTANCE_BAR[t.id]}`} />
-                      )}
-                      {t.label}
+                      <GraduationCap size={14} weight="duotone" />
+                      الطالب
                     </FilterChip>
-                  ))}
-                </div>
+                    <FilterChip
+                      active={roleFilter === RECIPIENT_TYPE.GUARDIAN}
+                      onClick={() =>
+                        setRoleFilter((r) => (r === RECIPIENT_TYPE.GUARDIAN ? "all" : RECIPIENT_TYPE.GUARDIAN))
+                      }
+                    >
+                      <UsersThree size={14} weight="duotone" />
+                      ولي الأمر
+                    </FilterChip>
+                  </>
+                )}
+
+                <Divider />
+                {instTabs.map((t) => (
+                  <FilterChip
+                    key={t.id}
+                    active={instFilter === t.id}
+                    onClick={() => setInstFilter(t.id)}
+                    count={instCounts[t.id]}
+                  >
+                    {t.id !== "all" && <span className={`h-2 w-2 rounded-full ${INSTANCE_DOT[t.id]}`} />}
+                    {t.label}
+                  </FilterChip>
+                ))}
               </div>
 
               {/* chat area */}
               <div ref={chatRef} className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 sm:px-8" style={WALLPAPER}>
                 {state.total > state.messages.length && (
                   <div className="flex justify-center pt-3">
-                    <span className="rounded-lg bg-amber-brand/20 px-3 py-1 text-[11.5px] font-medium text-orange-deep shadow-sm dark:bg-amber-brand/10 dark:text-amber-brand">
+                    <span className="rounded-lg bg-amber-brand/20 px-3 py-1 text-[11.5px] font-medium text-orange-deep dark:bg-amber-brand/10 dark:text-amber-brand">
                       معروض آخر {state.messages.length} رسالة من {state.total}
                     </span>
                   </div>
@@ -976,10 +1036,10 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
 
                 {timeline.length === 0 ? (
                   <div className="flex h-full flex-col items-center justify-center gap-3 py-16 text-center">
-                    <span className="flex h-24 w-24 items-center justify-center rounded-full bg-white/80 shadow-sm dark:bg-white/5">
-                      <ChatCircleDots size={44} weight="duotone" className="text-primary/70" />
+                    <span className="flex h-20 w-20 items-center justify-center rounded-full bg-white/90 dark:bg-white/5">
+                      <ChatCircleDots size={40} weight="duotone" className="text-primary/70" />
                     </span>
-                    <p className="rounded-lg bg-white/80 px-4 py-1.5 text-sm text-secondary/80 shadow-sm dark:bg-darklight dark:text-darkmuted">
+                    <p className="rounded-lg bg-white/90 px-4 py-1.5 text-sm text-secondary/80 dark:bg-darklight dark:text-darkmuted">
                       مفيش رسائل {scope === "group" ? "للجروب ده" : ""} لحد دلوقتي
                     </p>
                     {instFilter !== "all" ? (
@@ -1016,7 +1076,7 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
               </div>
 
               {/* ── Composer ── */}
-              <div className="space-y-2.5 border-t border-secondary/10 bg-PaleSkyBlu px-3 pb-3.5 pt-2.5 dark:border-dark_border dark:bg-darklight sm:px-5">
+              <div className="space-y-2 bg-PaleSkyBlu px-3 pb-3 pt-2 dark:bg-darklight sm:px-5">
                 {unknownVars.length > 0 && (
                   <Notice tone="rose">
                     متغيرات غير معروفة: <span dir="ltr" className="font-mono">{unknownVars.join(" ")}</span>
@@ -1029,7 +1089,7 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
                 )}
                 {!instanceConfigured(instance) && (
                   <Notice tone="rose">
-                    الرقم "{instanceMeta(instance).label}" مش متضبط في الـ env — اختار رقم تاني من خيارات الإرسال.
+                    الرقم "{currentInstance.label}" مش متضبط في الـ env — اختار رقم تاني من خيارات الإرسال.
                   </Notice>
                 )}
                 {raw && text.trim() && (
@@ -1039,21 +1099,15 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
                 )}
 
                 {preview && (
-                  <div className="rounded-2xl bg-white/70 p-3 dark:bg-darkmode/70">
+                  <div className="rounded-2xl bg-white/70 p-2.5 dark:bg-darkmode/70">
                     <p className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-secondary/60 dark:text-darkmuted">
                       معاينة — هتوصل كده
                       {recipient && <span className="font-medium">· {recipientName(recipient)}</span>}
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${instanceMeta(instance).soft}`}
-                      >
-                        <DeviceMobile size={11} weight="fill" />
-                        من {instanceMeta(instance).label}
-                      </span>
                     </p>
                     <div className="flex">
                       <div
                         dir={preview.language === "en" ? "ltr" : "rtl"}
-                        className="relative ms-auto max-h-40 max-w-[92%] overflow-y-auto rounded-2xl rounded-tl-none border border-dashed border-primary/50 bg-PaleCyan/70 px-3.5 py-2.5 text-[14.5px] leading-relaxed text-brand-deep dark:bg-teal-brand/60 dark:text-white"
+                        className="relative ms-auto max-h-36 max-w-[92%] overflow-y-auto rounded-2xl rounded-tl-none border border-dashed border-primary/50 bg-PaleCyan/70 px-3.5 py-2 text-[14px] leading-relaxed text-brand-deep dark:bg-teal-brand/60 dark:text-white"
                       >
                         <p className="whitespace-pre-wrap break-words">{preview.text}</p>
                       </div>
@@ -1061,7 +1115,7 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
                   </div>
                 )}
 
-                {/* recipient chips */}
+                {/* recipients + sender pill */}
                 <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   <span className="shrink-0 text-xs font-bold text-secondary/60 dark:text-darkmuted">إلى</span>
                   {recipients.map((r) => {
@@ -1074,65 +1128,40 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
                         disabled={!r.hasPhone}
                         onClick={() => setRecipientKey(r.key)}
                         title={r.hasPhone ? r.phoneHint : "بدون رقم"}
-                        className={`flex shrink-0 items-center gap-2 rounded-full py-1 pe-3.5 ps-1 text-[13px] font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS} ${
+                        className={`flex shrink-0 items-center gap-2 rounded-full py-1 pe-3 ps-1 text-[13px] font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS} ${
                           active
-                            ? "bg-primary/15 text-orange-deep ring-1 ring-primary/50 dark:bg-primary/20 dark:text-amber-brand"
+                            ? "bg-secondary text-white dark:bg-primary"
                             : "bg-white text-secondary hover:bg-PaleCyan dark:bg-dark_input dark:text-darkmuted dark:hover:bg-darkhover"
                         }`}
                       >
-                        <Avatar role={r.type} name={recipientName(r)} size="h-7 w-7" text="text-xs" />
-                        <span className="max-w-[140px] truncate">{recipientName(r)}</span>
-                        <span className="text-[10.5px] font-medium opacity-60">{meta.label}</span>
+                        <Avatar role={r.type} name={recipientName(r)} size="h-6 w-6" text="text-[11px]" />
+                        <span className="max-w-[130px] truncate">{recipientName(r)}</span>
+                        <span className="text-[10.5px] font-medium opacity-70">{meta.label}</span>
                         {!r.hasPhone && (
-                          <span className="rounded-full bg-rose-500/10 px-1.5 text-[9px] font-bold text-rose-600">بدون رقم</span>
+                          <span className="rounded-full bg-rose-500/15 px-1.5 text-[9px] font-bold text-rose-600">بدون رقم</span>
                         )}
                       </button>
                     );
                   })}
-                </div>
 
-                {/* instance quick picker */}
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-secondary/60 dark:text-darkmuted">
-                    <DeviceMobile size={15} weight="duotone" />
-                    من رقم
-                  </span>
-                  {["main", "eval"].map((key) => {
-                    const info = instances.find((i) => i.key === key);
-                    const ok = instanceConfigured(key);
-                    const active = instance === key;
-                    const meta = INSTANCE_META[key];
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        disabled={!ok}
-                        onClick={() => setInstance(key)}
-                        title={ok ? `Instance ${info?.idHint || ""}` : "مش متضبط في الـ env"}
-                        className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS} ${
-                          active
-                            ? "bg-primary/15 text-orange-deep ring-1 ring-primary/50 dark:bg-primary/20 dark:text-amber-brand"
-                            : "bg-white text-secondary hover:bg-PaleCyan dark:bg-dark_input dark:text-darkmuted dark:hover:bg-darkhover"
-                        }`}
-                      >
-                        <span className={`h-2 w-2 rounded-full ${ok ? "bg-emerald-500" : "bg-rose-500"}`} />
-                        {meta.label}
-                        {info?.idHint && (
-                          <span dir="ltr" className="text-[10px] font-normal opacity-60">
-                            {info.idHint}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
+                  <span className="ms-auto" />
+                  <button
+                    type="button"
+                    onClick={() => setOptsOpen(true)}
+                    title="تغيير رقم الإرسال"
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold ${currentInstance.soft} ${FOCUS}`}
+                  >
+                    <DeviceMobile size={14} weight="fill" />
+                    من {currentInstance.label}
+                  </button>
                 </div>
 
                 {/* input row / confirm */}
                 {confirming ? (
-                  <div className="flex items-center gap-2 rounded-3xl bg-white p-2.5 ps-5 shadow-sm dark:bg-dark_input">
+                  <div className="flex items-center gap-2 rounded-3xl bg-white p-2.5 ps-5 dark:bg-dark_input">
                     <p className="min-w-0 flex-1 truncate text-sm font-bold text-brand-deep dark:text-white">
                       هتبعت لـ {recipient ? recipientName(recipient) : "—"} ({recipient ? ROLE_META[recipient.type].label : ""}) من{" "}
-                      {instanceMeta(instance).label}؟
+                      {currentInstance.label}؟
                     </p>
                     <button
                       type="button"
@@ -1150,8 +1179,8 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-end gap-2.5">
-                    <div className="flex min-w-0 flex-1 items-end gap-1 rounded-3xl bg-white px-2.5 py-2 shadow-sm dark:bg-dark_input">
+                  <div className="flex items-end gap-2">
+                    <div className="flex min-w-0 flex-1 items-end gap-0.5 rounded-3xl bg-white px-2 py-1.5 dark:bg-dark_input">
                       <button
                         type="button"
                         onClick={() => setVarsOpen((v) => !v)}
@@ -1174,7 +1203,7 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
                             ? "اكتب رسالة… واختار المتغيرات من الجنب"
                             : "Type a message… pick variables from the side"
                         }
-                        className="max-h-44 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-2.5 text-[15px] leading-6 text-brand-deep outline-none placeholder:text-secondary/40 dark:text-white dark:placeholder:text-darksubtle"
+                        className="max-h-44 min-h-[42px] flex-1 resize-none bg-transparent px-2 py-2.5 text-[15px] leading-6 text-brand-deep outline-none placeholder:text-secondary/40 dark:text-white dark:placeholder:text-darksubtle"
                       />
 
                       {/* options popover */}
@@ -1196,9 +1225,12 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
                         </button>
 
                         {optsOpen && (
-                          <div className="absolute bottom-full start-0 z-10 mb-2 w-72 space-y-3 rounded-2xl border border-secondary/10 bg-white p-3.5 shadow-brand-lg animate-in fade-in zoom-in-95 duration-100 dark:border-dark_border dark:bg-darklight">
+                          <div className="absolute bottom-full start-0 z-10 mb-2 w-72 space-y-3 rounded-2xl border border-secondary/10 bg-white p-3.5 shadow-brand-lg dark:border-dark_border dark:bg-darklight">
                             <div>
-                              <p className="mb-1.5 text-[11px] font-bold text-secondary/70 dark:text-darkmuted">يبعت من أنهي رقم؟</p>
+                              <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold text-secondary/70 dark:text-darkmuted">
+                                <DeviceMobile size={13} weight="duotone" />
+                                يبعت من أنهي رقم؟
+                              </p>
                               <div className="flex rounded-xl bg-PaleSkyBlu p-0.5 dark:bg-darkmode">
                                 {["main", "eval"].map((key) => {
                                   const info = instances.find((i) => i.key === key);
@@ -1209,15 +1241,16 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
                                       type="button"
                                       disabled={!ok}
                                       onClick={() => setInstance(key)}
-                                      className={`flex-1 rounded-[10px] px-2 py-1.5 text-[11px] font-bold transition disabled:opacity-30 ${FOCUS} ${
+                                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-[10px] px-2 py-1.5 text-[11px] font-bold transition disabled:opacity-30 ${FOCUS} ${
                                         instance === key
                                           ? "bg-white text-orange-deep shadow-sm dark:bg-dark_input dark:text-amber-brand"
                                           : "text-secondary/60 dark:text-darkmuted"
                                       }`}
                                     >
+                                      <span className={`h-2 w-2 rounded-full ${ok ? "bg-emerald-500" : "bg-rose-500"}`} />
                                       {INSTANCE_META[key].label}
                                       {info?.idHint ? (
-                                        <span dir="ltr" className="ms-1 font-normal opacity-60">
+                                        <span dir="ltr" className="font-normal opacity-60">
                                           {info.idHint}
                                         </span>
                                       ) : null}
@@ -1274,7 +1307,7 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
                       onClick={() => setConfirming(true)}
                       disabled={!canSend}
                       title="إرسال (Ctrl + Enter)"
-                      className={`mb-0.5 flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-brand-md transition hover:bg-accent-hover active:scale-90 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none ${FOCUS}`}
+                      className={`mb-0.5 flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-brand-md transition hover:bg-accent-hover active:scale-90 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none ${FOCUS}`}
                     >
                       {sending ? (
                         <CircleNotch size={22} weight="bold" className="animate-spin" />
@@ -1289,7 +1322,7 @@ export default function MemberMessagesModal({ groupId, kind, memberId, memberNam
 
             {/* ═══ Variables panel ═══ */}
             <aside
-              className={`${varsOpen ? "flex" : "hidden"} min-h-0 flex-col bg-PaleSkyBlu dark:bg-darkmode lg:flex lg:border-s lg:border-secondary/10 dark:lg:border-dark_border max-lg:absolute max-lg:inset-x-0 max-lg:bottom-0 max-lg:top-[76px] max-lg:z-20 max-lg:rounded-t-3xl max-lg:shadow-[0_-12px_40px_rgba(0,26,31,0.35)]`}
+              className={`${varsOpen ? "flex" : "hidden"} min-h-0 flex-col bg-PaleSkyBlu dark:bg-darkmode lg:flex lg:border-s lg:border-secondary/10 dark:lg:border-dark_border max-lg:absolute max-lg:inset-x-0 max-lg:bottom-0 max-lg:top-[68px] max-lg:z-20 max-lg:rounded-t-3xl max-lg:shadow-[0_-12px_40px_rgba(0,26,31,0.35)]`}
             >
               <VariablesPanel
                 recipient={recipient}

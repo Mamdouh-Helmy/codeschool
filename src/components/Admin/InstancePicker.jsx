@@ -1,7 +1,7 @@
 // components/admin/InstancePicker.jsx
 "use client";
 import React, { useState } from "react";
-import { ChevronDown, Smartphone, SlidersHorizontal } from "lucide-react";
+import { CaretDown, DeviceMobile, SlidersHorizontal } from "@phosphor-icons/react";
 
 export const INSTANCE_META = {
   main: {
@@ -51,10 +51,10 @@ export default function InstancePicker({
   };
 
   return (
-    <div className="space-y-2.5 rounded-2xl border border-PowderBlueBorder bg-gradient-to-br from-gray-50 to-white p-3 dark:border-dark_border dark:from-darklight dark:to-darkmode">
+    <div className="space-y-2.5 rounded-2xl border border-PowderBlueBorder bg-white p-3 dark:border-dark_border dark:bg-darklight">
       <div className="flex items-center gap-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-orange-deep text-white shadow-sm">
-          <Smartphone className="h-3.5 w-3.5" />
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <DeviceMobile size={16} weight="duotone" />
         </span>
         <p className="text-xs font-bold text-MidnightNavyText dark:text-white">يبعت من أنهي رقم؟</p>
       </div>
@@ -72,7 +72,7 @@ export default function InstancePicker({
               disabled={!ok}
               aria-pressed={active}
               onClick={() => onChange(key)}
-              className={`relative rounded-xl border p-2.5 text-right transition-all disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS} ${
+              className={`relative rounded-xl border p-2.5 text-start transition-all disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS} ${
                 active
                   ? meta.border
                   : "border-PowderBlueBorder bg-white hover:border-primary/40 dark:border-dark_border dark:bg-dark_input"
@@ -80,7 +80,7 @@ export default function InstancePicker({
             >
               <div className="flex items-center gap-2">
                 <span className={`h-2 w-2 rounded-full ${ok ? "bg-emerald-500" : "bg-rose-500"}`} />
-               <span className="text-xs font-bold text-MidnightNavyText dark:text-white">{info?.label || meta.label}</span>
+                <span className="text-xs font-bold text-MidnightNavyText dark:text-white">{info?.label || meta.label}</span>
               </div>
               <p className="mt-1 text-[10px] text-gray-400" dir="ltr">
                 {ok ? info?.idHint || "—" : "مش متضبط"}
@@ -97,12 +97,12 @@ export default function InstancePicker({
             onClick={() => setOpen((v) => !v)}
             className={`flex w-full items-center gap-1.5 rounded-lg px-1 py-1 text-[11px] font-semibold text-gray-500 hover:text-primary ${FOCUS}`}
           >
-            <SlidersHorizontal className="h-3 w-3" />
+            <SlidersHorizontal size={13} weight="bold" />
             تخصيص لكل فئة
             {customCount > 0 && (
               <span className="rounded-full bg-primary/10 px-1.5 text-[10px] text-primary">{customCount}</span>
             )}
-            <ChevronDown className={`mr-auto h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+            <CaretDown size={14} weight="bold" className={`ms-auto transition-transform ${open ? "rotate-180" : ""}`} />
           </button>
 
           {open && (
@@ -115,7 +115,7 @@ export default function InstancePicker({
                   <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-200">
                     {TYPE_LABEL[type] || type}
                   </span>
-                  <div className="inline-flex rounded-lg bg-gray-100 p-0.5 dark:bg-darkmode">
+                  <div className="inline-flex rounded-lg bg-PaleSkyBlu p-0.5 dark:bg-darkmode">
                     {[
                       { id: "", label: "افتراضي" },
                       { id: "main", label: "الرئيسي" },
