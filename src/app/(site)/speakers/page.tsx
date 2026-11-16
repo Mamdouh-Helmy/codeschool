@@ -1,3 +1,4 @@
+//app/(site)/speakers/page.tsx
 import Testimonials from "@/components/Home/Testimonials";
 import TicketSection from "@/components/Home/TicketSection";
 import WorkSpeakers from "@/components/Home/Projects";

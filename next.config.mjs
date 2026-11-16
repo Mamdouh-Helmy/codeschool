@@ -64,7 +64,7 @@ const nextConfig = {
       { protocol: "https", hostname: "res.cloudinary.com" },
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
     ],
-    formats: ["image/webp"],
+    formats: ["image/avif", "image/webp"],
     qualities: [75, 100], // ✅ يسمح بالـ quality اللي بتستخدمه فعليًا في الكود
   },
 

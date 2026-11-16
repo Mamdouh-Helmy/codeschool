@@ -1,7 +1,7 @@
+//app/(site)/curriculum/page.tsx
 import CurriculumTimeline from '@/components/Curriculum/CurriculumTimeline';
 import HeroSub from "@/components/SharedComponent/HeroSub";
 import React from "react";
-import '@/Style/style.css'
 import { Metadata } from "next";
 import TicketSection from '@/components/Home/TicketSection';
 export const metadata: Metadata = {

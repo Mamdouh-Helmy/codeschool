@@ -1,3 +1,4 @@
+//app/(site)/webinars/page.tsx
 "use client";
 import React, { useMemo } from "react";
 import Image from "next/image";

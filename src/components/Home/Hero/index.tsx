@@ -2,9 +2,13 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useLocale } from "@/app/context/LocaleContext";
-import WebinarRegistrationForm from "./WebinarRegistrationForm";
+
+const WebinarRegistrationForm = dynamic(() => import("./WebinarRegistrationForm"), {
+  ssr: false,
+});
 
 interface SiteContent {
   _id: string;
@@ -43,7 +47,12 @@ interface Webinar {
   currentAttendees: number;
 }
 
-const Hero = () => {
+const getImageSrc = (imageUrl: string | undefined, defaultImage: string): string => {
+  if (!imageUrl) return defaultImage;
+  return imageUrl;
+};
+
+const Hero = ({ initialContent = null }: { initialContent?: SiteContent | null }) => {
   const { t } = useI18n();
   const { locale } = useLocale();
   const isRTL = locale === "ar";
@@ -51,12 +60,14 @@ const Hero = () => {
   const [showFullText, setShowFullText] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
   const [showRegistration, setShowRegistration] = useState(false);
-  const [siteContent, setSiteContent] = useState<SiteContent | null>(null);
+  const [siteContent, setSiteContent] = useState<SiteContent | null>(initialContent);
   const [nextWebinar, setNextWebinar] = useState<Webinar | null>(null);
-  const [loadingContent, setLoadingContent] = useState(true);
+  const [loadingContent, setLoadingContent] = useState(!initialContent);
   const [loadingWebinar, setLoadingWebinar] = useState(true);
 
+  // Fallback فقط لو السيرفر معرفش يجيب الداتا
   useEffect(() => {
+    if (initialContent) return;
     const fetchHeroData = async () => {
       try {
         setLoadingContent(true);
@@ -66,25 +77,25 @@ const Hero = () => {
           setSiteContent(result.data[0]);
         }
       } catch (error) {
-        console.error('Error fetching hero data:', error);
+        console.error("Error fetching hero data:", error);
       } finally {
         setLoadingContent(false);
       }
     };
     fetchHeroData();
-  }, [locale]);
+  }, [initialContent]);
 
   useEffect(() => {
     const fetchWebinarData = async () => {
       try {
         setLoadingWebinar(true);
-        const response = await fetch('/api/webinars/next');
+        const response = await fetch("/api/webinars/next");
         const result = await response.json();
         if (result.success && result.data) {
           setNextWebinar(result.data);
         }
       } catch (error) {
-        console.error('Error fetching webinar data:', error);
+        console.error("Error fetching webinar data:", error);
       } finally {
         setLoadingWebinar(false);
       }
@@ -107,20 +118,19 @@ const Hero = () => {
         instructor2: siteContent.instructor2Ar || "فريدة عبدالله",
         instructor2Role: siteContent.instructor2RoleAr || "تطوير الويب",
       };
-    } else {
-      return {
-        imageUrl: siteContent.imageUrl,
-        secondImageUrl: siteContent.secondImageUrl,
-        imageAlt: siteContent.imageAlt || "Hero image",
-        secondImageAlt: siteContent.secondImageAlt || "Second image",
-        heroTitle: siteContent.heroTitleEn || "Empower Young Minds!",
-        heroDescription: siteContent.heroDescriptionEn || "",
-        instructor1: siteContent.instructor1En || "Yassin Abdullah",
-        instructor1Role: siteContent.instructor1RoleEn || "Machine Learning",
-        instructor2: siteContent.instructor2En || "Farida Abdullah",
-        instructor2Role: siteContent.instructor2RoleEn || "Web Development",
-      };
     }
+    return {
+      imageUrl: siteContent.imageUrl,
+      secondImageUrl: siteContent.secondImageUrl,
+      imageAlt: siteContent.imageAlt || "Hero image",
+      secondImageAlt: siteContent.secondImageAlt || "Second image",
+      heroTitle: siteContent.heroTitleEn || "Empower Young Minds!",
+      heroDescription: siteContent.heroDescriptionEn || "",
+      instructor1: siteContent.instructor1En || "Yassin Abdullah",
+      instructor1Role: siteContent.instructor1RoleEn || "Machine Learning",
+      instructor2: siteContent.instructor2En || "Farida Abdullah",
+      instructor2Role: siteContent.instructor2RoleEn || "Web Development",
+    };
   };
 
   const content = getContentByLanguage();
@@ -131,13 +141,6 @@ const Hero = () => {
     setShowFullText(false);
     setShowVideo(false);
     setShowRegistration(false);
-  };
-
-  const getImageSrc = (imageUrl: string | undefined, defaultImage: string): string => {
-    if (!imageUrl) return defaultImage;
-    if (imageUrl.startsWith('data:image')) return imageUrl;
-    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) return imageUrl;
-    return imageUrl;
   };
 
   const displayTitle = content?.heroTitle || t("hero.title");
@@ -160,6 +163,9 @@ const Hero = () => {
 
   const isLoading = loadingContent;
 
+  const firstSrc = content ? getImageSrc(content.imageUrl, "/images/hero/john.png") : "";
+  const secondSrc = content ? getImageSrc(content.secondImageUrl, "/images/hero/maria.png") : "";
+
   return (
     <section className="dark:bg-darkmode pt-40 md:pt-22">
       <div className="container">
@@ -174,34 +180,29 @@ const Hero = () => {
             >
               {loadingWebinar ? (
                 <span className="inline-block w-48 h-6 bg-gray-200 dark:bg-dark_input animate-pulse rounded"></span>
-              ) : nextWebinar && (
-                <button
-                  onClick={() => setShowRegistration(true)}
-                  className="hover:underline cursor-pointer"
-                >
-                  {webinarText}
-                </button>
+              ) : (
+                nextWebinar && (
+                  <button
+                    onClick={() => setShowRegistration(true)}
+                    className="hover:underline cursor-pointer"
+                  >
+                    {webinarText}
+                  </button>
+                )
               )}
             </p>
 
-            {/* Title */}
+            {/* Title (بدون data-aos عشان الـ LCP) */}
             {isLoading ? (
               <div className="py-4 space-y-3">
                 <div className="w-3/4 h-8 bg-gray-200 dark:bg-dark_input animate-pulse rounded"></div>
                 <div className="w-1/2 h-8 bg-gray-200 dark:bg-dark_input animate-pulse rounded"></div>
               </div>
             ) : (
-              <h1
-                className="py-4"
-                data-aos="fade-up"
-                data-aos-delay="300"
-                data-aos-duration="1000"
-              >
-                {displayTitle}
-              </h1>
+              <h1 className="py-4">{displayTitle}</h1>
             )}
 
-            {/* Description */}
+            {/* Description (بدون data-aos) */}
             {isLoading ? (
               <div className="space-y-2 md:pb-14 pb-6">
                 <div className="w-full h-4 bg-gray-200 dark:bg-dark_input animate-pulse rounded"></div>
@@ -209,12 +210,7 @@ const Hero = () => {
                 <div className="w-3/4 h-4 bg-gray-200 dark:bg-dark_input animate-pulse rounded"></div>
               </div>
             ) : (
-              <p
-                data-aos="fade-up"
-                data-aos-delay="400"
-                data-aos-duration="1000"
-                className="text-xl text-SlateBlueText dark:text-darkmuted font-normal md:pb-14 pb-6 md:w-[500px]"
-              >
+              <p className="text-xl text-SlateBlueText dark:text-darkmuted font-normal md:pb-14 pb-6 md:w-[500px]">
                 {preview}
                 <button
                   onClick={() => setShowFullText(true)}
@@ -267,21 +263,21 @@ const Hero = () => {
             </div>
           ) : content ? (
             <div
-              data-aos="fade-left"
-              data-aos-delay="200"
-              data-aos-duration="1000"
               className="col-span-6 lg:flex hidden items-center gap-3"
               dir={isRTL ? "rtl" : "ltr"}
             >
-              {/* First Image Container */}
+              {/* First Image */}
               <div className="relative w-full">
                 <div className={`relative w-full h-[450px] ${firstImageStyle} bg-secondary overflow-hidden`}>
-                  <img
-                    src={getImageSrc(content.imageUrl, "/images/hero/john.png")}
+                  <Image
+                    src={firstSrc}
                     alt={content.imageAlt}
-                    width={400}
-                    height={500}
-                    className="w-full h-full object-cover"
+                    fill
+                    sizes="(min-width: 1024px) 300px, 1px"
+                    fetchPriority="high"
+                    loading="eager"
+                    unoptimized={firstSrc.startsWith("data:")}
+                    className="object-cover"
                   />
                 </div>
                 {instructor1Name && (
@@ -306,15 +302,17 @@ const Hero = () => {
                 )}
               </div>
 
-              {/* Second Image Container */}
+              {/* Second Image */}
               <div className="relative w-full">
                 <div className={`relative w-full h-[450px] ${secondImageStyle} bg-primary overflow-hidden`}>
-                  <img
-                    src={getImageSrc(content.secondImageUrl, "/images/hero/maria.png")}
+                  <Image
+                    src={secondSrc}
                     alt={content.secondImageAlt}
-                    width={400}
-                    height={500}
-                    className="w-full h-full object-cover"
+                    fill
+                    sizes="(min-width: 1024px) 300px, 1px"
+                    loading="lazy"
+                    unoptimized={secondSrc.startsWith("data:")}
+                    className="object-cover"
                   />
                 </div>
                 {instructor2Name && (
@@ -358,7 +356,7 @@ const Hero = () => {
             <button
               onClick={closeModal}
               className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-dark_input hover:bg-gray-200 dark:hover:bg-darkhover text-primary text-xl font-bold transition-colors duration-200"
-              style={isRTL ? { right: 'auto', left: '12px' } : {}}
+              style={isRTL ? { right: "auto", left: "12px" } : {}}
             >
               ×
             </button>
@@ -376,7 +374,7 @@ const Hero = () => {
             closeModal();
             setNextWebinar({
               ...nextWebinar,
-              currentAttendees: nextWebinar.currentAttendees + 1
+              currentAttendees: nextWebinar.currentAttendees + 1,
             });
           }}
         />
@@ -405,7 +403,7 @@ const Hero = () => {
             <button
               onClick={closeModal}
               className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-dark_input hover:bg-gray-200 dark:hover:bg-darkhover text-primary text-xl font-bold transition-colors duration-200"
-              style={isRTL ? { right: 'auto', left: '12px' } : {}}
+              style={isRTL ? { right: "auto", left: "12px" } : {}}
             >
               ×
             </button>

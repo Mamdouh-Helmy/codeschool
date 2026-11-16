@@ -1,3 +1,4 @@
+// src/app/(site)/about/page.tsx
 import type { Metadata } from "next";
 import { Baloo_Bhaijaan_2 } from "next/font/google";
 import AboutHero from "@/components/About/AboutHero";

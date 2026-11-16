@@ -1,4 +1,4 @@
-// src/app/blog/page.tsx
+//app/(site)/blog/page.tsx
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";

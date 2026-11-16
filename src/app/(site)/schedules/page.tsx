@@ -1,7 +1,7 @@
+//app/(site)/schedules/page.tsx
 import BoxSlider from "@/components/SharedComponent/BoxSlider";
 import HeroSub from "@/components/SharedComponent/HeroSub";
 import React from "react";
-import '@/Style/style.css'
 import Schedules from "@/components/Home/Schedules";
 import TicketSection from "@/components/Home/TicketSection";
 import Testimonials from "@/components/Home/Testimonials";

@@ -1,3 +1,4 @@
+//app/(site)/contact/page.tsx
 import ContactForm from "@/components/Contact/Form";
 import ContactInfo from "@/components/Contact/ContactInfo";
 import Location from "@/components/Contact/OfficeLocation";

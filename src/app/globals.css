@@ -1,7 +1,8 @@
+@import "@/Style/style.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@import "@/Style/style.css";
 
 html {
   scroll-behavior: smooth;

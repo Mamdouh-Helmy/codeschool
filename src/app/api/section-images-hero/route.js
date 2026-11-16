@@ -1,3 +1,4 @@
+//api/section-images-hero/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import SectionImageHero from "../../models/SectionImageHero";

@@ -26,8 +26,10 @@ import "./portfolio-forms.css";
 const dmsans = DM_Sans({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://codeschool.online"),
   title: "CodeSchool",
   description: "منصة تعليمية لتعليم البرمجة للأطفال والمبتدئين",
+  alternates: { canonical: "./" },
 };
 
 export default async function RootLayout({
@@ -38,7 +40,7 @@ export default async function RootLayout({
     cookieStore.get("app_locale")?.value === "ar" ? "ar" : "en"
   ) as "ar" | "en";
 
-  // ✅ بقت بتستخدم authOptions عشان تجيب الـ session كاملة بما فيها role
+  // بتستخدم authOptions عشان تجيب الـ session كاملة بما فيها role
   // من أول render على السيرفر (بدل ما تستنى الـ client يجيبها)
   const session = await getServerSession(authOptions);
 
