@@ -146,9 +146,10 @@ export async function addPaymentToInvoice(invoiceId, { amount, method, notes, re
   return { invoice, payment };
 }
 
-// ─── استرجاع مبلغ — بيرفض أي مبلغ أكبر من المدفوع فعليًا، أو أكبر من الجزء
-// اللي لسه مش Recognized Revenue ────────────────────────────────────────────
-export async function refundInvoicePayment(invoiceId, { amount, reason, actedBy }) {
+export async function refundInvoicePayment(
+  invoiceId,
+  { amount, reason, actedBy, dueDate = null },
+) {
   if (!amount || amount <= 0) throw new Error("Refund amount must be positive");
 
   const invoice = await Invoice.findById(invoiceId);
@@ -180,6 +181,18 @@ export async function refundInvoicePayment(invoiceId, { amount, reason, actedBy 
     );
   }
 
+  // استرجاع كامل (المدفوع بقى صفر) = إلغاء. استرجاع جزئي = الفاتورة تفضل شغالة
+  const newPaid = invoice.paidAmount - amount;
+  const isFullRefund = newPaid <= 0;
+
+  let newDueDate = null;
+  if (!isFullRefund) {
+    newDueDate = dueDate ? new Date(dueDate) : invoice.dueDate;
+    if (!newDueDate || isNaN(new Date(newDueDate).getTime())) {
+      throw new Error("DUE_DATE_REQUIRED: حدد تاريخ استحقاق باقي المبلغ");
+    }
+  }
+
   const refundRecord = await Payment.create({
     invoiceId,
     studentId: invoice.studentId,
@@ -190,7 +203,7 @@ export async function refundInvoicePayment(invoiceId, { amount, reason, actedBy 
     notes: reason || "",
   });
 
-  // ✅ نقفل إسكرو أقدم دفعات لسه not_started/in_escrow بمبلغ يعادل المسترد
+  // نقفل إسكرو الدفعات اللي المبلغ المسترد بيغطيها بالكامل بس
   let remainingToVoid = amount;
   const escrowedPayments = await Payment.find({
     invoiceId,
@@ -200,24 +213,28 @@ export async function refundInvoicePayment(invoiceId, { amount, reason, actedBy 
   }).sort({ date: 1 });
 
   for (const p of escrowedPayments) {
-    if (remainingToVoid <= 0) break;
+    if (p.amount > remainingToVoid) break;
     p.escrow.status = "refunded";
     await p.save();
     remainingToVoid -= p.amount;
   }
 
-  invoice.paidAmount -= amount;
-  invoice.status = "Voided";
-  // 🆕 FIX: فاتورة ملغية مفيهاش معنى لاستحقاق (dueDate) — بنمسحها هنا صراحة
-  // عشان متتعارضش مع required() في Invoice.js حتى لو الفاتورة كانت أصلاً
-  // "Paid" (dueDate = null) قبل الإلغاء.
-  invoice.dueDate = null;
+  invoice.paidAmount = newPaid;
+  if (isFullRefund) {
+    invoice.status = "Voided";
+    invoice.dueDate = null;
+  } else {
+    if (invoice.status !== "Suspended") invoice.status = "Pending";
+    invoice.dueDate = newDueDate;
+  }
   invoice.metadata.lastModifiedBy = actedBy;
   invoice.metadata.updatedAt = new Date();
   await invoice.save();
 
-  // ✅ NEW: الفاتورة اتلغت، فأي تنبيه overdue مفتوح عليها ملوش لازمة
-  await closeOverdueAlertsForInvoice(invoice._id, actedBy);
+  // تنبيهات overdue تتقفل بس لو الفاتورة اتلغت فعلًا
+  if (isFullRefund) {
+    await closeOverdueAlertsForInvoice(invoice._id, actedBy);
+  }
 
   return { invoice, refundRecord };
 }
@@ -521,9 +538,10 @@ export async function flagDueEscrowsForReview() {
   return { checked: duePayments.length, alertsCreated: created, failed: failedCount };
 }
 
-// ✅ ينفذ قرار الأدمن على تنبيه escrow_review: "recognize" (تتحول لإيراد
-// معترف به) أو "refund" (استرجاع المبلغ للطالب)
-export async function resolveEscrowAlert(alertId, { action, refundAmount, reason, actedBy }) {
+export async function resolveEscrowAlert(
+  alertId,
+  { action, refundAmount, reason, actedBy, dueDate },
+) {
   const alert = await BillingAlert.findById(alertId);
   if (!alert || alert.status !== "open" || alert.type !== "escrow_review") {
     throw new Error("Escrow alert not found or already resolved");
@@ -534,7 +552,6 @@ export async function resolveEscrowAlert(alertId, { action, refundAmount, reason
 
   const now = new Date();
 
-  // ✅ بنحسب المبلغ مرة واحدة بس ونستخدمه في التنفيذ وفي التسجيل
   const resolvedRefundAmount = Math.min(
     Number(refundAmount) || payment.amount,
     payment.amount,
@@ -549,6 +566,7 @@ export async function resolveEscrowAlert(alertId, { action, refundAmount, reason
       amount: resolvedRefundAmount,
       reason: reason || "استرجاع بعد مراجعة الإسكرو",
       actedBy,
+      dueDate,
     });
   } else {
     throw new Error("action must be 'recognize' or 'refund'");

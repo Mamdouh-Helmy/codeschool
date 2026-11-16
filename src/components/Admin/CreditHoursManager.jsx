@@ -139,8 +139,15 @@ function HoursRing({ used, total, size = 148, stroke = 14 }) {
 function PaymentHistoryChart({ payments = [], height = 92 }) {
     if (!payments.length) return null;
 
+    // Oldest → newest, left to right. الاسترجاعات الملغية متظهرش في الرسم.
+    const ordered = [...payments]
+        .filter((p) => p.status !== "voided")
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    if (!ordered.length) return null;
+
     // Oldest → newest, left to right.
-    const ordered = [...payments].sort((a, b) => new Date(a.date) - new Date(b.date));
+
     const magnitudes = ordered.map((p) => Math.abs(p.amount || 0));
     const max = Math.max(...magnitudes, 1);
     const baseline = height * 0.55;
@@ -206,7 +213,8 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
     const [refundSubmitting, setRefundSubmitting] = useState(false);
     const [expandedInvoice, setExpandedInvoice] = useState(null);
     const [newPayment, setNewPayment] = useState({ amount: "", method: "cash", notes: "" });
-    const [refundData, setRefundData] = useState({ amount: "", reason: "" });
+    const [refundData, setRefundData] = useState({ amount: "", reason: "", dueDate: "" });
+    const [reversingId, setReversingId] = useState(null);
 
     useEffect(() => {
         setCurrentStudent(student);
@@ -492,7 +500,9 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
                 const list = data.data || [];
                 setInvoices(list);
 
-                const latest = list.find(inv => inv.status !== "Voided") || list[0] || null;
+                // الأحدث دايمًا (الـ API بيرجع createdAt: -1)، حتى لو Voided
+                // عشان زرار "تراجع عن الاسترجاع" يفضل ظاهر
+                const latest = list[0] || null;
 
                 if (latest) {
                     const detailRes = await fetch(`/api/invoices/${latest._id}`);
@@ -510,6 +520,42 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
             setBillingLoading(false);
         }
     }, [currentStudent]);
+
+    const handleReverseRefund = async (invoiceId, refundPaymentId) => {
+        if (!confirm("متأكد إنك عايز تتراجع عن الاسترجاع ده وترجّع الفلوس للفاتورة؟")) return;
+
+        const send = async (dueDate) => {
+            const res = await fetch(`/api/invoices/${invoiceId}/reverse-refund`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ paymentId: refundPaymentId, dueDate }),
+            });
+            return res.json();
+        };
+
+        setReversingId(refundPaymentId);
+        try {
+            let data = await send();
+
+            // الفاتورة لسه عليها متبقي ومفيش تاريخ استحقاق → نسأل الأدمن
+            if (!data.success && data.code === "DUE_DATE_REQUIRED") {
+                const due = window.prompt("اكتب تاريخ استحقاق باقي المبلغ (YYYY-MM-DD):");
+                if (!due) return;
+                data = await send(due);
+            }
+
+            if (data.success) {
+                toast.success("تم التراجع عن الاسترجاع");
+                await fetchBilling();
+            } else {
+                toast.error(data.message || t("common.error"));
+            }
+        } catch (error) {
+            toast.error(error.message || t("common.error"));
+        } finally {
+            setReversingId(null);
+        }
+    };
 
     useEffect(() => {
         fetchBilling();
@@ -805,19 +851,30 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
             return;
         }
 
+        // استرجاع جزئي: الفاتورة هتفضل شغالة، فلازم تاريخ استحقاق للمتبقي
+        const isPartialRefund = amount < (currentInvoice.paidAmount || 0);
+        if (isPartialRefund && !currentInvoice.dueDate && !refundData.dueDate) {
+            toast.error("حدد تاريخ استحقاق باقي المبلغ");
+            return;
+        }
+
         setRefundSubmitting(true);
         try {
             const res = await fetch(`/api/invoices/${currentInvoice._id}/refund`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ amount, reason: refundData.reason }),
+                body: JSON.stringify({
+                    amount,
+                    reason: refundData.reason,
+                    dueDate: refundData.dueDate || undefined,
+                }),
             });
             const data = await res.json();
 
             if (data.success) {
                 toast.success("تم تنفيذ الاسترجاع بنجاح");
                 setShowRefund(false);
-                setRefundData({ amount: "", reason: "" });
+                setRefundData({ amount: "", reason: "", dueDate: "" });
                 fetchBilling();
             } else {
                 toast.error(data.message || "حدث خطأ أثناء الاسترجاع");
@@ -1361,6 +1418,13 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
                                             </div>
                                         </div>
 
+                                        {currentInvoice.status === "Voided" && (
+                                            <div className="mx-6 mb-4 rounded-lg px-3 py-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                                                <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                                                <span>الفاتورة دي ملغاة بسبب استرجاع كامل. لو الاسترجاع كان بالغلط، دوس "تراجع عن الاسترجاع" على سجل الاسترجاع في الأسفل.</span>
+                                            </div>
+                                        )}
+
                                         <div className="px-6 pb-6 flex gap-3 flex-wrap">
                                             <button
                                                 onClick={() => setShowAddPayment(true)}
@@ -1392,16 +1456,19 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
                                             <div className="space-y-2">
                                                 {currentInvoice.payments.map((payment) => {
                                                     const isRefund = payment.type === "refund" || payment.amount < 0;
+                                                    const isVoidedRefund = payment.status === "voided";
                                                     const escrowCfg = ESCROW_STATUS_CFG[payment.escrow?.status || "not_started"];
                                                     return (
-                                                        <div key={payment._id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg flex-wrap gap-2">
+                                                        <div
+                                                            key={payment._id}
+                                                            className={`flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg flex-wrap gap-2 ${isVoidedRefund ? "opacity-60" : ""}`}
+                                                        >
                                                             <div className="flex items-center gap-3">
-                                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isRefund ? "bg-rose-100 dark:bg-rose-900/30 text-rose-600" : "bg-green-100 dark:bg-green-900/30 text-green-600"
-                                                                    }`}>
+                                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isRefund ? "bg-rose-100 dark:bg-rose-900/30 text-rose-600" : "bg-green-100 dark:bg-green-900/30 text-green-600"}`}>
                                                                     {isRefund ? <ArrowDownRight className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
                                                                 </div>
                                                                 <div>
-                                                                    <p className={`font-semibold text-sm ${isRefund ? "text-rose-600" : "text-MidnightNavyText dark:text-white"}`}>
+                                                                    <p className={`font-semibold text-sm ${isRefund ? "text-rose-600" : "text-MidnightNavyText dark:text-white"} ${isVoidedRefund ? "line-through" : ""}`}>
                                                                         {isRefund ? "استرجاع" : "دفعة"} — {formatMoney(Math.abs(payment.amount))}
                                                                     </p>
                                                                     <p className="text-xs text-SlateBlueText dark:text-darktext">
@@ -1410,11 +1477,33 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
                                                                     </p>
                                                                 </div>
                                                             </div>
-                                                            {!isRefund && (
-                                                                <span className={`text-[11px] px-2 py-1 rounded-full font-medium ${escrowCfg.bg}`}>
-                                                                    {escrowCfg.label}
-                                                                </span>
-                                                            )}
+
+                                                            <div className="flex items-center gap-2">
+                                                                {!isRefund && (
+                                                                    <span className={`text-[11px] px-2 py-1 rounded-full font-medium ${escrowCfg.bg}`}>
+                                                                        {escrowCfg.label}
+                                                                    </span>
+                                                                )}
+
+                                                                {isRefund && !isVoidedRefund && (
+                                                                    <button
+                                                                        onClick={() => handleReverseRefund(currentInvoice._id, payment._id)}
+                                                                        disabled={reversingId === payment._id}
+                                                                        className="px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 disabled:opacity-50 flex items-center gap-1 transition-colors"
+                                                                    >
+                                                                        {reversingId === payment._id
+                                                                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                                                                            : <RefreshCw className="w-3 h-3" />}
+                                                                        تراجع عن الاسترجاع
+                                                                    </button>
+                                                                )}
+
+                                                                {isRefund && isVoidedRefund && (
+                                                                    <span className="text-[11px] px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500">
+                                                                        تم التراجع عنه
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     );
                                                 })}
@@ -2097,6 +2186,23 @@ export default function CreditHoursManager({ student, onClose, onUpdate }) {
                                     placeholder="سبب الاسترجاع..."
                                 />
                             </div>
+                            {Number(refundData.amount) > 0 &&
+                                Number(refundData.amount) < (currentInvoice.paidAmount || 0) && (
+                                    <div>
+                                        <label className={labelCls}>
+                                            تاريخ استحقاق باقي المبلغ {!currentInvoice.dueDate && <span className="text-red-500">*</span>}
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={refundData.dueDate}
+                                            onChange={(e) => setRefundData({ ...refundData, dueDate: e.target.value })}
+                                            className={inputCls}
+                                        />
+                                        <p className="text-[11px] text-SlateBlueText dark:text-darktext mt-1">
+                                            الفاتورة هتفضل شغالة والمتبقي هيتحصّل في الموعد ده.
+                                        </p>
+                                    </div>
+                                )}
                         </div>
 
                         <div className="p-4 border-t border-PowderBlueBorder dark:border-dark_border flex gap-3">

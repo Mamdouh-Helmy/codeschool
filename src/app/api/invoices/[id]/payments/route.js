@@ -1,3 +1,4 @@
+//api//invoices/[id]/payments/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { addPaymentToInvoice } from "@/lib/billing";
