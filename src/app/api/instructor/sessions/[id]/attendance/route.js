@@ -16,6 +16,7 @@ import {
   getPausedStudentIds,
   notPausedInGroup,
 } from "../../../../../services/holdGuard";
+import { getSessionHours, getBalanceAlertType } from "../../../../../services/sessionCredit";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ AUTH / OWNERSHIP HELPERS
@@ -56,14 +57,15 @@ async function parseBody(req) {
 }
 
 // ─── Constants ───────────────────────────────────────────
+// ─── Constants ───────────────────────────────────────────
 const VALID_STATUSES = ["present", "late", "absent", "excused"];
 const DEDUCT_STATUSES = VALID_STATUSES;
 const NOTIFY_STATUSES = ["absent", "late", "excused"];
-const CREDIT_DEDUCTION = 2;
+// ❌ اتمسح: const CREDIT_DEDUCTION = 2;
 
 const SESSION_POPULATE = {
   path: "groupId",
-  select: "name code students instructors hold status isArchived",
+  select: "name code students instructors hold status isArchived schedule",
 };
 
 /**
@@ -356,8 +358,10 @@ export async function PATCH(req, { params }) {
 
     // ✅ الحصة التعويضية: بيتسجل الحضور عادي بس من غير أي خصم/refund/تنبيهات رصيد
     const isComplimentarySession = session.isComplimentary === true;
+    // ✅ مدة السيشن الفعلية
+    const sessionHours = getSessionHours(session);
 
-    console.log(`📋 [Attendance PATCH] Session ${id} | isComplimentary: ${isComplimentarySession}`);
+    console.log(`📋 [Attendance PATCH] Session ${id} | isComplimentary: ${isComplimentarySession} | hours: ${sessionHours}`);
 
     const oldStatusSnapshot = {};
     session.attendance.forEach((a) => {
@@ -395,7 +399,7 @@ export async function PATCH(req, { params }) {
 
       const student = studentMap[studentId];
       const creditPayload = {
-        hours: CREDIT_DEDUCTION,
+        hours: sessionHours,
         sessionId: id,
         sessionTitle: session.title || "",
         groupId: session.groupId?._id,
@@ -435,15 +439,20 @@ export async function PATCH(req, { params }) {
         if (!student?.creditSystem?.currentPackage) continue;
 
         const remainingHours = student.creditSystem.currentPackage.remainingHours || 0;
-        const previousBalance = remainingHours + CREDIT_DEDUCTION;
+        const previousBalance = remainingHours + sessionHours;
         const base = { studentId: record.studentId, student, remainingHours };
 
-        // ✅ عتبة 2 ساعة → قالب "4h" (التنبيه المبدئي)
-        if (previousBalance > 2 && remainingHours <= 2 && remainingHours > 0) {
+        const alertType = getBalanceAlertType({
+          previousBalance,
+          remainingHours,
+          sessionHours,
+        });
+
+        if (alertType === "4h") {
+          // باقي سيشن واحدة
           lowBalanceStudents.push({ ...base, alertType: "4h" });
-        }
-        // ✅ عتبة الصفر → قالب "2h" (التنبيه العاجل)
-        if (remainingHours <= 0) {
+        } else if (alertType === "2h") {
+          // الباقة خلصت
           lowBalanceStudents.push({ ...base, remainingHours: 0, alertType: "2h" });
           zeroBalanceStudents.push({ ...base, remainingHours: 0 });
         }

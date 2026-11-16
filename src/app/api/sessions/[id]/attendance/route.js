@@ -1,9 +1,9 @@
 // /api/sessions/[id]/attendance/route.js
 // ✅ منطق الخصم:
 // - أول ما تتسجل حالة حضور لطالب في السيشن دي (أي حالة: حاضر/غايب/متأخر/معتذر)
-//   → يتخصم ساعتين مرة واحدة بس.
+//   → يتخصم مدة السيشن الفعلية (From → To) مرة واحدة بس.
 // - أي تعديل بعد كده على نفس الطالب في نفس السيشن (يقلبها لأي حالة تانية)
-//   → مفيش أي خصم أو إرجاع تاني. الساعتين ثابتة زي ما هي.
+//   → مفيش أي خصم أو إرجاع تاني. الساعات ثابتة زي ما هي.
 // - ✅ NEW: لو السيشن دي isComplimentary (حصة تعويضية/Makeup) → بيتسجل الحضور
 //   عادي تمامًا، بس من غير أي خصم من رصيد الطالب خالص. المدرس بياخد حقه
 //   عادي من خلال processSessionPayroll لما السيشن تتحدد completed — مفيش
@@ -27,12 +27,12 @@ import {
   disableZeroBalanceNotifications,
 } from "../../../../services/groupAutomation";
 import { getPausedStudentIds, notPausedInGroup } from "../../../../services/holdGuard";
+import { getSessionHours, getBalanceAlertType } from "../../../../services/sessionCredit";
 import mongoose from "mongoose";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const HOURS_PER_SESSION = 2;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ✅ HOLD GUARD — منطق مركزي واحد
@@ -116,13 +116,13 @@ export async function POST(req, { params }) {
       );
     }
 
-    // ✅ populate hold + status + isArchived
+    // ✅ populate hold + status + isArchived + schedule
     const session = await Session.findOne({
       _id: id,
       isDeleted: false,
     }).populate({
       path: "groupId",
-      select: "name code hold status isArchived",
+      select: "name code hold status isArchived schedule",
     });
     if (!session) {
       return NextResponse.json(
@@ -199,6 +199,9 @@ export async function POST(req, { params }) {
     const lowBalanceStudents = [];
     const zeroBalanceStudents = [];
 
+    // ✅ مدة السيشن الفعلية (From → To) بدل 2 ساعة ثابتة
+    const sessionHours = getSessionHours(session);
+
     for (const record of activeAttendance) {
       const studentId = record.studentId?.toString();
       const newStatus = record.status;
@@ -209,12 +212,12 @@ export async function POST(req, { params }) {
       // ✅ الحصة التعويضية: نسجل الحضور من غير أي خصم ولا تنبيهات رصيد
       if (isComplimentary) continue;
 
-      // ✅ أول مرة يتسجل له حضور في السيشن دي → اخصم ساعتين
+      // ✅ أول مرة يتسجل له حضور في السيشن دي → اخصم مدة السيشن
       const student = await Student.findById(studentId);
       if (!student?.creditSystem?.currentPackage) continue;
 
       const deductionResult = await student.deductCreditHours({
-        hours: HOURS_PER_SESSION,
+        hours: sessionHours,
         sessionId: session._id,
         groupId: group._id,
         sessionTitle: session.title,
@@ -230,25 +233,30 @@ export async function POST(req, { params }) {
       creditDeductions.push({
         studentId,
         action: "deduct",
-        hoursDeducted: HOURS_PER_SESSION,
+        hoursDeducted: sessionHours,
         remainingHours,
         reason: `First record for this session: ${newStatus}`,
       });
 
-      const previousBalance = remainingHours + HOURS_PER_SESSION;
+      const previousBalance = remainingHours + sessionHours;
 
-      // ✅ عتبة 2 ساعة → قالب "4h" (التنبيه المبدئي)
-      if (previousBalance > 2 && remainingHours <= 2 && remainingHours > 0) {
+      // ✅ التوقيت بيتحسب من مدة السيشن وعدد السيشنات المتبقية
+      const alertType = getBalanceAlertType({
+        previousBalance,
+        remainingHours,
+        sessionHours,
+      });
+
+      if (alertType === "4h") {
+        // باقي سيشن واحدة
         lowBalanceStudents.push({
           studentId,
           student,
           remainingHours,
           alertType: "4h",
         });
-      }
-
-      // ✅ عتبة الصفر → قالب "2h" (التنبيه العاجل)
-      if (remainingHours <= 0) {
+      } else if (alertType === "2h") {
+        // الباقة خلصت
         lowBalanceStudents.push({
           studentId,
           student,

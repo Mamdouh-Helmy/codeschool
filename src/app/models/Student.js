@@ -151,7 +151,7 @@ const whatsappMessageSchema = new mongoose.Schema(
       sessionId: { type: mongoose.Schema.Types.ObjectId, ref: "Session" },
       interviewId: { type: mongoose.Schema.Types.ObjectId, ref: "Interview" },
       sessionTitle: String,
-         scheduleKey: String,
+      scheduleKey: String,
       attendanceStatus: String,
       isCustomMessage: { type: Boolean, default: false },
       recipientType: {
@@ -177,7 +177,7 @@ const whatsappMessageSchema = new mongoose.Schema(
       relationship: String,
       remainingHours: Number,
       alertType: String,
-      sentFromInstance: String, 
+      sentFromInstance: String,
       instanceKey: String,
     },
     error: { type: String },
@@ -380,14 +380,18 @@ const StudentSchema = new mongoose.Schema(
       groupIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Group" }],
       currentCourses: [currentCourseSchema],
       pausedGroups: [
-  {
-    _id: false,
-    groupId: { type: mongoose.Schema.Types.ObjectId, ref: "Group", required: true },
-    reason: { type: String, default: "" },
-    pausedAt: { type: Date, default: Date.now },
-    pausedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-  },
-],
+        {
+          _id: false,
+          groupId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Group",
+            required: true,
+          },
+          reason: { type: String, default: "" },
+          pausedAt: { type: Date, default: Date.now },
+          pausedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        },
+      ],
     },
 
     // ✅ الوسوم الخاصة بالطالب
@@ -1126,11 +1130,13 @@ StudentSchema.methods.deductCreditHours = async function (deductionData) {
         currentPackage.remainingHours,
         hoursToDeduct,
       );
-      currentPackage.remainingHours -= deductFromPackage;
+      currentPackage.remainingHours =
+        Math.round((currentPackage.remainingHours - deductFromPackage) * 100) /
+        100;
       hoursToDeduct -= deductFromPackage;
       deductedFromPackage += deductFromPackage;
 
-      if (currentPackage.remainingHours === 0) {
+      if (currentPackage.remainingHours <= 0.001) {
         currentPackage.status = "completed";
         this.creditSystem.status = "expired";
         this.creditSystem.stats.zeroBalanceDate = new Date();
