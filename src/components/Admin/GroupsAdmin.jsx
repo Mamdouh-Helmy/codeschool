@@ -96,7 +96,7 @@ const STATUS_DOT = {
 // لون التايم ستامب (زي لون الوقت في الواتس) حسب الحالة
 const STATUS_TIME_COLOR = {
     active: "text-emerald-600 dark:text-emerald-400",
-    draft: "text-slate-400",
+    draft: "text-slate-400 dark:text-slate-400",
     completed: "text-sky-600 dark:text-sky-400",
     cancelled: "text-rose-500 dark:text-rose-400",
 };
@@ -104,7 +104,7 @@ const STATUS_TIME_COLOR = {
 // حلقة الأفاتار (زي حلقة الستاتس في الواتس)
 const STATUS_RING = {
     active: "from-emerald-400 to-emerald-600",
-    draft: "from-slate-300 to-slate-400",
+    draft: "from-slate-300 to-slate-400 dark:from-slate-500 dark:to-slate-600",
     completed: "from-sky-400 to-sky-600",
     cancelled: "from-rose-400 to-rose-600",
 };
@@ -117,6 +117,9 @@ const AVATAR_GRADIENTS = [
     "from-amber-400 to-orange-600",
     "from-cyan-500 to-blue-600",
 ];
+
+// يخلّي عناصر المتصفح الأصلية (التقويم، الـ dropdown، الأسهم) تظهر صح في الدارك
+const SCHEME_DARK = "dark:[color-scheme:dark]";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -177,7 +180,7 @@ const avatarGradientFor = (name = "") => {
 };
 
 const selectCls = (isRTL) =>
-    `w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"} py-2.5 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all bg-white dark:bg-dark_input dark:text-white appearance-none`;
+    `w-full ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"} py-2.5 text-sm border border-PowderBlueBorder dark:border-dark_border rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all bg-white dark:bg-dark_input dark:text-white appearance-none ${SCHEME_DARK}`;
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -850,7 +853,7 @@ export default function GroupsAdmin() {
     const noQuickFilter = filters.status.length === 0 && !filters.groupType && !filters.archived;
 
     const chipBase = "shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-all active:scale-95 whitespace-nowrap";
-    const chipOn = "bg-primary/15 text-primary ring-1 ring-inset ring-primary/30 font-semibold";
+    const chipOn = "bg-primary/15 text-primary ring-1 ring-inset ring-primary/30 font-semibold dark:bg-primary/25 dark:text-orange-300 dark:ring-primary/50";
     const chipOff = "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10";
 
     // ── Loading State ──────────────────────────────────────────────────────────
@@ -874,12 +877,8 @@ export default function GroupsAdmin() {
     // ── Render ─────────────────────────────────────────────────────────────────
     return (
         <div
-            className={`relative rounded-3xl p-3 md:p-5  ${isRTL ? "rtl" : "ltr"}`}
+            className={`relative rounded-3xl p-3 md:p-5 bg-[length:20px_20px] bg-[radial-gradient(rgba(0,96,109,0.07)_1.2px,transparent_1.2px)] dark:bg-[radial-gradient(rgba(255,255,255,0.07)_1.2px,transparent_1.2px)] ${isRTL ? "rtl" : "ltr"}`}
             dir={isRTL ? "rtl" : "ltr"}
-            style={{
-                backgroundImage: "radial-gradient(rgba(0,96,109,0.07) 1.2px, transparent 1.2px)",
-                backgroundSize: "20px 20px",
-            }}
         >
             <div className="max-w-7xl mx-auto space-y-4 md:space-y-5">
 
@@ -896,12 +895,12 @@ export default function GroupsAdmin() {
                                     className={`group/story flex flex-col items-center gap-1.5 ${clickable ? "cursor-pointer active:scale-95" : ""} transition-transform`}
                                 >
                                     <div className="relative">
-                                        <div className={`p-[3px] rounded-full bg-gradient-to-tr ${s.grad} ${s.active === false ? "opacity-50 grayscale-[40%]" : ""} ${clickable ? "group-hover/story:scale-105" : ""} transition-all`}>
-                                            <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-white dark:bg-darkmode border-[3px] border-white dark:border-darkmode flex items-center justify-center">
+                                        <div className={`p-[3px] rounded-full bg-gradient-to-tr ${s.grad} ${s.active === false ? "opacity-50 grayscale-[40%] dark:opacity-60" : ""} ${clickable ? "group-hover/story:scale-105" : ""} transition-all`}>
+                                            <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-white dark:bg-darklight border-[3px] border-white dark:border-darklight flex items-center justify-center">
                                                 <span className="text-lg md:text-xl font-extrabold text-MidnightNavyText dark:text-white tabular-nums">{s.value}</span>
                                             </div>
                                         </div>
-                                        <span className={`absolute -bottom-0.5 -end-0.5 w-5 h-5 rounded-full ${s.badge} text-white flex items-center justify-center ring-2 ring-[#efeae2] dark:ring-[#0b141a]`}>
+                                        <span className={`absolute -bottom-0.5 -end-0.5 w-5 h-5 rounded-full ${s.badge} text-white flex items-center justify-center ring-2 ring-white dark:ring-darkmode`}>
                                             {s.icon}
                                         </span>
                                     </div>
@@ -915,10 +914,10 @@ export default function GroupsAdmin() {
                 </div>
 
                 {/* ── Chat panel ── */}
-                <div className="bg-white dark:bg-darkmode rounded-2xl border border-PowderBlueBorder dark:border-dark_border shadow-[0_6px_24px_rgba(11,20,26,0.08)]">
+                <div className="bg-white dark:bg-darkmode rounded-2xl border border-PowderBlueBorder dark:border-white/10 shadow-[0_6px_24px_rgba(11,20,26,0.08)] dark:shadow-none">
 
                     {/* Top bar */}
-                    <div className="flex items-center justify-between gap-3 px-4 py-3 bg-[#f0f2f5] dark:bg-darklight rounded-t-2xl border-b border-PowderBlueBorder/70 dark:border-dark_border">
+                    <div className="flex items-center justify-between gap-3 px-4 py-3 bg-[#f0f2f5] dark:bg-darklight rounded-t-2xl border-b border-PowderBlueBorder/70 dark:border-white/10">
                         <div className="flex items-center gap-3 min-w-0">
                             <div className="relative shrink-0">
                                 <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary to-orange-deep flex items-center justify-center text-white shadow-md shadow-primary/25">
@@ -947,14 +946,14 @@ export default function GroupsAdmin() {
                             <button
                                 onClick={onMakeup}
                                 title={t("groups.makeup.title") || "إنشاء حصة تعويضية"}
-                                className="h-10 px-3 rounded-full flex items-center gap-2 text-primary bg-primary/10 hover:bg-primary/15 font-semibold text-xs transition-colors"
+                                className="h-10 px-3 rounded-full flex items-center gap-2 text-primary dark:text-orange-300 bg-primary/10 hover:bg-primary/15 dark:bg-primary/20 dark:hover:bg-primary/30 font-semibold text-xs transition-colors"
                             >
                                 <Gift className="w-[18px] h-[18px]" />
                                 <span className="hidden sm:inline">{t("groups.makeup.button") || "حصة تعويضية"}</span>
                             </button>
                             <button
                                 onClick={() => { setEditingGroup(null); setModalOpen(true); }}
-                                className="hidden md:flex h-10 px-4 rounded-full items-center gap-2 bg-primary hover:bg-primary/90 active:scale-95 text-white font-semibold text-sm shadow-md shadow-primary/25 transition-all"
+                                className="hidden md:flex h-10 px-4 rounded-full items-center gap-2 bg-primary hover:bg-primary/90 active:scale-95 text-white font-semibold text-sm shadow-md shadow-primary/25 dark:shadow-none transition-all"
                             >
                                 <Plus className="w-4 h-4" />
                                 {t("groups.create") || "Create Group"}
@@ -971,7 +970,7 @@ export default function GroupsAdmin() {
                                 placeholder={t("groups.filters.search") || "Search by name or code..."}
                                 value={searchInput}
                                 onChange={(e) => handleSearchChange(e.target.value)}
-                                className={`w-full ${isRTL ? "pr-10 pl-10" : "pl-10 pr-10"} py-2.5 text-sm rounded-xl bg-[#f0f2f5] dark:bg-dark_input border border-transparent focus:bg-white dark:focus:bg-dark_input focus:border-primary/40 focus:ring-2 focus:ring-primary/20 outline-none transition-all dark:text-white placeholder:text-gray-400`}
+                                className={`w-full ${isRTL ? "pr-10 pl-10" : "pl-10 pr-10"} py-2.5 text-sm rounded-xl bg-[#f0f2f5] dark:bg-dark_input border border-transparent dark:border-white/10 focus:bg-white dark:focus:bg-dark_input focus:border-primary/40 focus:ring-2 focus:ring-primary/20 outline-none transition-all text-MidnightNavyText dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500`}
                             />
                             {searchInput && (
                                 <button
@@ -987,8 +986,8 @@ export default function GroupsAdmin() {
                             onClick={() => setShowAdvancedFilters((v) => !v)}
                             title={t("groups.filters.advanced") || "Advanced"}
                             className={`relative shrink-0 h-10 w-10 rounded-xl flex items-center justify-center transition-all ${showAdvancedFilters
-                                ? "bg-primary text-white shadow-md shadow-primary/25"
-                                : "bg-[#f0f2f5] text-gray-600 hover:bg-gray-200 dark:bg-dark_input dark:text-gray-300 dark:hover:bg-white/10"
+                                ? "bg-primary text-white shadow-md shadow-primary/25 dark:shadow-none"
+                                : "bg-[#f0f2f5] text-gray-600 hover:bg-gray-200 dark:bg-dark_input dark:text-gray-300 dark:hover:bg-white/10 dark:border dark:border-white/10"
                                 }`}
                         >
                             <SlidersHorizontal className="w-[18px] h-[18px]" />
@@ -1057,7 +1056,7 @@ export default function GroupsAdmin() {
 
                     {/* Advanced Filters Panel */}
                     {showAdvancedFilters && (
-                        <div className="mx-3 md:mx-4 mb-3 space-y-5 p-4 rounded-2xl bg-[#f7f8fa] dark:bg-darklight/60 border border-PowderBlueBorder/70 dark:border-dark_border animate-in fade-in slide-in-from-top-1 duration-200">
+                        <div className="mx-3 md:mx-4 mb-3 space-y-5 p-4 rounded-2xl bg-[#f7f8fa] dark:bg-darklight/60 border border-PowderBlueBorder/70 dark:border-white/10 animate-in fade-in slide-in-from-top-1 duration-200">
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div className="relative">
@@ -1213,14 +1212,14 @@ export default function GroupsAdmin() {
                             <div className="flex flex-wrap items-center gap-3">
                                 <div className="flex items-center gap-2 bg-white dark:bg-dark_input rounded-xl p-3 ring-1 ring-inset ring-gray-200 dark:ring-white/10">
                                     <Users className="w-4 h-4 text-gray-400" />
-                                    <span className="text-xs text-gray-500">{t("groups.filters.studentsCount") || "Students:"}</span>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">{t("groups.filters.studentsCount") || "Students:"}</span>
                                     <input
                                         type="number"
                                         min="0"
                                         placeholder="Min"
                                         value={filters.studentsCountMin}
                                         onChange={(e) => handleFilterChange("studentsCountMin", e.target.value)}
-                                        className="w-16 px-2 py-1.5 text-xs border rounded-lg dark:bg-dark_input dark:text-white focus:ring-2 focus:ring-primary/30 outline-none"
+                                        className={`w-16 px-2 py-1.5 text-xs border border-gray-200 dark:border-white/10 rounded-lg bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-primary/30 outline-none ${SCHEME_DARK}`}
                                     />
                                     <span className="text-gray-400">–</span>
                                     <input
@@ -1229,20 +1228,20 @@ export default function GroupsAdmin() {
                                         placeholder="Max"
                                         value={filters.studentsCountMax}
                                         onChange={(e) => handleFilterChange("studentsCountMax", e.target.value)}
-                                        className="w-16 px-2 py-1.5 text-xs border rounded-lg dark:bg-dark_input dark:text-white focus:ring-2 focus:ring-primary/30 outline-none"
+                                        className={`w-16 px-2 py-1.5 text-xs border border-gray-200 dark:border-white/10 rounded-lg bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-primary/30 outline-none ${SCHEME_DARK}`}
                                     />
                                 </div>
 
                                 <div className={`flex items-center gap-2 ${isRTL ? "mr-auto" : "ml-auto"}`}>
                                     {activeFiltersCount > 0 && (
                                         <>
-                                            <span className="px-3 py-1.5 bg-primary/10 text-primary text-xs rounded-full font-medium flex items-center gap-1">
+                                            <span className="px-3 py-1.5 bg-primary/10 text-primary dark:bg-primary/20 dark:text-orange-300 text-xs rounded-full font-medium flex items-center gap-1">
                                                 <Filter className="w-3 h-3" />
                                                 {activeFiltersCount} {t("groups.filters.active") || "active"}
                                             </span>
                                             <button
                                                 onClick={clearAllFilters}
-                                                className="px-3 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors flex items-center gap-1"
+                                                className="px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors flex items-center gap-1"
                                             >
                                                 <X className="w-3 h-3" />
                                                 {t("groups.filters.clearAll") || "Clear All"}
@@ -1251,7 +1250,7 @@ export default function GroupsAdmin() {
                                     )}
                                     <button
                                         onClick={loadGroups}
-                                        className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-full flex items-center gap-2 text-sm font-medium transition-all shadow-sm shadow-primary/20 active:scale-95"
+                                        className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-full flex items-center gap-2 text-sm font-medium transition-all shadow-sm shadow-primary/20 dark:shadow-none active:scale-95"
                                     >
                                         <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
                                         {t("groups.filters.refresh") || "Refresh"}
@@ -1269,7 +1268,7 @@ export default function GroupsAdmin() {
                     {/* "notice pill" زي رسالة التشفير في الواتس */}
                     {groups.length > 0 && (
                         <div className="flex justify-center py-3">
-                            <span className="px-3 py-1 rounded-lg bg-[#ffeecd] text-[#54656f] dark:bg-amber-500/10 dark:text-amber-200 text-[11px] font-medium shadow-sm tabular-nums">
+                            <span className="px-3 py-1 rounded-lg bg-[#ffeecd] text-[#54656f] dark:bg-amber-500/15 dark:text-amber-200 dark:ring-1 dark:ring-inset dark:ring-amber-500/20 text-[11px] font-medium shadow-sm dark:shadow-none tabular-nums">
                                 {t("groups.pagination.showing")
                                     ?.replace("{from}", showingFrom)
                                     ?.replace("{to}", showingTo)
@@ -1281,7 +1280,7 @@ export default function GroupsAdmin() {
 
                     {/* ── Chat list ── */}
                     {groups.length > 0 && (
-                        <ul className="divide-y divide-gray-100 dark:divide-dark_border">
+                        <ul className="divide-y divide-gray-100 dark:divide-white/10">
                             {groups.map((group) => (
                                 <GroupRow
                                     key={group.id}
@@ -1318,7 +1317,7 @@ export default function GroupsAdmin() {
                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-sm mx-auto">{t("groups.empty.description") || "Try adjusting your filters or create a new group."}</p>
                             <button
                                 onClick={() => setModalOpen(true)}
-                                className="bg-primary hover:bg-primary/90 active:scale-95 text-white px-8 py-3 rounded-full font-semibold flex items-center gap-2 mx-auto shadow-md shadow-primary/25 transition-all"
+                                className="bg-primary hover:bg-primary/90 active:scale-95 text-white px-8 py-3 rounded-full font-semibold flex items-center gap-2 mx-auto shadow-md shadow-primary/25 dark:shadow-none transition-all"
                             >
                                 <Plus className="w-4 h-4" />
                                 {t("groups.empty.button") || "Create Group"}
@@ -1342,7 +1341,7 @@ export default function GroupsAdmin() {
             <button
                 onClick={() => { setEditingGroup(null); setModalOpen(true); }}
                 title={t("groups.create") || "Create Group"}
-                className="md:hidden fixed bottom-5 end-5 z-30 w-14 h-14 rounded-2xl bg-primary text-white shadow-xl shadow-primary/40 flex items-center justify-center active:scale-90 transition-transform"
+                className="md:hidden fixed bottom-5 end-5 z-30 w-14 h-14 rounded-2xl bg-primary text-white shadow-xl shadow-primary/40 dark:shadow-black/50 flex items-center justify-center active:scale-90 transition-transform"
             >
                 <Plus className="w-6 h-6" />
             </button>
@@ -1432,7 +1431,7 @@ export default function GroupsAdmin() {
                 size="md"
             >
                 <div className="space-y-5 p-1">
-                    <div className="bg-gray-50 dark:bg-dark_input/60 rounded-xl p-3 ring-1 ring-inset ring-gray-200 dark:ring-gray-700">
+                    <div className="bg-gray-50 dark:bg-dark_input/60 rounded-xl p-3 ring-1 ring-inset ring-gray-200 dark:ring-white/10">
                         <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1.5">
                             <Sparkles className="w-3.5 h-3.5" />
                             {t("groups.tags.newTag") || "New tag"}
@@ -1444,20 +1443,20 @@ export default function GroupsAdmin() {
                                 onChange={(e) => setNewTagName(e.target.value)}
                                 onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
                                 placeholder={t("groups.tags.newTag") || "New tag name"}
-                                className="flex-1 px-3 py-2 border border-transparent bg-white dark:bg-dark_input rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none shadow-sm"
+                                className="flex-1 px-3 py-2 border border-transparent dark:border-white/10 bg-white dark:bg-darkmode rounded-lg text-sm text-MidnightNavyText dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none shadow-sm dark:shadow-none"
                             />
                             <label className="relative shrink-0">
                                 <input
                                     type="color"
                                     value={newTagColor}
                                     onChange={(e) => setNewTagColor(e.target.value)}
-                                    className="w-10 h-10 rounded-lg cursor-pointer border-2 border-white dark:border-dark_input shadow-sm appearance-none"
+                                    className="w-10 h-10 rounded-lg cursor-pointer border-2 border-white dark:border-white/20 shadow-sm dark:shadow-none appearance-none"
                                     style={{ backgroundColor: newTagColor }}
                                 />
                             </label>
                             <button
                                 onClick={handleAddTag}
-                                className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition shadow-sm shadow-primary/20 flex items-center gap-1.5 shrink-0"
+                                className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition shadow-sm shadow-primary/20 dark:shadow-none flex items-center gap-1.5 shrink-0"
                             >
                                 <Plus className="w-3.5 h-3.5" />
                                 {t("common.add") || "Add"}
@@ -1467,7 +1466,7 @@ export default function GroupsAdmin() {
 
                     <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
                         {tagsList.map((tag) => (
-                            <div key={tag._id} className="flex items-center justify-between p-2.5 rounded-xl ring-1 ring-inset ring-gray-100 dark:ring-gray-700 hover:ring-gray-200 dark:hover:bg-gray-800/60 transition">
+                            <div key={tag._id} className="flex items-center justify-between p-2.5 rounded-xl ring-1 ring-inset ring-gray-100 dark:ring-white/10 hover:ring-gray-200 dark:hover:bg-white/5 transition">
                                 {editingTag?._id === tag._id ? (
                                     <div className="flex items-center gap-2 flex-1">
                                         <input
@@ -1475,13 +1474,13 @@ export default function GroupsAdmin() {
                                             value={editingTag.name}
                                             onChange={(e) => setEditingTag({ ...editingTag, name: e.target.value })}
                                             autoFocus
-                                            className="flex-1 px-2.5 py-1.5 border rounded-lg text-sm dark:bg-dark_input dark:text-white focus:ring-2 focus:ring-primary/30 outline-none"
+                                            className="flex-1 px-2.5 py-1.5 border border-gray-200 dark:border-white/10 rounded-lg text-sm bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white focus:ring-2 focus:ring-primary/30 outline-none"
                                         />
                                         <input
                                             type="color"
                                             value={editingTag.color}
                                             onChange={(e) => setEditingTag({ ...editingTag, color: e.target.value })}
-                                            className="w-8 h-8 p-0 border rounded-lg cursor-pointer"
+                                            className="w-8 h-8 p-0 border border-gray-200 dark:border-white/20 rounded-lg cursor-pointer bg-transparent"
                                         />
                                         <button
                                             onClick={() => handleUpdateTag(editingTag._id, editingTag.name, editingTag.color)}
@@ -1491,7 +1490,7 @@ export default function GroupsAdmin() {
                                         </button>
                                         <button
                                             onClick={() => setEditingTag(null)}
-                                            className="px-3 py-1.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-medium hover:bg-gray-300 transition"
+                                            className="px-3 py-1.5 bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-medium hover:bg-gray-300 dark:hover:bg-white/20 transition"
                                         >
                                             {t("common.cancel") || "Cancel"}
                                         </button>
@@ -1541,6 +1540,7 @@ export default function GroupsAdmin() {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function DateRangeFilter({ label, icon, fromValue, toValue, onFromChange, onToChange }) {
+    const inputCls = `flex-1 px-3 py-2 text-xs border border-PowderBlueBorder dark:border-white/10 rounded-lg bg-white dark:bg-darkmode text-MidnightNavyText dark:text-white focus:ring-2 focus:ring-primary/30 outline-none ${SCHEME_DARK}`;
     return (
         <div className="bg-white dark:bg-dark_input rounded-xl p-3 ring-1 ring-inset ring-gray-200 dark:ring-white/10">
             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1.5">
@@ -1552,14 +1552,14 @@ function DateRangeFilter({ label, icon, fromValue, toValue, onFromChange, onToCh
                     type="date"
                     value={fromValue}
                     onChange={(e) => onFromChange(e.target.value)}
-                    className="flex-1 px-3 py-2 text-xs border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white focus:ring-2 focus:ring-primary/30 outline-none"
+                    className={inputCls}
                 />
                 <span className="text-gray-400">→</span>
                 <input
                     type="date"
                     value={toValue}
                     onChange={(e) => onToChange(e.target.value)}
-                    className="flex-1 px-3 py-2 text-xs border border-PowderBlueBorder dark:border-dark_border rounded-lg dark:bg-dark_input dark:text-white focus:ring-2 focus:ring-primary/30 outline-none"
+                    className={inputCls}
                 />
             </div>
         </div>
@@ -1615,7 +1615,7 @@ function GroupRow({
     })();
 
     const ringGrad = isArchived
-        ? "from-slate-300 to-slate-400"
+        ? "from-slate-300 to-slate-400 dark:from-slate-500 dark:to-slate-600"
         : isOnHold
             ? "from-amber-400 to-amber-600"
             : STATUS_RING[group.status] || STATUS_RING.draft;
@@ -1630,7 +1630,7 @@ function GroupRow({
         <li className={`group relative ${menuOpen ? "z-20" : ""} ${isArchived ? "opacity-75" : ""}`}>
             <div
                 onClick={() => onViewDetails(group.id)}
-                className="flex flex-wrap md:flex-nowrap items-start md:items-center gap-x-4 gap-y-1 px-4 py-3.5 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-white/[0.04] active:bg-[#ebedee] dark:active:bg-white/[0.07] transition-colors"
+                className="flex flex-wrap md:flex-nowrap items-start md:items-center gap-x-4 gap-y-1 px-4 py-3.5 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-white/[0.05] active:bg-[#ebedee] dark:active:bg-white/[0.08] transition-colors"
             >
                 {/* ── Avatar with status ring ── */}
                 <div className="relative shrink-0">
@@ -1645,7 +1645,7 @@ function GroupRow({
                     {(groupType === "kids" || groupType === "adults") && (
                         <span
                             title={groupTypeLabels[groupType]}
-                            className="absolute -bottom-0.5 -end-0.5 w-[22px] h-[22px] rounded-full bg-white dark:bg-darklight shadow flex items-center justify-center text-xs ring-1 ring-black/5"
+                            className="absolute -bottom-0.5 -end-0.5 w-[22px] h-[22px] rounded-full bg-white dark:bg-darklight shadow flex items-center justify-center text-xs ring-1 ring-black/5 dark:ring-white/15"
                         >
                             {groupType === "kids" ? "🧒" : "🧑"}
                         </span>
@@ -1686,7 +1686,7 @@ function GroupRow({
                     {/* line 2: ticks + course (زي آخر رسالة) */}
                     <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
                         <CheckCheck
-                            className={`w-4 h-4 shrink-0 ${group.sessionsGenerated ? "text-sky-500" : "text-gray-400"}`}
+                            className={`w-4 h-4 shrink-0 ${group.sessionsGenerated ? "text-sky-500 dark:text-sky-400" : "text-gray-400 dark:text-gray-500"}`}
                             title={group.sessionsGenerated
                                 ? `${t("groups.sessions.generated") || "Sessions generated"}: ${group.totalSessions}`
                                 : (t("groups.sessions.notGenerated") || "Not generated")}
@@ -1700,12 +1700,12 @@ function GroupRow({
 
                     {/* line 3: chips */}
                     <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-white/5 text-[10px] font-medium text-gray-500 dark:text-gray-400">
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-white/10 text-[10px] font-medium text-gray-500 dark:text-gray-300">
                             <Hash className="w-3 h-3" />{group.code}
                         </span>
 
                         {group.schedule?.daysOfWeek && (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-gray-400">
+                            <span className="inline-flex items-center gap-1 text-[10px] text-gray-400 dark:text-gray-400">
                                 <CalendarDays className="w-3 h-3" />
                                 {group.schedule.daysOfWeek.map((d) => dayLabels[d] || d).join(", ")}
                             </span>
@@ -1726,7 +1726,7 @@ function GroupRow({
                                 type="button"
                                 onClick={(e) => { stop(e); onFixLinks(group.id); }}
                                 title={linkIssueLabel}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20 transition-colors"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20 dark:hover:bg-amber-500/20 transition-colors"
                             >
                                 <Link2Off className="w-3 h-3" />
                                 {linkIssueLabel}
@@ -1742,7 +1742,11 @@ function GroupRow({
                             <span
                                 key={tag._id}
                                 className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium"
-                                style={{ backgroundColor: tag.color + "18", color: tag.color }}
+                                style={{
+                                    backgroundColor: tag.color + "22",
+                                    color: tag.color,
+                                    boxShadow: `inset 0 0 0 1px ${tag.color}40`,
+                                }}
                             >
                                 <span className="w-1.5 h-1.5 rounded-full me-1" style={{ backgroundColor: tag.color }} />
                                 {tag.name}
@@ -1764,7 +1768,7 @@ function GroupRow({
                         {group.studentsCount}/{group.maxStudents}
                     </span>
                     {group.isFull && (
-                        <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wide">
+                        <span className="text-[9px] font-bold text-rose-500 dark:text-rose-400 uppercase tracking-wide">
                             {t("groups.status.full") || "FULL"}
                         </span>
                     )}
@@ -1776,7 +1780,7 @@ function GroupRow({
                     className={`basis-full md:basis-auto order-last md:order-none ps-[68px] md:ps-0 pt-1 md:pt-0 flex items-center gap-0.5 transition-opacity ${menuOpen ? "md:opacity-100" : "md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"}`}
                 >
                     <ActionButton onClick={() => onViewDetails(group.id)} hoverColor="blue" title={t("groups.actions.viewDetails") || "View Details"}>
-                        <Info className="w-[18px] h-[18px] text-blue-600" />
+                        <Info className="w-[18px] h-[18px] text-blue-600 dark:text-blue-400" />
                     </ActionButton>
 
                     {isArchived ? (
@@ -1785,13 +1789,13 @@ function GroupRow({
                             hoverColor="green"
                             title={t("groups.actions.restore") || "استرجاع من الأرشيف"}
                         >
-                            <ArchiveRestore className="w-[18px] h-[18px] text-emerald-600" />
+                            <ArchiveRestore className="w-[18px] h-[18px] text-emerald-600 dark:text-emerald-400" />
                         </ActionButton>
                     ) : (
                         <>
                             {group.status === "draft" && (
                                 <ActionButton onClick={() => onActivate(group.id)} hoverColor="green" title={t("groups.actions.activate") || "Activate"}>
-                                    <PlayCircle className="w-[18px] h-[18px] text-emerald-600" />
+                                    <PlayCircle className="w-[18px] h-[18px] text-emerald-600 dark:text-emerald-400" />
                                 </ActionButton>
                             )}
 
@@ -1801,7 +1805,7 @@ function GroupRow({
                                     hoverColor="amber"
                                     title={t("groups.actions.hold") || "تعليق الجروب"}
                                 >
-                                    <PauseCircle className="w-[18px] h-[18px] text-amber-600" />
+                                    <PauseCircle className="w-[18px] h-[18px] text-amber-600 dark:text-amber-400" />
                                 </ActionButton>
                             )}
 
@@ -1811,19 +1815,19 @@ function GroupRow({
                                     hoverColor="green"
                                     title={t("groups.actions.release") || "فكّ التعليق"}
                                 >
-                                    <PlayCircle className="w-[18px] h-[18px] text-emerald-600" />
+                                    <PlayCircle className="w-[18px] h-[18px] text-emerald-600 dark:text-emerald-400" />
                                 </ActionButton>
                             )}
 
                             {(group.status === "active" || isOnHold) && (
                                 <ActionButton onClick={() => onSendMessage(group.id)} hoverColor="blue" title="إرسال رسالة">
-                                    <MessageSquare className="w-[18px] h-[18px] text-blue-600" />
+                                    <MessageSquare className="w-[18px] h-[18px] text-blue-600 dark:text-blue-400" />
                                 </ActionButton>
                             )}
 
                             {group.status === "active" && !group.isFull && !isOnHold && (
                                 <ActionButton onClick={() => onAddStudents(group.id)} hoverColor="blue" title={t("groups.actions.addStudents") || "Add Students"}>
-                                    <UserPlus className="w-[18px] h-[18px] text-blue-600" />
+                                    <UserPlus className="w-[18px] h-[18px] text-blue-600 dark:text-blue-400" />
                                 </ActionButton>
                             )}
                         </>
@@ -1841,11 +1845,11 @@ function GroupRow({
 
                         {menuOpen && (
                             <div
-                                className={`absolute ${isRTL ? "left-0" : "right-0"} top-full mt-1 w-56 py-1.5 rounded-2xl bg-white dark:bg-darklight border border-gray-100 dark:border-dark_border shadow-[0_10px_40px_rgba(11,20,26,0.18)] animate-in fade-in zoom-in-95 duration-100 z-30`}
+                                className={`absolute ${isRTL ? "left-0" : "right-0"} top-full mt-1 w-56 py-1.5 rounded-2xl bg-white dark:bg-darklight border border-gray-100 dark:border-white/10 shadow-[0_10px_40px_rgba(11,20,26,0.18)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.6)] animate-in fade-in zoom-in-95 duration-100 z-30`}
                             >
                                 {group.sessionsGenerated && (
                                     <MenuItem
-                                        icon={<Calendar className="w-4 h-4 text-purple-600" />}
+                                        icon={<Calendar className="w-4 h-4 text-purple-600 dark:text-purple-400" />}
                                         label={t("groups.actions.viewSessions") || "View Sessions"}
                                         onClick={() => { setMenuOpen(false); onViewSessions(group.id); }}
                                     />
@@ -1853,7 +1857,7 @@ function GroupRow({
 
                                 {!isArchived && hasLinkIssue && (
                                     <MenuItem
-                                        icon={<Link2Off className="w-4 h-4 text-amber-600" />}
+                                        icon={<Link2Off className="w-4 h-4 text-amber-600 dark:text-amber-400" />}
                                         label={t("groups.actions.fixLinks") || "إصلاح لينكات الاجتماعات"}
                                         onClick={() => { setMenuOpen(false); onFixLinks(group.id); }}
                                     />
@@ -1871,7 +1875,7 @@ function GroupRow({
                                             label={t("groups.actions.archive") || "أرشفة"}
                                             onClick={() => { setMenuOpen(false); onArchive(group.id, group.name); }}
                                         />
-                                        <div className="my-1 h-px bg-gray-100 dark:bg-dark_border" />
+                                        <div className="my-1 h-px bg-gray-100 dark:bg-white/10" />
                                         <MenuItem
                                             danger
                                             icon={<Trash2 className="w-4 h-4" />}
@@ -1882,7 +1886,7 @@ function GroupRow({
                                 )}
 
                                 {isArchived && !group.sessionsGenerated && (
-                                    <p className="px-4 py-2 text-xs text-gray-400">
+                                    <p className="px-4 py-2 text-xs text-gray-400 dark:text-gray-500">
                                         {t("groups.archived") || "مؤرشف"}
                                     </p>
                                 )}
@@ -1913,12 +1917,12 @@ function MenuItem({ icon, label, onClick, danger = false }) {
 
 function ActionButton({ onClick, hoverColor, title, children }) {
     const hoverClasses = {
-        blue: "hover:bg-blue-50 dark:hover:bg-blue-900/30",
-        green: "hover:bg-emerald-50 dark:hover:bg-emerald-900/30",
-        purple: "hover:bg-purple-50 dark:hover:bg-purple-900/30",
-        red: "hover:bg-red-50 dark:hover:bg-red-900/30",
+        blue: "hover:bg-blue-50 dark:hover:bg-blue-500/15",
+        green: "hover:bg-emerald-50 dark:hover:bg-emerald-500/15",
+        purple: "hover:bg-purple-50 dark:hover:bg-purple-500/15",
+        red: "hover:bg-red-50 dark:hover:bg-red-500/15",
         gray: "hover:bg-gray-100 dark:hover:bg-white/10",
-        amber: "hover:bg-amber-50 dark:hover:bg-amber-900/30",
+        amber: "hover:bg-amber-50 dark:hover:bg-amber-500/15",
     };
     return (
         <button
@@ -1971,7 +1975,7 @@ function Pagination({ pagination, t, isRTL, onPageChange }) {
     const LastIcon = isRTL ? ChevronsLeft : ChevronsRight;
 
     return (
-        <div className="px-4 py-3.5 border-t border-gray-100 dark:border-dark_border bg-[#f0f2f5]/70 dark:bg-darklight/60 rounded-b-2xl">
+        <div className="px-4 py-3.5 border-t border-gray-100 dark:border-white/10 bg-[#f0f2f5]/70 dark:bg-darklight/60 rounded-b-2xl">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                 <p className="text-xs text-SlateBlueText dark:text-darktext order-2 sm:order-1 tabular-nums">
                     {t("groups.pagination.showing")
@@ -2007,7 +2011,7 @@ function Pagination({ pagination, t, isRTL, onPageChange }) {
                                     onClick={() => onPageChange(p)}
                                     aria-current={p === page ? "page" : undefined}
                                     className={`w-8 h-8 rounded-full text-xs font-semibold transition-all tabular-nums active:scale-90 ${p === page
-                                        ? "bg-primary text-white shadow-sm shadow-primary/30"
+                                        ? "bg-primary text-white shadow-sm shadow-primary/30 dark:shadow-none"
                                         : "text-MidnightNavyText dark:text-white hover:bg-black/5 dark:hover:bg-white/10"
                                         }`}
                                 >
