@@ -50,6 +50,9 @@ const Contact = ({ portfolio }: { portfolio: PortfolioData }) => {
     ...(contact?.location ? [{ icon: <FaMapMarkerAlt />, title: "Address", description: contact.location }] : []),
   ];
 
+  // ✅ خدمات صاحب البورتفوليو نفسه من الداتا بيس (بنتجاهل أي خدمة من غير عنوان)
+  const services = (portfolio.services ?? []).filter((s) => s?.title?.trim());
+
   const [form, setForm] = useState<FormState>(INITIAL_STATE);
   const [errors, setErrors] = useState<FormErrors>({});
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
@@ -180,20 +183,24 @@ const Contact = ({ portfolio }: { portfolio: PortfolioData }) => {
                 </div>
               </div>
 
-              <Select value={form.service} onValueChange={(v) => handleChange("service", v)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a service" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel>Select a service</SelectLabel>
-                    <SelectItem value="web">Web Development</SelectItem>
-                    <SelectItem value="uiux">UI/UX Design</SelectItem>
-                    <SelectItem value="logo">Logo Design</SelectItem>
-                    <SelectItem value="seo">SEO</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+              {/* ✅ الخدمات من الداتا بيس — بتختفي لو صاحب البورتفوليو ملوش خدمات */}
+              {services.length > 0 && (
+                <Select value={form.service} onValueChange={(v) => handleChange("service", v)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectLabel>Select a service</SelectLabel>
+                      {services.map((service, index) => (
+                        <SelectItem key={`${service.title}-${index}`} value={service.title}>
+                          {service.title}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              )}
 
               <div>
                 <Textarea

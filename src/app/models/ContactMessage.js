@@ -31,9 +31,11 @@ const ContactMessageSchema = new mongoose.Schema(
         trim: true,
       },
     },
+    // ✅ عنوان الخدمة اللي اختارها الزائر من خدمات صاحب البورتفوليو (نص حر مش enum)
     service: {
       type: String,
-      enum: ["web", "uiux", "logo", "seo", ""],
+      trim: true,
+      maxlength: 150,
       default: "",
     },
     message: {

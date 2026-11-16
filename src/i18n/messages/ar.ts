@@ -307,7 +307,6 @@ const ar = {
   "validation.passwordsMatch": "كلمات المرور غير متطابقة",
 
   "nav.home": "الرئيسية",
-  "nav.about": "عننا",
   "nav.services": "الخدمات",
   "nav.portfolio": "الأعمال",
   "nav.settings": "الإعدادات",
@@ -4987,6 +4986,7 @@ const ar = {
   "groups.archived": "مؤرشفة",
   "groups.actions.more": "المزيد",
   "groups.actions.restore": "استعادة المجموعة",
+  "nav.about" : "من نحن" ,
 };
 
 export default ar;

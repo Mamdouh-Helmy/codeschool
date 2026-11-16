@@ -10,7 +10,6 @@ import fs from "fs";
 import { sendPortfolioMessage, resolveOwnerPhone } from "../../../services/portfolioNotifications";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const VALID_SERVICES = ["web", "uiux", "logo", "seo", ""];
 
 // ✅ نوع القالب اللي بيتبعت لصاحب البورتفوليو على الواتساب لما توصله رسالة جديدة
 const CONTACT_NOTIFICATION_TYPE = "portfolio_contact_form_notification";
@@ -453,8 +452,6 @@ export async function POST(req) {
       );
     }
 
-    const safeService = VALID_SERVICES.includes(service) ? service : "";
-
     // ✅ إضافة gender و language عشان رسالة الواتساب تظبط الجنس واللغة صح
     // و role عشان نحدد لينك لوحة التحكم الصح (instructor/admin/student/marketing/guest)
     const portfolio = await Portfolio.findById(portfolioId).populate(
@@ -477,6 +474,14 @@ export async function POST(req) {
     }
 
     const user = portfolio.userId;
+
+    // ✅ الخدمة لازم تكون واحدة من خدمات صاحب البورتفوليو نفسه (من الداتا بيس)،
+    // وأي قيمة تانية بتتحول لفاضي بدل ما نرفض الرسالة
+    const ownerServiceTitles = (portfolio.services || [])
+      .map((s) => s?.title?.trim())
+      .filter(Boolean);
+    const requestedService = typeof service === "string" ? service.trim() : "";
+    const safeService = ownerServiceTitles.includes(requestedService) ? requestedService : "";
 
     const contactMessage = await ContactMessage.create({
       portfolioId,

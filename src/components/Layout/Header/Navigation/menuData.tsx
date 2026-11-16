@@ -3,6 +3,7 @@ import { HeaderItem } from "@/types/menu";
 
 export const defaultHeaderData: HeaderItem[] = [
   { label: "homepage", href: "/" },
+  { label: "about", href: "/about" },
   { label: "schedules", href: "/schedules" },
   { label: "speakers", href: "/speakers" },
   {
@@ -44,6 +45,7 @@ export async function getHeaderData(locale: string = "en"): Promise<HeaderItem[]
 
     return [
       { label: "homepage", href: "/" },
+      { label: "about", href: "/about" },
       { label: "schedules", href: "/schedules" },
       { label: "speakers", href: "/speakers" },
       {

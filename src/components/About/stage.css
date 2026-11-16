@@ -1,0 +1,155 @@
+/* Hero scene — الأرضية والمدار والشخصية */
+
+.stage-floor {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.stage-symbol { animation: stage-drift 6s ease-in-out infinite alternate; }
+.stage-dot    { animation: stage-dot 0.9s ease-in-out infinite; }
+.stage-caret  { animation: stage-caret 1s steps(1) infinite; }
+
+/* ───────── Orbit ───────── */
+.orbit      { animation: orbit-spin 50s linear infinite; }
+/* --a = زاوية الأيقونة الثابتة، والأنيميشن بيلغي دوران المدار عشان الأيقونة تفضل مستقيمة */
+.orbit-item { animation: orbit-counter 50s linear infinite; }
+
+/* ───────── Mascot ───────── */
+.mascot-hop {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: mascot-hop 0.9s ease-out;
+}
+.mascot-breathe {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: mascot-breathe 3.2s ease-in-out infinite;
+}
+.mascot-shadow {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+.mascot-shadow-hop { animation: mascot-shadow-hop 0.9s ease-out; }
+
+/* --look-x / --look-y بتتحدّث من HeroMascot حسب مكان الماوس (من -1 لـ 1) */
+.mascot-head {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  transform: translate(calc(var(--look-x, 0) * 3px), 0) rotate(calc(var(--look-x, 0) * 3deg));
+  transition: transform 0.25s ease-out;
+}
+.mascot-face {
+  transform: translate(calc(var(--look-x, 0) * 7px), calc(var(--look-y, 0) * 5px));
+  transition: transform 0.2s ease-out;
+}
+.mascot-pupil {
+  transform: translate(calc(var(--look-x, 0) * 3px), calc(var(--look-y, 0) * 3px));
+  transition: transform 0.12s ease-out;
+}
+.mascot-eyes {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: mascot-blink 5s infinite;
+}
+.mascot-brows { transition: transform 0.25s ease; }
+.mascot[data-mood="happy"] .mascot-brows { transform: translateY(-5px); }
+
+.mascot-arm {
+  transform-box: fill-box;
+  transform-origin: 50% 10%;
+}
+.mascot[data-mood="happy"] .mascot-wave-arm { animation: mascot-wave 2.4s ease-in-out; }
+
+.mascot-halo {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: mascot-halo 2s ease-in-out infinite;
+}
+.mascot[data-mood="busy"] .mascot-halo { animation-duration: 0.5s; }
+
+.mascot-led { animation: mascot-led 1.6s ease-in-out infinite; }
+.mascot[data-mood="busy"] .mascot-led { animation-duration: 0.35s; }
+
+@keyframes stage-drift {
+  from { transform: translateY(0) rotate(-4deg); }
+  to   { transform: translateY(-14px) rotate(4deg); }
+}
+@keyframes stage-dot {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
+  40%           { transform: translateY(-6px); opacity: 1; }
+}
+@keyframes stage-caret {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+@keyframes orbit-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes orbit-counter {
+  from { transform: rotate(calc(var(--a) * -1)); }
+  to   { transform: rotate(calc(var(--a) * -1 - 360deg)); }
+}
+@keyframes mascot-breathe {
+  0%, 100% { transform: scaleY(1); }
+  50%      { transform: scaleY(1.014); }
+}
+@keyframes mascot-hop {
+  0%   { transform: translateY(0); }
+  30%  { transform: translateY(-40px) rotate(-5deg); }
+  60%  { transform: translateY(0) rotate(3deg); }
+  80%  { transform: translateY(-14px); }
+  100% { transform: translateY(0); }
+}
+@keyframes mascot-shadow-hop {
+  0%, 100% { transform: scale(1); opacity: 0.22; }
+  30%      { transform: scale(0.6); opacity: 0.1; }
+  80%      { transform: scale(0.88); opacity: 0.18; }
+}
+@keyframes mascot-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95%           { transform: scaleY(0.08); }
+}
+@keyframes mascot-wave {
+  0%, 100% { transform: rotate(0deg); }
+  12%      { transform: rotate(-90deg); }
+  28%      { transform: rotate(-125deg); }
+  44%      { transform: rotate(-90deg); }
+  60%      { transform: rotate(-125deg); }
+  76%      { transform: rotate(-90deg); }
+}
+@keyframes mascot-halo {
+  0%, 100% { opacity: 0.15; transform: scale(0.8); }
+  50%      { opacity: 0.6; transform: scale(1.25); }
+}
+@keyframes mascot-led {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-symbol,
+  .stage-dot,
+  .stage-caret,
+  .orbit,
+  .mascot-hop,
+  .mascot-breathe,
+  .mascot-shadow-hop,
+  .mascot-eyes,
+  .mascot[data-mood="happy"] .mascot-wave-arm,
+  .mascot-halo,
+  .mascot-led {
+    animation: none;
+  }
+  .orbit-item {
+    animation: none;
+    transform: rotate(calc(var(--a) * -1));
+  }
+  .mascot-head,
+  .mascot-face,
+  .mascot-pupil,
+  .mascot-brows {
+    transition: none;
+  }
+}
