@@ -2,7 +2,6 @@
 import React from "react";
 import Image from "next/image";
 import "slick-carousel/slick/slick.css";
-import "slick-carousel/slick/slick-theme.css";
 import Slider from "react-slick";
 import { useTestimonials } from "@/hooks/useApiData";
 import { useI18n } from "@/i18n/I18nProvider";
