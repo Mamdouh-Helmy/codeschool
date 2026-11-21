@@ -31,11 +31,11 @@ interface RecipientStatus {
     delivered: boolean;
     deliveredAt?: string | null;
     pendingReason:
-        | "no_student_phone"
-        | "no_guardian_phone"
-        | "send_failed_or_pending"
-        | "skipped_adult_student"
-        | null;
+    | "no_student_phone"
+    | "no_guardian_phone"
+    | "send_failed_or_pending"
+    | "skipped_adult_student"
+    | null;
     // ✅ NEW: بيتحدد من الـ backend للـ adults — يوضّح إن ولي الأمر متخطى بقرار
     skipped?: boolean;
 }
@@ -121,7 +121,7 @@ const CERT_DESIGN_WIDTH = 1200;
 // لو الافتراض أصغر من الحقيقي، المحتوى بيتقص فورًا في أول رندر قبل ما
 // القياس الحقيقي يوصل؛ لو الافتراض أكبر، أسوأ حاجة ممكن تحصل إن الشهادة
 // تبان أصغر شوية من المفروض مؤقتًا (مساحة فاضية)، مش قص.
-const CERT_DESIGN_FALLBACK_HEIGHT = 1400;
+const CERT_DESIGN_FALLBACK_HEIGHT = 1600;
 
 // ✅ ثوابت الزوم مشتركة بين الـ Lightbox ومعاينة الشهادة المكبّرة، عشان
 // سلوك التكبير يبقى متسق في كل الملف
@@ -479,7 +479,13 @@ function CertificateDesignModal({ onClose }: { onClose: () => void }) {
 
     const [form, setForm] = useState<DesignForm>({
         studentName: "Youssef Mourad",
-        caption: "Grade 5-6 Module 1 Chatbot Dev 1",
+        caption:
+            "You have successfully completed **Grade 5-6 Module 1 Chatbot Dev 1**\n" +
+            "Throughout this module, you have achieved the following outcomes:\n" +
+            "Define the concept of a chatbot and recognize its role in various applications.\n" +
+            "Explain the fundamentals of algorithms and their significance in chatbot dev.\n" +
+            "Python syntax, including variables, data types, and control structures.\n" +
+            "Apply Python syntax to solve programming problems.",
         signatureName: "Aya Elnagar",
         background: "navy-orange",
     });
@@ -799,8 +805,8 @@ function CertificateDesignModal({ onClose }: { onClose: () => void }) {
         >
             <div
                 className={`bg-white dark:bg-darkmode shadow-2xl overflow-hidden flex flex-col transition-all duration-200 ${isFullscreen
-                        ? "w-[98vw] h-[96vh] rounded-xl"
-                        : "w-full max-w-7xl h-[88vh] rounded-2xl"
+                    ? "w-[98vw] h-[96vh] rounded-xl"
+                    : "w-full max-w-7xl h-[88vh] rounded-2xl"
                     }`}
                 onClick={(e) => e.stopPropagation()}
             >
@@ -1210,8 +1216,8 @@ function TabButton({
         <button
             onClick={onClick}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-13 font-semibold transition-all duration-200 ${active
-                    ? "bg-white dark:bg-darkmode text-primary shadow-sm"
-                    : "text-SlateBlueText dark:text-darktext hover:text-primary"
+                ? "bg-white dark:bg-darkmode text-primary shadow-sm"
+                : "text-SlateBlueText dark:text-darktext hover:text-primary"
                 }`}
         >
             {children}

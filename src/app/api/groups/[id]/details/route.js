@@ -72,7 +72,10 @@ export async function GET(req, { params }) {
     //    (الموقوف لازم يفضل ظاهر هنا عشان الأدمن يقدر يشغّله)
     // ══════════════════════════════════════════════
     const group = await Group.findOne({ _id: groupId, isDeleted: false })
-      .populate({ path: "instructors.userId", select: "name email gender profile" })
+      .populate({
+        path: "instructors.userId",
+        select: "name email gender profile",
+      })
       .populate({
         path: "students",
         select:
@@ -113,7 +116,10 @@ export async function GET(req, { params }) {
     const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;
 
     const sessionsWithAtt = sessions.filter(
-      (s) => s.status === "completed" && s.attendanceTaken && s.attendance?.length > 0,
+      (s) =>
+        s.status === "completed" &&
+        s.attendanceTaken &&
+        s.attendance?.length > 0,
     );
     let avgAttPct = 0;
     if (sessionsWithAtt.length > 0) {
@@ -121,7 +127,12 @@ export async function GET(req, { params }) {
         const presentCount = s.attendance.filter(
           (a) => a.status === "present" || a.status === "late",
         ).length;
-        return acc + (s.attendance.length > 0 ? (presentCount / s.attendance.length) * 100 : 0);
+        return (
+          acc +
+          (s.attendance.length > 0
+            ? (presentCount / s.attendance.length) * 100
+            : 0)
+        );
       }, 0);
       avgAttPct = Math.round(total_att_sum / sessionsWithAtt.length);
     }
@@ -144,6 +155,7 @@ export async function GET(req, { params }) {
         status: s.status,
         attendanceTaken: !!s.attendanceTaken,
         isComplimentary: !!s.isComplimentary,
+        isOpen: !!(s.earlyAccess?.enabled && !s.earlyAccess?.consumedAt),
         meetingLink: s.meetingLink || null,
         meetingPlatform: s.meetingPlatform || null,
         recordingLink: s.recordingLink || null,
@@ -195,7 +207,8 @@ export async function GET(req, { params }) {
 
         // ✅ NEW: الطالب الموقوف مش بيتحسب "غايب" عن حصص حصلت بعد الإيقاف
         // (مفيش له سجل حضور فيها لأنه كان مخفي من قايمة الحضور)
-        if (!record && isPaused && pausedDateStr && sess.date >= pausedDateStr) return;
+        if (!record && isPaused && pausedDateStr && sess.date >= pausedDateStr)
+          return;
 
         const status = record ? record.status : "absent";
         if (status === "present") present++;
@@ -251,7 +264,8 @@ export async function GET(req, { params }) {
 
       const totalDone = present + absent + late + excused;
       const attended = present + late;
-      const attendancePct = totalDone > 0 ? Math.round((attended / totalDone) * 100) : 0;
+      const attendancePct =
+        totalDone > 0 ? Math.round((attended / totalDone) * 100) : 0;
 
       // ملخص الباقة الحالية
       const pkg = student.creditSystem?.currentPackage || null;
@@ -269,7 +283,9 @@ export async function GET(req, { params }) {
         price: pkg?.price || 0,
         startDate: pkg?.startDate || null,
         endDate: pkg?.endDate || null,
-        isExpired: pkg?.endDate ? new Date(pkg.endDate).getTime() < nowMs : false,
+        isExpired: pkg?.endDate
+          ? new Date(pkg.endDate).getTime() < nowMs
+          : false,
         status: student.creditSystem?.status || "no_package",
       };
 
@@ -278,7 +294,15 @@ export async function GET(req, { params }) {
         name: student.personalInfo?.fullName || "بدون اسم",
         enrollment: student.enrollmentNumber || "—",
         whatsapp: student.personalInfo?.whatsappNumber || null,
-        attendance: { present, absent, late, excused, totalDone, attended, attendancePct },
+        attendance: {
+          present,
+          absent,
+          late,
+          excused,
+          totalDone,
+          attended,
+          attendancePct,
+        },
         credit,
         // ✅ NEW
         isPaused,
@@ -301,7 +325,9 @@ export async function GET(req, { params }) {
       .filter(Boolean);
 
     const rateDocs = instructorIds.length
-      ? await InstructorRate.find({ instructorId: { $in: instructorIds } }).lean()
+      ? await InstructorRate.find({
+          instructorId: { $in: instructorIds },
+        }).lean()
       : [];
     const rateMap = {};
     rateDocs.forEach((r) => {
@@ -327,7 +353,9 @@ export async function GET(req, { params }) {
         const r = rateAt(rateDoc, s.scheduledDate);
         if (!r) return;
         hourlyEarnings += (mins / 60) * r.hourlyRate;
-        const isOffline = (s.deliveryMode || (groupIsOffline ? "offline" : "online")) === "offline";
+        const isOffline =
+          (s.deliveryMode || (groupIsOffline ? "offline" : "online")) ===
+          "offline";
         if (isOffline) transportation += r.transportationAllowance;
       });
 
@@ -336,7 +364,9 @@ export async function GET(req, { params }) {
       const workedMinutes = Math.round((entry.countTime || 0) * 60);
       const sessionsHours = minutes / 60;
       const avgRate =
-        sessionsHours > 0 ? hourlyEarnings / sessionsHours : rateDoc?.hourlyRate || 0;
+        sessionsHours > 0
+          ? hourlyEarnings / sessionsHours
+          : rateDoc?.hourlyRate || 0;
       const workedHourlyEarnings = (workedMinutes / 60) * avgRate;
       const share = minutes > 0 ? Math.min(1, workedMinutes / minutes) : 0;
       const workedTransportation = transportation * share;
@@ -371,6 +401,7 @@ export async function GET(req, { params }) {
           status: group.status,
           // ✅ NEW
           isArchived: !!group.isArchived,
+          isOnHold: !!group.hold?.isHeld,
           archive: group.archive
             ? {
                 archivedAt: group.archive.archivedAt || null,
@@ -397,8 +428,18 @@ export async function GET(req, { params }) {
         },
 
         stats: {
-          sessions: { total, completed, scheduled, cancelled, postponed, progressPct },
-          attendance: { avgPct: avgAttPct, sessionsWithAttendance: sessionsWithAtt.length },
+          sessions: {
+            total,
+            completed,
+            scheduled,
+            cancelled,
+            postponed,
+            progressPct,
+          },
+          attendance: {
+            avgPct: avgAttPct,
+            sessionsWithAttendance: sessionsWithAtt.length,
+          },
           students: {
             total: group.students?.length || 0,
             maxSlots: group.maxStudents,

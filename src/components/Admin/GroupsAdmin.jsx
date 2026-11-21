@@ -13,7 +13,6 @@ import {
     Link2Off,
     PauseCircle,
     Gift,
-    MessageSquare,
     Archive,
     ArchiveRestore,
     CheckCheck,
@@ -28,7 +27,6 @@ import FixGroupLinksModal from "./FixGroupLinksModal";
 import GroupDetailsPage from "./GroupDetailsPage";
 import GroupHoldModal from "./GroupHoldModal";
 import MakeupSessionForm from "./MakeupSessionForm";
-import GroupMessageModal from "./GroupMessageModal";
 import { useConfirm } from "./ConfirmDialog";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -228,7 +226,6 @@ export default function GroupsAdmin() {
     const [makeupModalOpen, setMakeupModalOpen] = useState(false);
 
     const [pendingActivation, setPendingActivation] = useState(DEFAULT_PENDING_ACTIVATION);
-    const [messageModal, setMessageModal] = useState({ open: false, groupId: null });
 
     const searchTimeoutRef = useRef(null);
 
@@ -287,9 +284,6 @@ export default function GroupsAdmin() {
         if (filters.tags) count++;
         return count;
     }, [filters]);
-
-    const onSendMessage = useCallback((groupId) => setMessageModal({ open: true, groupId }), []);
-    const closeMessageModal = useCallback(() => setMessageModal({ open: false, groupId: null }), []);
 
     // ── Data Fetching ──────────────────────────────────────────────────────────
     useEffect(() => {
@@ -1299,7 +1293,6 @@ export default function GroupsAdmin() {
                                     onFixLinks={onFixLinks}
                                     onHold={onHold}
                                     onRelease={onRelease}
-                                    onSendMessage={onSendMessage}
                                     onArchive={onArchive}
                                     onRestore={onRestore}
                                 />
@@ -1360,12 +1353,6 @@ export default function GroupsAdmin() {
                     onClose={closeAddStudentsModal}
                     onStudentAdded={loadGroups}
                 />
-            </Modal>
-
-            <Modal open={messageModal.open} title="إرسال رسالة للجروب" onClose={closeMessageModal} size="2xl">
-                {messageModal.open && (
-                    <GroupMessageModal groupId={messageModal.groupId} onClose={closeMessageModal} />
-                )}
             </Modal>
 
             <MeetingLinksCheckModal
@@ -1816,12 +1803,6 @@ function GroupRow({
                                     title={t("groups.actions.release") || "فكّ التعليق"}
                                 >
                                     <PlayCircle className="w-[18px] h-[18px] text-emerald-600 dark:text-emerald-400" />
-                                </ActionButton>
-                            )}
-
-                            {(group.status === "active" || isOnHold) && (
-                                <ActionButton onClick={() => onSendMessage(group.id)} hoverColor="blue" title="إرسال رسالة">
-                                    <MessageSquare className="w-[18px] h-[18px] text-blue-600 dark:text-blue-400" />
                                 </ActionButton>
                             )}
 

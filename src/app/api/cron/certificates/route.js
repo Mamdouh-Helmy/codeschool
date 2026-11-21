@@ -233,6 +233,8 @@ async function generateCertificateImage(browser, data) {
       timeout: 30000,
     });
 
+    await page.evaluate(() => window.__certReady);
+
     const fileName = `cert-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2, 7)}.png`;

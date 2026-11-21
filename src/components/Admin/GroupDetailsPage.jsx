@@ -6,7 +6,8 @@ import {
   Users, BookOpen, Clock, GraduationCap, TrendingUp, AlertCircle,
   CheckCircle, Mail, Phone, Trash2, UserMinus, BarChart3, XCircle,
   ChevronDown, ChevronUp, Calendar, X, Link as LinkIcon, FileText, Video,
-  UserPlus, Package, Wallet, Timer, Settings2, Gift, Plus, Search, Loader2, MessageSquare, ClipboardCheck, PauseCircle, PlayCircle, Archive,
+  UserPlus, Package, Wallet, Timer, Settings2, Gift, Plus, Search, Loader2,
+  MessageSquare, ClipboardCheck, PauseCircle, PlayCircle, Archive, Lock, Unlock,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -15,6 +16,7 @@ import StudentPackageModal from "./StudentPackageModal";
 import InstructorNotificationModal from "./InstructorNotificationModal";
 import MemberMessagesModal from "./MemberMessagesModal";
 import StudentEvaluationModal from "./StudentEvaluationModal";
+import GroupMessageModal from "./GroupMessageModal";
 import { useConfirm } from "./ConfirmDialog";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -62,6 +64,10 @@ const GROUP_STATUS_CLS = {
 const platformIcon = (p) => ({ zoom: "🔷", google_meet: "🔴", microsoft_teams: "🔵" }[p] || "🔗");
 
 const CARD = "bg-white dark:bg-darklight rounded-2xl border border-gray-100 dark:border-dark_border shadow-sm";
+const INPUT_CLS = "w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-dark_border bg-gray-50 dark:bg-dark_input text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/25 dark:[color-scheme:dark]";
+
+// الحالات اللي الأدمن يقدر يحوّل لها الحصة (بنفس ترتيب العرض)
+const SESSION_STATUSES = ["scheduled", "completed", "cancelled", "postponed"];
 
 // ─── small pieces ────────────────────────────────────────────────────────────
 function Bar({ value, barCls, trackCls }) {
@@ -109,8 +115,182 @@ function SideCard({ headerCls, icon: Icon, title, children }) {
   );
 }
 
-// ─── Sessions (scrollable + filter + polished) ───────────────────────────────
-function SessionsList({ sessions, t, language, tx }) {
+// ─── Session status dialog (scheduled / completed / cancelled / postponed) ───
+// بيكلم PUT /api/sessions/[id]. الـ route بيصفّر meetingLink/recordingLink/
+// instructorNotes لو ما اتبعتوش، عشان كده بنبعتهم دايمًا بقيمهم الحالية.
+function SessionStatusDialog({ session, t, tx, isRTL, onClose, onSaved }) {
+  const [status, setStatus] = useState(session.status);
+  const [newDate, setNewDate] = useState(session.date);
+  const [newTime, setNewTime] = useState(session.startTime);
+  const [actualStart, setActualStart] = useState("");
+  const [actualEnd, setActualEnd] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const unchanged = status === session.status;
+
+  const hints = {
+    scheduled: tx("ترجع الحصة لحالة مجدولة.", "Back to scheduled."),
+    completed: tx("بيتحسب وقت المدرس وحسابه.", "Counts instructor time and pay."),
+    cancelled: tx("الحصة وكل اللي بعدها بيترحّلوا أسبوع.", "This and following sessions shift +7 days."),
+    postponed: tx("تأجيل الحصة لميعاد جديد.", "Move the session to a new date."),
+  };
+
+  async function submit() {
+    if (status === "postponed" && !newDate) {
+      toast.error(tx("حدد التاريخ الجديد", "Pick the new date"));
+      return;
+    }
+
+    const body = {
+      status,
+      meetingLink: session.meetingLink || "",
+      recordingLink: session.recordingLink || "",
+      instructorNotes: session.instructorNotes || "",
+    };
+    if (status === "postponed") {
+      body.newDate = newDate;
+      body.newTime = newTime || session.startTime;
+    }
+    if (status === "completed") {
+      if (actualStart) body.actualStartTime = actualStart;
+      if (actualEnd) body.actualEndTime = actualEnd;
+    }
+
+    setBusy(true);
+    const tid = toast.loading(tx("جاري الحفظ...", "Saving..."));
+    try {
+      const res = await fetch(`/api/sessions/${session.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || t("common.error"));
+
+      const shifted = json.cascade?.shiftedCount;
+      toast.success(
+        status === "cancelled" && shifted
+          ? tx(`تم الإلغاء وترحيل ${shifted} حصة أسبوع`, `Cancelled, ${shifted} session(s) shifted +7 days`)
+          : tx("تم تحديث حالة الحصة", "Session status updated"),
+        { id: tid },
+      );
+      await onSaved();
+      onClose();
+    } catch (e) {
+      toast.error(e.message, { id: tid });
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-darkmode/60 backdrop-blur-sm p-3"
+      onClick={(e) => e.target === e.currentTarget && !busy && onClose()}
+    >
+      <div
+        dir={isRTL ? "rtl" : "ltr"}
+        className="w-full max-w-md max-h-[92vh] overflow-y-auto rounded-3xl bg-white dark:bg-darklight border border-gray-100 dark:border-dark_border shadow-2xl"
+      >
+        <div className="flex items-start gap-3 px-5 pt-5">
+          <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+            <Settings2 size={20} />
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-black text-gray-900 dark:text-white text-base">{tx("تغيير حالة الحصة", "Change session status")}</h3>
+            <p className="text-sm text-darktext mt-0.5 truncate">{session.title}</p>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-2 gap-2.5">
+            {SESSION_STATUSES.map((s) => {
+              const meta = smeta(s, t);
+              const selected = status === s;
+              const current = session.status === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setStatus(s)}
+                  className={`text-start p-3 rounded-xl border transition ${
+                    selected
+                      ? "border-primary bg-primary/5"
+                      : "border-gray-200 dark:border-dark_border hover:bg-gray-50 dark:hover:bg-dark_input"
+                  }`}
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${meta.cls}`}>{meta.label}</span>
+                    {current && <span className="text-[10px] font-semibold text-darktext">{tx("الحالية", "Current")}</span>}
+                  </span>
+                  <span className="block text-[11px] text-darktext mt-2 leading-snug">{hints[s]}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {status === "postponed" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-darkmuted mb-1.5">{tx("التاريخ الجديد", "New date")}</label>
+                <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} disabled={busy} className={INPUT_CLS} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-darkmuted mb-1.5">{tx("الوقت الجديد", "New time")}</label>
+                <input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} disabled={busy} className={INPUT_CLS} />
+              </div>
+            </div>
+          )}
+
+          {status === "completed" && (
+            <div>
+              <p className="text-xs font-bold text-gray-500 dark:text-darkmuted mb-1.5">
+                {tx("الوقت الفعلي (اختياري — الافتراضي ميعاد الحصة)", "Actual time (optional — defaults to scheduled)")}
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <input type="time" value={actualStart} onChange={(e) => setActualStart(e.target.value)} disabled={busy} className={INPUT_CLS} />
+                <input type="time" value={actualEnd} onChange={(e) => setActualEnd(e.target.value)} disabled={busy} className={INPUT_CLS} />
+              </div>
+            </div>
+          )}
+
+          {session.status === "completed" && status !== "completed" && (
+            <div className="flex items-start gap-2 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 px-3.5 py-3 text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+              <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+              <p>
+                {tx(
+                  "الحصة دي مكتملة: ساعات المدرس وخصم رصيد الطلاب اللي اتحسبوا قبل كده مش بيتراجعوا تلقائيًا.",
+                  "This session is completed: instructor hours and student credit already applied are not reverted automatically.",
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 px-5 pb-5">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="px-5 py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-dark_border text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-dark_input disabled:opacity-50 transition"
+          >
+            {tx("إلغاء", "Cancel")}
+          </button>
+          <button
+            onClick={submit}
+            disabled={busy || unchanged}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            {busy && <Loader2 size={15} className="animate-spin" />}
+            {tx("حفظ الحالة", "Save status")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sessions (scrollable + filter + actions) ────────────────────────────────
+function SessionsList({ sessions, t, language, tx, locked, busyId, onManage, onToggleOpen }) {
   const [filter, setFilter] = useState("all");
   const boxRef = useRef(null);
   const nextRef = useRef(null);
@@ -192,7 +372,7 @@ function SessionsList({ sessions, t, language, tx }) {
           ))}
         </div>
 
-        {/* ✅ scrollable area — max height ثابت + fade عشان يبان إن فيه أكتر تحت */}
+        {/* scrollable area */}
         <div className="relative">
           <div
             ref={boxRef}
@@ -208,6 +388,7 @@ function SessionsList({ sessions, t, language, tx }) {
               const sm = smeta(sess.status, t);
               const dim = ["cancelled", "postponed"].includes(sess.status);
               const isNext = sess.id === nextId;
+              const busy = busyId === sess.id;
               return (
                 <div
                   key={sess.id || i}
@@ -232,6 +413,11 @@ function SessionsList({ sessions, t, language, tx }) {
                             {tx("الجاية", "NEXT")}
                           </span>
                         )}
+                        {sess.isOpen && (
+                          <span className="text-[9px] font-black bg-emerald-500 text-white px-1.5 py-0.5 rounded-full">
+                            {tx("مفتوحة", "OPEN")}
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-darktext mt-0.5 flex items-center gap-1 flex-wrap">
                         <span>{sess.date}</span>
@@ -242,6 +428,29 @@ function SessionsList({ sessions, t, language, tx }) {
                       </p>
                     </div>
                     <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${sm.cls}`}>{sm.label}</span>
+
+                    {!locked && (
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button
+                          onClick={() => onToggleOpen(sess)}
+                          disabled={busy}
+                          title={sess.isOpen ? tx("إغلاق الحصة", "Close session") : tx("فتح الحصة", "Open session")}
+                          className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${sess.isOpen
+                            ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300"
+                            : "bg-primary/10 text-primary hover:bg-primary/15"
+                            }`}
+                        >
+                          {busy ? <Loader2 size={14} className="animate-spin" /> : sess.isOpen ? <Lock size={14} /> : <Unlock size={14} />}
+                        </button>
+                        <button
+                          onClick={() => onManage(sess)}
+                          title={tx("تغيير الحالة", "Change status")}
+                          className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark_input dark:text-gray-300 dark:hover:bg-dark_border transition-colors"
+                        >
+                          <Settings2 size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {(sess.meetingLink || sess.recordingLink || sess.instructorNotes) && (
@@ -389,9 +598,14 @@ export default function GroupDetailsPage({ groupId, onClose }) {
     busy: false,
   });
   const [addOpen, setAddOpen] = useState(false);
+  const [messageOpen, setMessageOpen] = useState(false); // ✅ رسالة للجروب (اتنقلت من GroupsAdmin)
   const [pkgStudentId, setPkgStudentId] = useState(null);
   const [msgTarget, setMsgTarget] = useState(null); // { kind: "student" | "instructor", id, name }
   const [evalTarget, setEvalTarget] = useState(null); // { id, name }
+
+  // ── إدارة الحصص ──
+  const [statusSessionId, setStatusSessionId] = useState(null); // مودال تغيير الحالة
+  const [openBusyId, setOpenBusyId] = useState(null); // فتح/إغلاق جاري على حصة
 
   // ── حذف طالب (مودال التأكيد) ──
   const [removeDialog, setRemoveDialog] = useState({
@@ -424,7 +638,7 @@ export default function GroupDetailsPage({ groupId, onClose }) {
 
   useEffect(() => { if (groupId) load(true); }, [groupId]);
 
-  // silent = true → ما يقلبش الشاشة كلها لودينج (بعد التعديلات)
+  // initial = true → شاشة لودينج كاملة، غير كده بيحدّث البيانات في الخلفية
   async function load(initial = false) {
     if (initial) setLoading(true);
     setError(null);
@@ -438,6 +652,38 @@ export default function GroupDetailsPage({ groupId, onClose }) {
   }
 
   const toggle = (id) => setExpanded((p) => ({ ...p, [id]: !p[id] }));
+
+    // ── Open / close session (earlyAccess) ─────────────────────────────────────
+  async function toggleSessionOpen(sess) {
+    if (openBusyId) return;
+
+    const opening = !sess.isOpen;
+    setOpenBusyId(sess.id);
+    const tid = toast.loading(
+      opening ? tx("جاري فتح الحصة...", "Opening session...") : tx("جاري إغلاق الحصة...", "Closing session..."),
+    );
+
+    try {
+      const res = await fetch(`/api/sessions/${sess.id}/open`, {
+        method: opening ? "POST" : "DELETE",
+        cache: "no-store",
+      });
+      // لو الـ route مش موجود هيرجع HTML مش JSON، فبنعرض كود الـ HTTP بدل ما نبلع الخطأ
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) throw new Error(json?.error || `HTTP ${res.status}`);
+
+      toast.success(
+        json.message || (opening ? tx("تم فتح الحصة", "Session opened") : tx("تم إغلاق الحصة", "Session closed")),
+        { id: tid },
+      );
+      await load();
+    } catch (e) {
+      console.error("[toggleSessionOpen]", e);
+      toast.error(e.message || t("common.error"), { id: tid });
+    } finally {
+      setOpenBusyId(null);
+    }
+  }
 
   // ── Add instructor ─────────────────────────────────────────────────────────
   async function openInstructorPicker() {
@@ -698,6 +944,9 @@ export default function GroupDetailsPage({ groupId, onClose }) {
   const circ = 2 * Math.PI * 36;
   const isFull = students.length >= group.maxStudents;
   const pkgStudent = pkgStudentId ? students.find((s) => s.id === pkgStudentId) : null;
+  const statusSession = statusSessionId ? sessions.find((s) => s.id === statusSessionId) : null;
+  // الرسائل متاحة للجروب الـ active أو الـ Hold (زي ما كانت في GroupsAdmin)، ومش للمؤرشف
+  const canMessage = !group.isArchived && (group.status === "active" || group.isOnHold);
 
   const statCards = [
     { icon: Users, label: t("students.title"), val: `${stats.students.total}/${stats.students.maxSlots}`, bg: "bg-primary/10", cl: "text-primary" },
@@ -812,7 +1061,16 @@ export default function GroupDetailsPage({ groupId, onClose }) {
           </div>
 
           {/* ══ SESSIONS (scrollable) ══ */}
-          <SessionsList sessions={sessions} t={t} language={language} tx={tx} />
+          <SessionsList
+            sessions={sessions}
+            t={t}
+            language={language}
+            tx={tx}
+            locked={group.isArchived}
+            busyId={openBusyId}
+            onManage={(s) => setStatusSessionId(s.id)}
+            onToggleOpen={toggleSessionOpen}
+          />
 
           {/* ══ 2-COL ══ */}
           <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6 items-start">
@@ -823,14 +1081,24 @@ export default function GroupDetailsPage({ groupId, onClose }) {
                 title={t("students.title")}
                 count={students.length}
                 right={
-                  <button
-                    onClick={() => setAddOpen(true)}
-                    disabled={isFull || group.isArchived}
-                    title={group.isArchived ? tx("الجروب مؤرشف", "Group is archived") : isFull ? tx("المجموعة مكتملة", "Group is full") : ""}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-brand-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <UserPlus size={15} /> {tx("إضافة طالب", "Add student")}
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => setMessageOpen(true)}
+                      disabled={!canMessage}
+                      title={canMessage ? "" : tx("الرسائل متاحة للجروب النشط أو المعلّق فقط", "Messages are available for active or on-hold groups only")}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/15 text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <MessageSquare size={15} /> {tx("إرسال رسالة", "Send message")}
+                    </button>
+                    <button
+                      onClick={() => setAddOpen(true)}
+                      disabled={isFull || group.isArchived}
+                      title={group.isArchived ? tx("الجروب مؤرشف", "Group is archived") : isFull ? tx("المجموعة مكتملة", "Group is full") : ""}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-brand-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <UserPlus size={15} /> {tx("إضافة طالب", "Add student")}
+                    </button>
+                  </div>
                 }
               />
 
@@ -1110,6 +1378,41 @@ export default function GroupDetailsPage({ groupId, onClose }) {
           </div>
         </div>
       </div>
+
+      {/* ══ Session status dialog ══ */}
+      {statusSession && (
+        <SessionStatusDialog
+          key={statusSession.id}
+          session={statusSession}
+          t={t}
+          tx={tx}
+          isRTL={isRTL}
+          onClose={() => setStatusSessionId(null)}
+          onSaved={() => load()}
+        />
+      )}
+
+      {/* ══ Group message (اتنقل من GroupsAdmin) ══ */}
+      {messageOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-darkmode/60 backdrop-blur-sm p-3">
+          <div
+            dir={isRTL ? "rtl" : "ltr"}
+            className="w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden rounded-3xl bg-white dark:bg-darklight border border-gray-100 dark:border-dark_border shadow-2xl"
+          >
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 dark:border-dark_border">
+              <h3 className="font-black text-gray-900 dark:text-white flex items-center gap-2">
+                <MessageSquare size={18} className="text-primary" /> {tx("إرسال رسالة للجروب", "Send message to group")}
+              </h3>
+              <button onClick={() => setMessageOpen(false)} className="p-2 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-dark_input transition">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <GroupMessageModal groupId={groupId} onClose={() => setMessageOpen(false)} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══ Add student — نفس AddStudentsToGroup بالظبط ══ */}
       {addOpen && (
