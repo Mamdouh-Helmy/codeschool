@@ -1,6 +1,7 @@
 // /src/app/api/cron/certificates/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
+import Course from "../../../models/Course";
 import Student from "../../../models/Student";
 import Group from "../../../models/Group";
 import Session from "../../../models/Session";
