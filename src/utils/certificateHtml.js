@@ -34,7 +34,7 @@ const PANEL_MARGIN_TOP = 58;
 const PANEL_MARGIN_BOTTOM = 32; // أصغر من فوق زي الـ reference
 const PANEL_PADDING_X = 100;
 const PANEL_PADDING_TOP = 194; // بيحدد مكان اللوجو (أول عنصر في اللوح)
-const PANEL_PADDING_BOTTOM = 44;
+const PANEL_PADDING_BOTTOM = 90; // لازم > 46 (الإطار الداخلي) عشان الفوتر ميلزقش في الإطار
 
 // الشارة: بتتحط بالنسبة لحافة الصورة كلها (مش اللوح). بعد الـ trim بتبدأ من top:0
 const BADGE_BOX = { top: 0, left: 168, width: 224 };
@@ -48,7 +48,7 @@ const CAPTION_BOX = {
   width: CANVAS_WIDTH - PANEL_MARGIN_X * 2 - PANEL_PADDING_X * 2, // 888
   height: 340,
 };
-const CAPTION_MAX_FONT = 32;
+const CAPTION_MAX_FONT = 34;
 const CAPTION_MIN_FONT = 14;
 const CAPTION_LINE_HEIGHT = 1.8;
 
@@ -385,13 +385,11 @@ export async function buildCertificateHtml({
       -webkit-text-stroke: 0.5px ${accent};
     }
 
-    /* منطقة الكابشن: بتاخد كل المساحة الفاضية بين الاسم و"We wish you..." */
-    .caption-zone {
-      flex: 1 1 0; min-height: 0; width: 100%;
-      margin: 12px 0 14px;
-      display: flex; align-items: center; justify-content: center;
-      overflow: hidden;
-    }
+    /* ✅ الكابشن لازق تحت الاسم وفوق "We wish you..." بمسافات ثابتة.
+       المساحة الفاضية (لو الكابشن قصير) بتتوزع على الـ spacers (.sp) في أماكن
+       تانية (تحت اللوجو، وقبل الشعارات، وقبل الفوتر) بدل ما تعمل فجوة حوالين الكابشن. */
+    .caption-zone { width: 100%; margin: 22px 0 32px; }
+    .sp { flex: 1 1 0; min-height: 0; }
     .caption {
       width: 100%;
       text-align: center;
@@ -434,6 +432,7 @@ export async function buildCertificateHtml({
         ${editable("logo", "تغيير اللوجو", `<img data-trim="white" src="${logoSrc}" alt="Code School" />`)}
       </div>
 
+      <div class="sp"></div>
       <p class="lead">Proudly present this official</p>
       <h1 class="title">Certificate</h1>
       <p class="sub">To our beloved, young &amp; dedicated member:</p>
@@ -446,12 +445,16 @@ export async function buildCertificateHtml({
 
       <h3 class="wish">We wish you all the best!</h3>
 
+      <div class="sp"></div>
+
       <div class="partners">
         ${editable("stem", "تغيير الشعار", `<img data-trim="white" src="${stemSrc}" alt="STEM" />`)}
         ${editable("iAIDL", "تغيير الشعار", `<img data-trim="white" src="${iaidlSrc}" alt="iAIDL" />`)}
         ${editable("finland", "تغيير الشعار", `<img data-trim="white" src="${finlandSrc}" alt="Finland" />`)}
         ${editable("kidsafe", "تغيير الشعار", `<img data-trim="white" src="${kidsafeSrc}" alt="KidSAFE" />`)}
       </div>
+
+      <div class="sp"></div>
 
       <div class="footer">
         <div class="date-block">
@@ -473,7 +476,7 @@ export async function buildCertificateHtml({
 
   <script>
     (function () {
-      var zone = document.getElementById('cert-caption-zone');
+      var sps = Array.prototype.slice.call(document.querySelectorAll('.sp'));
       var box = document.getElementById('cert-caption');
       var name = document.getElementById('cert-name');
 
@@ -533,10 +536,17 @@ export async function buildCertificateHtml({
         }
       }
 
+      // أقل مساحة فاضية بين الـ spacers — لو أقل من 12px يبقى الكابشن كبير على اللوح
+      function minSpace() {
+        var m = 100000;
+        sps.forEach(function (s) { m = Math.min(m, s.offsetHeight); });
+        return m;
+      }
+
       function fitCaption() {
         var size = ${CAPTION_MAX_FONT};
         box.style.fontSize = size + 'px';
-        while (box.offsetHeight > zone.clientHeight && size > ${CAPTION_MIN_FONT}) {
+        while (minSpace() < 12 && size > ${CAPTION_MIN_FONT}) {
           size -= 1;
           box.style.fontSize = size + 'px';
         }
