@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { useContext, useEffect, useRef, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
@@ -29,6 +30,17 @@ type LocalUser = {
   role?: string;
   image?: string | null;
   [key: string]: any;
+};
+
+// ✅ Portal: بيرندر الـ children في document.body بره الـ header تمامًا
+// عشان يتخطى أي stacking context (fixed / transform / z-index) في الصفحة
+const BodyPortal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  if (!mounted) return null;
+  return createPortal(children, document.body);
 };
 
 const Header: React.FC = () => {
@@ -978,10 +990,14 @@ const Header: React.FC = () => {
             </div>
           </nav>
         </div>
+      </header>
 
-        {/* Dialogs */}
+      {/* ✅ كل الـ overlays والـ dialogs بتتعمل لها render في document.body
+          بـ z-index عالي عشان تظهر فوق أي عنصر في الصفحة (بما فيها الهيدر نفسه) */}
+      <BodyPortal>
+        {/* Dialogs (نجاح / فشل / تسجيل) */}
         <div
-          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isSuccessDialogOpen
+          className={`fixed top-6 end-1/2 translate-x-1/2 z-[10000] transition-all duration-300 ${authDialog?.isSuccessDialogOpen
             ? "opacity-100 transform translate-y-0"
             : "opacity-0 transform -translate-y-4 pointer-events-none"
             }`}
@@ -989,7 +1005,7 @@ const Header: React.FC = () => {
           <SuccessfullLogin />
         </div>
         <div
-          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isFailedDialogOpen
+          className={`fixed top-6 end-1/2 translate-x-1/2 z-[10000] transition-all duration-300 ${authDialog?.isFailedDialogOpen
             ? "opacity-100 transform translate-y-0"
             : "opacity-0 transform -translate-y-4 pointer-events-none"
             }`}
@@ -997,85 +1013,85 @@ const Header: React.FC = () => {
           <FailedLogin />
         </div>
         <div
-          className={`fixed top-6 end-1/2 translate-x-1/2 z-50 transition-all duration-300 ${authDialog?.isUserRegistered
+          className={`fixed top-6 end-1/2 translate-x-1/2 z-[10000] transition-all duration-300 ${authDialog?.isUserRegistered
             ? "opacity-100 transform translate-y-0"
             : "opacity-0 transform -translate-y-4 pointer-events-none"
             }`}
         >
           <UserRegistered />
         </div>
-      </header>
 
-      {isSignInOpen && (
-        <div
-          ref={signInRef}
-          className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50"
-        >
-          <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg bg-white px-8 py-14 text-center dark:bg-darklight">
-            <button
-              onClick={() => setIsSignInOpen(false)}
-              className="hover:bg-gray-200 dark:hover:bg-darkhover p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
-            >
-              <Icon icon="ic:round-close" className="text-2xl dark:text-white" />
-            </button>
-            <Signin
-              signInOpen={(value: boolean) => setIsSignInOpen(value)}
-              onSuccess={() => {
-                // ✅ مبقاش محتاج نخزن حاجة يدويًا هنا — useSession هيتحدث لوحده
-                // بعد ما signIn() تنجح في Signin.tsx
-              }}
-              onSwitchToSignUp={() => {
-                setIsSignInOpen(false);
-                setIsSignUpOpen(true);
-              }}
-            />
+        {isSignInOpen && (
+          <div
+            ref={signInRef}
+            className="fixed inset-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4 overflow-y-auto"
+          >
+            <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg bg-white px-8 py-14 text-center dark:bg-darklight">
+              <button
+                onClick={() => setIsSignInOpen(false)}
+                className="hover:bg-gray-200 dark:hover:bg-darkhover p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
+              >
+                <Icon icon="ic:round-close" className="text-2xl dark:text-white" />
+              </button>
+              <Signin
+                signInOpen={(value: boolean) => setIsSignInOpen(value)}
+                onSuccess={() => {
+                  // ✅ مبقاش محتاج نخزن حاجة يدويًا هنا — useSession هيتحدث لوحده
+                  // بعد ما signIn() تنجح في Signin.tsx
+                }}
+                onSwitchToSignUp={() => {
+                  setIsSignInOpen(false);
+                  setIsSignUpOpen(true);
+                }}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {isSignUpOpen && (
-        <div
-          ref={signUpRef}
-          className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50"
-        >
-          <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg bg-white px-8 py-14 text-center dark:bg-darklight">
-            <button
-              onClick={() => setIsSignUpOpen(false)}
-              className="hover:bg-gray-200 dark:hover:bg-darkhover p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
-            >
-              <Icon icon="ic:round-close" className="text-2xl dark:text-white" />
-            </button>
-            <SignUp
-              signUpOpen={(value: boolean) => setIsSignUpOpen(value)}
-              onSuccess={() => {}}
-              onSwitchToSignIn={() => {
-                setIsSignUpOpen(false);
-                setIsSignInOpen(true);
-              }}
-            />
+        {isSignUpOpen && (
+          <div
+            ref={signUpRef}
+            className="fixed inset-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4 overflow-y-auto"
+          >
+            <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg bg-white px-8 py-14 text-center dark:bg-darklight">
+              <button
+                onClick={() => setIsSignUpOpen(false)}
+                className="hover:bg-gray-200 dark:hover:bg-darkhover p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
+              >
+                <Icon icon="ic:round-close" className="text-2xl dark:text-white" />
+              </button>
+              <SignUp
+                signUpOpen={(value: boolean) => setIsSignUpOpen(value)}
+                onSuccess={() => {}}
+                onSwitchToSignIn={() => {
+                  setIsSignUpOpen(false);
+                  setIsSignInOpen(true);
+                }}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {isProfileOpen && (
-        <div
-          ref={profileRef}
-          className="fixed inset-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50"
-        >
-          <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg bg-white px-8 py-14 text-center dark:bg-darklight">
-            <button
-              onClick={() => setIsProfileOpen(false)}
-              className="hover:bg-gray-200 dark:hover:bg-darkhover p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
-            >
-              <Icon icon="ic:round-close" className="text-2xl dark:text-white" />
-            </button>
-            <ProfileModal
-              onClose={() => setIsProfileOpen(false)}
-              onProfileUpdate={handleProfileUpdate}
-            />
+        {isProfileOpen && (
+          <div
+            ref={profileRef}
+            className="fixed inset-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4 overflow-y-auto"
+          >
+            <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-lg bg-white px-8 py-14 text-center dark:bg-darklight">
+              <button
+                onClick={() => setIsProfileOpen(false)}
+                className="hover:bg-gray-200 dark:hover:bg-darkhover p-1 rounded-full absolute -top-5 -right-3 mr-8 mt-8"
+              >
+                <Icon icon="ic:round-close" className="text-2xl dark:text-white" />
+              </button>
+              <ProfileModal
+                onClose={() => setIsProfileOpen(false)}
+                onProfileUpdate={handleProfileUpdate}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </BodyPortal>
     </>
   );
 };
